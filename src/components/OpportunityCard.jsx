@@ -319,9 +319,11 @@ function ExLogo({ info }) {
 
 function TransferDots({ dep, wdr }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3}}>
-      <span style={{ fontSize: 10}}>{getTransferIcon(dep).icon}</span>
-      <span style={{ fontSize: 10}}>{getTransferIcon(wdr).icon}</span>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>D:</span>
+      <span style={{ fontSize: 10 }}>{getTransferIcon(dep).icon}</span>
+      <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>W:</span>
+      <span style={{ fontSize: 10 }}>{getTransferIcon(wdr).icon}</span>
     </span>
   )
 }

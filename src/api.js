@@ -1,3 +1,9 @@
+import {
+    getBinanceStatus, getBingXStatus, getBitgetStatus, 
+    getBybitStatus, getKuCoinStatus, getMEXCStatus, 
+    getOKXStatus 
+} from './coinStatus.js'
+
 const cache = {}
 
 function isFresh(key, ttlMs = 55000) {
@@ -24,12 +30,13 @@ export async function fetchBinance(symbol) {
 
             const ticker = await tickerRes.json()
             const fund = await fundRes.json()
+            const status = await getBinanceStatus(symbol)
 
             const result = {
                 funding: parseFloat(fund.lastFundingRate),
                 volume: parseFloat(ticker.quoteVolume),
-                deposit: true,
-                withdraw: true,
+                deposit: status.deposit,
+                withdraw: status.withdraw,
                 nextFunding: parseInt(fund.nextFundingTime)
             }
 
@@ -57,13 +64,14 @@ export async function fetchBingX(symbol) {
 
         const ticker = tickerData.data
         const fund = fundData.data
+        const status = await getBingXStatus(symbol)
         if (!ticker || !fund) return null
 
         const result = {
             funding: parseFloat(fund.lastFundingRate),
             volume: parseFloat(ticker.quoteVolume),
-            deposit: true,
-            withdraw: true,
+            deposit: status.deposit,
+            withdraw: status.withdraw,
             nextFunding: parseInt(fund.nextFundingTime)
         }
 
@@ -85,13 +93,14 @@ export async function fetchBitget(symbol) {
     )
     const data = await res.json()
     const ticker = data.data?.[0]
+    const status = await getBitgetStatus(symbol)
     if (!ticker) return null
 
     const result = {
       funding: parseFloat(ticker.fundingRate),
       volume: parseFloat(ticker.usdtVolume),
-      deposit: true,
-      withdraw: true,
+      deposit: status.deposit,
+      withdraw: status.withdraw,
       nextFunding: parseInt(ticker.nextFundingTime)
     }
 
@@ -113,14 +122,15 @@ export async function fetchBybit(symbol) {
         )
         const data = await res.json()
         const ticker = data.result.list[0]
+        const status = await getBybitStatus(symbol)
 
         if (!ticker) return null
 
         const result = {
             funding: parseFloat(ticker.fundingRate),
             volume: parseFloat(ticker.turnover24h),
-            deposit: true,
-            withdraw: true,
+            deposit: status.deposit,
+            withdraw: status.withdraw,
             nextFunding: parseInt(ticker.nextFundingTime)
         }
 
@@ -171,15 +181,18 @@ export async function fetchKuCoin(symbol) {
         const res = await fetch(
             `/kucoin-api/api/v1/contracts/${symbol}USDTM`
         )
+        if (!res.ok) return null
         const data = await res.json()
         const contract = data.data
+        const status = await getKuCoinStatus(symbol)
+
         if (!contract) return null
 
         const result = {
             funding: parseFloat(contract.fundingFeeRate),
             volume: parseFloat(contract.turnoverOf24h),
-            deposit: true,
-            withdraw: true,
+            deposit: status.deposit,
+            withdraw: status.withdraw,
             nextFunding: contract.nextFundingRateTime ? Date.now() + contract.nextFundingRateTime : null,
         }
 
@@ -204,15 +217,15 @@ export async function fetchMEXC(symbol) {
         const fundingData = await fundingRes.json()
 
         const ticker = tickerData.data
-        const funding = fundingData.data
+        const status = await getMEXCStatus(symbol)
 
         if (!ticker) return null
 
         const result = {
             funding: parseFloat(ticker.fundingRate),
             volume: parseFloat(ticker.amount24),
-            deposit: true,
-            withdraw: true,
+            deposit: status.deposit,
+            withdraw: status.withdraw,
             nextFunding: fundingData?.data?.nextSettleTime ?? null
         }
 
@@ -241,14 +254,15 @@ export async function fetchOKX(symbol) {
 
         const f = fund.data[0]
         const t = ticker.data[0]
+        const status = await getOKXStatus(symbol)
 
         if (!ticker) return null
 
         const result = {
             funding: parseFloat(f.fundingRate),
             volume: parseFloat(t.volCcy24h) * parseFloat(t.last),
-            deposit: true,
-            withdraw: true,
+            deposit: status.deposit,
+            withdraw: status.withdraw,
             nextFunding: parseInt(f.fundingTime)
         }
 

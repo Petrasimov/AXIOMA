@@ -28,6 +28,21 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/kucoin-api/, '')
       },
+      '/mexc-spot-api': {
+        target: 'https://api.mexc.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/mexc-spot-api/, '')
+      },
+      '/kucoin-spot-api': {
+        target: 'https://api.kucoin.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/kucoin-spot-api/, '')
+      },
+      '/binance-api': {
+        target: 'https://api.binance.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/binance-api/, '')
+      },
     }
   },
 })
