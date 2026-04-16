@@ -1,0 +1,97 @@
+/* ----------------- Переменные ----------------- */
+
+:root {
+  --bg-primary: #060606;
+  --bg-secondary: #0a1a25;
+  --bg-card: #0d2033;
+  --bg-hover: #112840;
+
+  --accent: #2F6997;
+  --accent-bright: #3d87c0;
+
+  --text-primary: #e8f4fd;
+  --text-secondary: #6a8fa8;
+  --text-muted: #3d6680;
+
+  --success: #00c97a;
+  --error: #e03e3e;
+  --warning: #f0a500;
+
+  --border: #1a3a52;
+
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* ----------------- Основные настройки ----------------- */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow:  hidden;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  display: flex;
+}
+
+/* ----------------- Скролл-бар ----------------- */
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+/* ----------------- Выделение ----------------- */
+
+::selection {
+  background: var(--accent);
+  color: var(--text-primary);
+}
+
+.app-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+/* ----------------- Фон основной области ----------------- */
+
+.main-area {
+  background-image: radial-gradient(rgba(26, 58, 82, 0.9) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-color: var(--bg-primary);
+  animation: bg-drift 60s linear infinite;
+}
+
+@keyframes bg-drift {
+  from { background-position: 0 0; }
+  to   { background-position: 320px 320px; }
+}
+
+
+
