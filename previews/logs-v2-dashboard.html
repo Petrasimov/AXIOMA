@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Logs v2 — Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-primary: #060606; --bg-secondary: #0a1a25; --bg-card: #0d2033;
+    --bg-hover: #112840; --accent: #2F6997; --accent-bright: #3d87c0;
+    --text-primary: #e8f4fd; --text-secondary: #6a8fa8; --text-muted: #3d6680;
+    --success: #00c97a; --error: #e03e3e; --warning: #f0a500; --border: #1a3a52;
+    --font-sans: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+  }
+  body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-sans); display: flex; height: 100vh; overflow: hidden; }
+
+  .sidebar { width: 60px; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 0; gap: 4px; flex-shrink: 0; }
+  .s-logo { display: flex; align-items: center; justify-content: center; padding: 0 12px 20px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .s-logo-icon { width: 36px; height: 36px; background: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--accent); border-radius: 4px; }
+  .s-tab { display: flex; align-items: center; justify-content: center; padding: 10px 0; cursor: pointer; color: var(--text-secondary); border-left: 2px solid transparent; }
+  .s-tab.active { color: var(--accent-bright); border-left-color: var(--accent-bright); background: var(--bg-hover); }
+
+  .main { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+  /* Header */
+  .header { height: 72px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 16px; flex-shrink: 0; }
+  .h-title { font-size: 18px; font-weight: 700; letter-spacing: 2px; }
+  .h-live { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10px; color: var(--success); }
+  .h-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+  .h-sep { flex: 1; }
+  .h-btn { padding: 6px 14px; font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 1px; background: none; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; }
+  .h-btn:hover { border-color: var(--accent-bright); color: var(--accent-bright); }
+
+  /* Health row */
+  .health-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .health-card { padding: 14px 18px; border-right: 1px solid var(--border); position: relative; overflow: hidden; }
+  .health-card:last-child { border-right: none; }
+  .hc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .hc-name { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; color: var(--text-muted); text-transform: uppercase; }
+  .hc-status { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 1px; padding: 2px 8px; }
+  .hc-status.ok   { color: var(--success); border: 1px solid rgba(0,201,122,0.3); background: rgba(0,201,122,0.07); }
+  .hc-status.warn { color: var(--warning); border: 1px solid rgba(240,165,0,0.3); background: rgba(240,165,0,0.07); }
+  .hc-status.err  { color: var(--error);   border: 1px solid rgba(224,62,62,0.3);  background: rgba(224,62,62,0.07); }
+  .hc-val { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+  .hc-sub { font-size: 10px; color: var(--text-muted); }
+  .hc-bar { height: 2px; background: var(--border); margin-top: 10px; border-radius: 1px; overflow: hidden; }
+  .hc-bar-fill { height: 100%; border-radius: 1px; transition: width 1s; }
+  .hc-stripe { position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+  .hc-stripe.ok   { background: var(--success); }
+  .hc-stripe.warn { background: var(--warning); }
+  .hc-stripe.err  { background: var(--error); }
+
+  /* Body */
+  .body { display: flex; flex: 1; overflow: hidden; }
+
+  /* Source panel */
+  .source-panel { width: 180px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--bg-secondary); flex-shrink: 0; }
+  .sp-head { padding: 12px 14px; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+  .sp-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: pointer; border-bottom: 1px solid rgba(26,58,82,0.5); border-left: 2px solid transparent; transition: all .15s; }
+  .sp-item:hover { background: var(--bg-hover); }
+  .sp-item.active { border-left-color: var(--accent-bright); background: var(--bg-hover); }
+  .sp-item.all.active { border-left-color: var(--text-secondary); }
+  .sp-name { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+  .sp-item.active .sp-name { color: var(--text-primary); }
+  .sp-badges { display: flex; gap: 4px; }
+  .sp-badge { font-family: var(--font-mono); font-size: 9px; font-weight: 700; padding: 1px 5px; }
+  .sp-badge.e { color: var(--error); }
+  .sp-badge.w { color: var(--warning); }
+  .sp-badge.o { color: var(--success); }
+  .sp-footer { margin-top: auto; padding: 12px 14px; border-top: 1px solid var(--border); }
+  .sp-search { width: 100%; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-family: var(--font-mono); font-size: 11px; padding: 6px 10px; outline: none; }
+  .sp-search::placeholder { color: var(--text-muted); }
+  .sp-search:focus { border-color: var(--accent); }
+
+  /* Log area */
+  .log-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .lm-toolbar { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); flex-shrink: 0; }
+  .lm-pill { padding: 4px 10px; font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 1px; background: none; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; }
+  .lm-pill.ok.active    { border-color: var(--success); color: var(--success); }
+  .lm-pill.info.active  { border-color: var(--accent-bright); color: var(--accent-bright); }
+  .lm-pill.warn.active  { border-color: var(--warning); color: var(--warning); }
+  .lm-pill.error.active { border-color: var(--error); color: var(--error); }
+  .lm-pill.debug.active { border-color: var(--text-muted); color: var(--text-secondary); }
+  .lm-sep { flex: 1; }
+  .lm-count { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+
+  .log-stream { flex: 1; overflow-y: auto; font-family: var(--font-mono); font-size: 11.5px; }
+  .log-stream::-webkit-scrollbar { width: 4px; }
+  .log-stream::-webkit-scrollbar-track { background: var(--bg-primary); }
+  .log-stream::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .log-entry { display: grid; grid-template-columns: 72px 46px 82px 1fr; align-items: start; border-bottom: 1px solid rgba(26,58,82,0.4); padding: 4px 0; cursor: pointer; transition: background .1s; }
+  .log-entry:hover { background: var(--bg-hover); }
+  .log-entry.selected { background: rgba(47,105,151,0.12); }
+  .le-time { padding: 0 10px; color: var(--text-muted); font-size: 10px; line-height: 1.8; }
+  .le-lvl { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; line-height: 1.8; }
+  .le-lvl.ok    { color: var(--success); }
+  .le-lvl.info  { color: var(--accent-bright); }
+  .le-lvl.warn  { color: var(--warning); }
+  .le-lvl.error { color: var(--error); }
+  .le-lvl.debug { color: var(--text-muted); }
+  .le-src { color: var(--text-muted); font-size: 10px; padding: 0 8px; line-height: 1.8; }
+  .le-msg { padding: 0 14px 0 0; color: var(--text-secondary); line-height: 1.8; }
+  .le-msg .hl   { color: var(--text-primary); }
+  .le-msg .val  { color: var(--accent-bright); }
+  .le-msg .ok   { color: var(--success); }
+  .le-msg .err  { color: var(--error); }
+  .le-msg .warn { color: var(--warning); }
+
+  .log-detail-panel { height: 0; overflow: hidden; transition: height .25s; background: #04111a; border-top: 1px solid var(--border); flex-shrink: 0; }
+  .log-detail-panel.open { height: 180px; }
+  .ldp-head { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+  .ldp-title { font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); letter-spacing: 1px; }
+  .ldp-close { margin-left: auto; font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); cursor: pointer; padding: 2px 8px; border: 1px solid var(--border); }
+  .ldp-body { padding: 10px 16px; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); white-space: pre; line-height: 1.7; overflow-y: auto; height: 130px; }
+  .ldp-body .err { color: var(--error); }
+  .ldp-body .ok { color: var(--success); }
+  .ldp-body .val { color: var(--accent-bright); }
+  .ldp-body .fix { color: var(--warning); }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="s-logo"><div class="s-logo-icon">AX</div></div>
+  <div class="s-tab">🏠</div>
+  <div class="s-tab">📈</div>
+  <div class="s-tab">%</div>
+  <div class="s-tab">📖</div>
+  <div class="s-tab active">{ }</div>
+</div>
+
+<div class="main">
+
+  <div class="header">
+    <span class="h-title">LOGS</span>
+    <div class="h-live"><div class="h-dot"></div>&nbsp;LIVE</div>
+    <div class="h-sep"></div>
+    <button class="h-btn">⬇ EXPORT</button>
+    <button class="h-btn">🗑 CLEAR</button>
+  </div>
+
+  <!-- Health cards -->
+  <div class="health-row">
+    <div class="health-card">
+      <div class="hc-stripe ok"></div>
+      <div class="hc-top">
+        <span class="hc-name">FRONTEND</span>
+        <span class="hc-status ok">HEALTHY</span>
+      </div>
+      <div class="hc-val">React 18</div>
+      <div class="hc-sub">14 opps rendered · 2ms render</div>
+      <div class="hc-bar"><div class="hc-bar-fill" style="width:95%;background:var(--success)"></div></div>
+    </div>
+    <div class="health-card">
+      <div class="hc-stripe warn"></div>
+      <div class="hc-top">
+        <span class="hc-name">API</span>
+        <span class="hc-status warn">1 SLOW</span>
+      </div>
+      <div class="hc-val">7 / 8</div>
+      <div class="hc-sub">Gate slow 2.1s · KuCoin err</div>
+      <div class="hc-bar"><div class="hc-bar-fill" style="width:75%;background:var(--warning)"></div></div>
+    </div>
+    <div class="health-card">
+      <div class="hc-stripe ok"></div>
+      <div class="hc-top">
+        <span class="hc-name">WEBSOCKET</span>
+        <span class="hc-status ok">2 ACTIVE</span>
+      </div>
+      <div class="hc-val">Bin · BB</div>
+      <div class="hc-sub">avg latency 308ms</div>
+      <div class="hc-bar"><div class="hc-bar-fill" style="width:88%;background:var(--success)"></div></div>
+    </div>
+    <div class="health-card">
+      <div class="hc-stripe ok"></div>
+      <div class="hc-top">
+        <span class="hc-name">SERVER</span>
+        <span class="hc-status ok">RUNNING</span>
+      </div>
+      <div class="hc-val">5173</div>
+      <div class="hc-sub">Vite · 4 proxies · HMR on</div>
+      <div class="hc-bar"><div class="hc-bar-fill" style="width:100%;background:var(--success)"></div></div>
+    </div>
+    <div class="health-card">
+      <div class="hc-stripe err"></div>
+      <div class="hc-top">
+        <span class="hc-name">ERRORS</span>
+        <span class="hc-status err">3 ERRORS</span>
+      </div>
+      <div class="hc-val" style="color:var(--error)">3</div>
+      <div class="hc-sub">KuCoin · OKX WS × 2</div>
+      <div class="hc-bar"><div class="hc-bar-fill" style="width:20%;background:var(--error)"></div></div>
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- Source panel -->
+    <div class="source-panel">
+      <div class="sp-head">SOURCE</div>
+      <div class="sp-item all active">
+        <span class="sp-name">All sources</span>
+        <div class="sp-badges"><span class="sp-badge o">1432</span></div>
+      </div>
+      <div class="sp-item">
+        <span class="sp-name">Frontend</span>
+        <div class="sp-badges"><span class="sp-badge o">412</span></div>
+      </div>
+      <div class="sp-item">
+        <span class="sp-name">API</span>
+        <div class="sp-badges"><span class="sp-badge e">1</span><span class="sp-badge w">2</span><span class="sp-badge o">89</span></div>
+      </div>
+      <div class="sp-item">
+        <span class="sp-name">WebSocket</span>
+        <div class="sp-badges"><span class="sp-badge e">2</span><span class="sp-badge o">78</span></div>
+      </div>
+      <div class="sp-item">
+        <span class="sp-name">Server</span>
+        <div class="sp-badges"><span class="sp-badge o">21</span></div>
+      </div>
+      <div class="sp-item">
+        <span class="sp-name">Cache</span>
+        <div class="sp-badges"><span class="sp-badge w">1</span><span class="sp-badge o">55</span></div>
+      </div>
+      <div class="sp-footer">
+        <input class="sp-search" placeholder="grep...">
+      </div>
+    </div>
+
+    <!-- Log main -->
+    <div class="log-main">
+      <div class="lm-toolbar">
+        <button class="lm-pill ok active">OK</button>
+        <button class="lm-pill info active">INFO</button>
+        <button class="lm-pill warn active">WARN</button>
+        <button class="lm-pill error active">ERROR</button>
+        <button class="lm-pill debug">DEBUG</button>
+        <div class="lm-sep"></div>
+        <span class="lm-count">showing 1–24 of 135 · errors first</span>
+      </div>
+
+      <div class="log-stream">
+
+        <!-- Errors first -->
+        <div class="log-entry selected">
+          <span class="le-time">14:30:03</span>
+          <span class="le-lvl error">ERROR</span>
+          <span class="le-src">API</span>
+          <span class="le-msg"><span class="err">KuCoin: contract BTCUSDTM not found</span> — use XBTUSDTM · <span class="val">api.js:fetchKuCoin</span></span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:30:07</span>
+          <span class="le-lvl error">ERROR</span>
+          <span class="le-src">WS</span>
+          <span class="le-msg"><span class="err">OKX WS dropped</span> — code 1006, no reason · reconnect 1/5</span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:31:12</span>
+          <span class="le-lvl error">ERROR</span>
+          <span class="le-src">WS</span>
+          <span class="le-msg"><span class="err">OKX WS dropped again</span> — code 1006 · reconnect 2/5 · possible network issue</span>
+        </div>
+
+        <!-- Warnings -->
+        <div class="log-entry">
+          <span class="le-time">14:30:03</span>
+          <span class="le-lvl warn">WARN</span>
+          <span class="le-src">API</span>
+          <span class="le-msg">Gate response slow: <span class="warn">2140ms</span> (threshold 2000ms) — data received</span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:30:11</span>
+          <span class="le-lvl warn">WARN</span>
+          <span class="le-src">API</span>
+          <span class="le-msg">Cache miss: MEXC — TTL expired, re-fetching · last fetch was <span class="warn">58s</span> ago</span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:31:02</span>
+          <span class="le-lvl warn">WARN</span>
+          <span class="le-src">FRONTEND</span>
+          <span class="le-msg">DetailModal open — 60s polling paused · <span class="val">enrichOpportunities</span> interval suspended</span>
+        </div>
+
+        <!-- Info / OK -->
+        <div class="log-entry">
+          <span class="le-time">14:30:01</span>
+          <span class="le-lvl ok">OK</span>
+          <span class="le-src">SERVER</span>
+          <span class="le-msg">Vite <span class="val">5.4.2</span> started on <span class="val">:5173</span> · ready in <span class="ok">312ms</span></span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:30:01</span>
+          <span class="le-lvl ok">OK</span>
+          <span class="le-src">SERVER</span>
+          <span class="le-msg">Proxies: <span class="val">/gate-api /bingx-api /mexc-api /kucoin-api /binance-api</span></span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:30:02</span>
+          <span class="le-lvl ok">OK</span>
+          <span class="le-src">FRONTEND</span>
+          <span class="le-msg">App mounted · favorites: <span class="val">3</span> · hidden: <span class="val">0</span> · activeTrades: <span class="val">1</span></span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:30:02</span>
+          <span class="le-lvl info">INFO</span>
+          <span class="le-src">API</span>
+          <span class="le-msg">Parallel fetch: 8 exchanges · BTCUSDT · funding + volume + transfer</span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:30:02</span>
+          <span class="le-lvl ok">OK</span>
+          <span class="le-src">API</span>
+          <span class="le-msg">Binance — funding: <span class="ok">+0.0102%</span> · vol: <span class="val">$2.4B</span> · <span class="ok">591ms</span></span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:30:02</span>
+          <span class="le-lvl ok">OK</span>
+          <span class="le-src">API</span>
+          <span class="le-msg">Bybit — funding: <span class="ok">+0.0085%</span> · vol: <span class="val">$1.1B</span> · <span class="ok">724ms</span></span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:30:03</span>
+          <span class="le-lvl ok">OK</span>
+          <span class="le-src">API</span>
+          <span class="le-msg">OKX · Gate · MEXC · Bitget · BingX — all ok · cache written</span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:30:04</span>
+          <span class="le-lvl ok">OK</span>
+          <span class="le-src">FRONTEND</span>
+          <span class="le-msg">enrichOpportunities done · <span class="ok">19/20</span> enriched · render <span class="ok">2ms</span></span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:30:05</span>
+          <span class="le-lvl ok">OK</span>
+          <span class="le-src">WS</span>
+          <span class="le-msg">Binance WS connected · bids=20 asks=20 · latency <span class="ok">287ms</span></span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:30:05</span>
+          <span class="le-lvl ok">OK</span>
+          <span class="le-src">WS</span>
+          <span class="le-msg">Bybit WS connected · bids=25 asks=25 · latency <span class="ok">329ms</span></span>
+        </div>
+        <div class="log-entry">
+          <span class="le-time">14:31:04</span>
+          <span class="le-lvl info">INFO</span>
+          <span class="le-src">API</span>
+          <span class="le-msg">Refresh cycle — cache: 7 hits · 0 misses · next: <span class="val">60s</span></span>
+        </div>
+
+      </div>
+
+      <!-- Detail panel -->
+      <div class="log-detail-panel open">
+        <div class="ldp-head">
+          <span class="le-lvl error" style="font-family:var(--font-mono);font-size:9px;font-weight:700">ERROR</span>
+          <span class="ldp-title">API · 14:30:03.891 · KuCoin fetch failed</span>
+          <span class="ldp-close">✕ CLOSE</span>
+        </div>
+        <div class="ldp-body"><span class="err">ERROR</span>  KuCoin: contract does not exist
+
+<span class="val">Source:</span>   api.js → fetchKuCoin(sym)
+<span class="val">Endpoint:</span> /kucoin-api/api/v1/contracts/BTCUSDTM
+<span class="val">Response:</span> 400 Bad Request
+<span class="val">Body:</span>     { "code": "400100", "msg": "Contract does not exist" }
+
+<span class="fix">Fix:</span>      BTC futures symbol on KuCoin is XBTUSDTM, not BTCUSDTM
+          Change TEST_SYMBOL in ApiPage.jsx:
+          KuCoin: testCoin === 'BTC' ? 'XBT' : testCoin</div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -237,10 +237,10 @@ function HiddenDropdown({ hiddenItems, onRestore }) {
                         {hiddenItems.map(opp => (
                             <div key={opp.id} className="sort-option" style={{ justifyContent: 'space-between' }}>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                    <span style={{ color: 'var(--text-promary)', fontWeight: 600, fontSize: 12 }}>
+                                    <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 12 }}>
                                         {opp.symbol}
                                     </span>
-                                    <span style={{ fontSize: 10, color: 'car(--text-muted)' }}>
+                                    <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                                         {opp.strategy.toUpperCase()} · {opp.bid_ex} → {opp.ask_ex} 
                                     </span>
                                 </div>

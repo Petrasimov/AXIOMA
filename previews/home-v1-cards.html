@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Home v1 — Cards Grid</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-primary: #060606; --bg-secondary: #0a1a25; --bg-card: #0d2033;
+    --bg-hover: #112840; --accent: #2F6997; --accent-bright: #3d87c0;
+    --text-primary: #e8f4fd; --text-secondary: #6a8fa8; --text-muted: #3d6680;
+    --success: #00c97a; --error: #e03e3e; --warning: #f0a500; --border: #1a3a52;
+    --font-sans: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+  }
+  body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-sans); display: flex; height: 100vh; overflow: hidden; }
+
+  .sidebar { width: 60px; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 0; gap: 4px; flex-shrink: 0; }
+  .s-logo { display: flex; align-items: center; justify-content: center; padding: 0 12px 20px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .s-logo-icon { width: 36px; height: 36px; background: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--accent); border-radius: 4px; }
+  .s-tab { display: flex; align-items: center; justify-content: center; padding: 10px 0; cursor: pointer; color: var(--text-secondary); border-left: 2px solid transparent; font-size: 18px; }
+  .s-tab.active { color: var(--accent-bright); border-left-color: var(--accent-bright); background: var(--bg-hover); }
+  .s-tab.dim { opacity: 0.35; cursor: not-allowed; }
+
+  .main { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+  .header {
+    height: 72px; background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 32px; gap: 16px; flex-shrink: 0;
+  }
+  .h-title { font-size: 18px; font-weight: 700; letter-spacing: 2px; }
+  .h-sep { flex: 1; }
+  .h-badge {
+    font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 1.5px;
+    padding: 4px 12px; border: 1px solid rgba(0,201,122,0.4); color: var(--success);
+    background: rgba(0,201,122,0.07);
+  }
+
+  .content { flex: 1; overflow-y: auto; padding: 48px 48px; }
+  .content::-webkit-scrollbar { width: 4px; }
+  .content::-webkit-scrollbar-track { background: var(--bg-primary); }
+  .content::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* Hero */
+  .hero { display: flex; align-items: flex-start; gap: 48px; margin-bottom: 56px; }
+  .hero-logo {
+    width: 80px; height: 80px; min-width: 80px; background: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 800; color: var(--accent); border-radius: 8px; letter-spacing: 2px;
+  }
+  .hero-text { flex: 1; }
+  .hero-name {
+    font-size: 42px; font-weight: 800; letter-spacing: 6px; color: var(--text-primary);
+    line-height: 1; margin-bottom: 8px;
+  }
+  .hero-sub {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 3px;
+    color: var(--accent-bright); text-transform: uppercase; margin-bottom: 20px;
+  }
+  .hero-desc {
+    font-size: 15px; color: var(--text-secondary); line-height: 1.8; max-width: 620px;
+  }
+  .hero-desc strong { color: var(--text-primary); font-weight: 600; }
+
+  /* Section title */
+  .section-title {
+    display: flex; align-items: center; gap: 14px; margin-bottom: 24px;
+  }
+  .st-label { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase; }
+  .st-line { flex: 1; height: 1px; background: var(--border); }
+
+  /* Screener cards */
+  .cards-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 48px; }
+
+  .card {
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    padding: 24px; display: flex; flex-direction: column; gap: 14px;
+    position: relative; overflow: hidden; transition: border-color .2s;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card.active-card { border-color: rgba(0,201,122,0.3); }
+  .card.active-card:hover { border-color: var(--success); }
+
+  .card-stripe { position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+  .card-stripe.active { background: var(--success); }
+  .card-stripe.soon   { background: var(--border); }
+  .card-stripe.future { background: var(--text-muted); }
+
+  .card-top { display: flex; align-items: center; justify-content: space-between; }
+  .card-icon { font-size: 22px; }
+  .card-badge {
+    font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 1px;
+    padding: 3px 10px;
+  }
+  .card-badge.active { color: var(--success); border: 1px solid rgba(0,201,122,0.4); background: rgba(0,201,122,0.07); }
+  .card-badge.soon   { color: var(--warning); border: 1px solid rgba(240,165,0,0.3); background: rgba(240,165,0,0.07); }
+  .card-badge.future { color: var(--text-muted); border: 1px solid var(--border); }
+
+  .card-name { font-size: 14px; font-weight: 700; letter-spacing: 1px; color: var(--text-primary); }
+  .card-full { font-size: 10px; color: var(--text-muted); letter-spacing: 0.5px; margin-top: 2px; }
+  .card-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.7; }
+
+  .card-meta { display: flex; gap: 8px; flex-wrap: wrap; }
+  .card-tag {
+    font-family: var(--font-mono); font-size: 9px; color: var(--text-muted);
+    padding: 2px 8px; border: 1px solid var(--border); letter-spacing: 0.5px;
+  }
+  .card-tag.hi { color: var(--accent-bright); border-color: rgba(61,135,192,0.3); }
+
+  /* Info row */
+  .info-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 48px; }
+  .info-block { background: var(--bg-secondary); border: 1px solid var(--border); padding: 24px; }
+  .ib-title { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 14px; }
+  .ib-list { display: flex; flex-direction: column; gap: 10px; }
+  .ib-item { display: flex; align-items: flex-start; gap: 10px; }
+  .ib-dot { width: 6px; height: 6px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
+  .ib-dot.ok   { background: var(--success); }
+  .ib-dot.soon { background: var(--warning); }
+  .ib-dot.no   { background: var(--border); }
+  .ib-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+  .ib-text strong { color: var(--text-primary); }
+
+  /* Footer note */
+  .footer-note {
+    padding: 20px 24px; background: var(--bg-secondary); border: 1px solid var(--border);
+    border-left: 3px solid var(--accent); display: flex; align-items: center; gap: 16px;
+  }
+  .fn-icon { font-size: 18px; flex-shrink: 0; }
+  .fn-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+  .fn-text strong { color: var(--text-primary); }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="s-logo"><div class="s-logo-icon">AX</div></div>
+  <div class="s-tab active">🏠</div>
+  <div class="s-tab">📈</div>
+  <div class="s-tab dim">%</div>
+  <div class="s-tab dim">📖</div>
+  <div class="s-tab">{ }</div>
+</div>
+
+<div class="main">
+  <div class="header">
+    <span class="h-title">ГЛАВНАЯ</span>
+    <div class="h-sep"></div>
+    <span class="h-badge">● СЕРВИС АКТИВЕН</span>
+  </div>
+
+  <div class="content">
+
+    <!-- Hero -->
+    <div class="hero">
+      <div class="hero-logo">AX</div>
+      <div class="hero-text">
+        <div class="hero-name">AXIOM</div>
+        <div class="hero-sub">Crypto Arbitrage Screener</div>
+        <div class="hero-desc">
+          AXIOM — это платформа для мониторинга <strong>арбитражных возможностей</strong> на криптовалютном рынке.
+          Мы агрегируем данные с 8 крупнейших бирж в реальном времени и показываем расхождения цен,
+          которые можно использовать для <strong>нейтральных к рынку стратегий</strong> с минимальным риском.
+        </div>
+      </div>
+    </div>
+
+    <!-- Screeners -->
+    <div class="section-title">
+      <span class="st-label">Скринеры</span>
+      <div class="st-line"></div>
+    </div>
+
+    <div class="cards-grid">
+
+      <div class="card active-card">
+        <div class="card-stripe active"></div>
+        <div class="card-top">
+          <span class="card-icon">📈</span>
+          <span class="card-badge active">● АКТИВЕН</span>
+        </div>
+        <div>
+          <div class="card-name">ФЬЮЧЕРСНЫЙ АРБИТРАЖ</div>
+          <div class="card-full">Futures / Futures · CEX-CEX</div>
+        </div>
+        <div class="card-desc">
+          Поиск расхождений цен между фьючерсными контрактами на разных биржах.
+          Одновременный вход LONG на одной бирже и SHORT на другой нейтрализует рыночный риск.
+        </div>
+        <div class="card-meta">
+          <span class="card-tag hi">8 бирж</span>
+          <span class="card-tag hi">Live данные</span>
+          <span class="card-tag hi">WS книга</span>
+          <span class="card-tag hi">P&L калькулятор</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-stripe soon"></div>
+        <div class="card-top">
+          <span class="card-icon">🔄</span>
+          <span class="card-badge soon">СКОРО</span>
+        </div>
+        <div>
+          <div class="card-name">СПОТ-ФЬЮЧЕРСНЫЙ</div>
+          <div class="card-full">Spot / Futures · CEX-CEX</div>
+        </div>
+        <div class="card-desc">
+          Арбитраж между спотовым рынком одной биржи и фьючерсным контрактом другой.
+          Учитывает стоимость переноса позиции и ставку фандинга.
+        </div>
+        <div class="card-meta">
+          <span class="card-tag">8 бирж</span>
+          <span class="card-tag">Фандинг учёт</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-stripe soon"></div>
+        <div class="card-top">
+          <span class="card-icon">💰</span>
+          <span class="card-badge soon">СКОРО</span>
+        </div>
+        <div>
+          <div class="card-name">ФАНДИНГ АРБИТРАЖ</div>
+          <div class="card-full">Funding Rate · Yield</div>
+        </div>
+        <div class="card-desc">
+          Мониторинг аномальных ставок фандинга. Поиск возможностей для сбора положительного
+          фандинга при нейтральной позиции через хедж на споте.
+        </div>
+        <div class="card-meta">
+          <span class="card-tag">8 бирж</span>
+          <span class="card-tag">Ставки 3 периода</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-stripe future"></div>
+        <div class="card-top">
+          <span class="card-icon">⛓</span>
+          <span class="card-badge future">В ПЛАНЕ</span>
+        </div>
+        <div>
+          <div class="card-name">DEX-CEX АРБИТРАЖ</div>
+          <div class="card-full">Decentralized / Centralized</div>
+        </div>
+        <div class="card-desc">
+          Расхождения цен между децентрализованными протоколами (Uniswap, dYdX) и
+          централизованными биржами. Требует on-chain исполнения.
+        </div>
+        <div class="card-meta">
+          <span class="card-tag">EVM</span>
+          <span class="card-tag">Solana</span>
+          <span class="card-tag">Gas учёт</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-stripe future"></div>
+        <div class="card-top">
+          <span class="card-icon">🔀</span>
+          <span class="card-badge future">В ПЛАНЕ</span>
+        </div>
+        <div>
+          <div class="card-name">ТРЕУГОЛЬНЫЙ АРБИТРАЖ</div>
+          <div class="card-full">Triangular · CEX Internal</div>
+        </div>
+        <div class="card-desc">
+          Поиск неэффективности внутри одной биржи через цепочку из трёх пар.
+          BTC → ETH → USDT → BTC с положительным итогом.
+        </div>
+        <div class="card-meta">
+          <span class="card-tag">Внутрибиржевой</span>
+          <span class="card-tag">Без переводов</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-stripe future"></div>
+        <div class="card-top">
+          <span class="card-icon">📊</span>
+          <span class="card-badge future">В ПЛАНЕ</span>
+        </div>
+        <div>
+          <div class="card-name">СТАТИСТИЧЕСКИЙ</div>
+          <div class="card-full">Statistical · Pairs Trading</div>
+        </div>
+        <div class="card-desc">
+          Торговля коинтегрированными парами на основе исторических корреляций.
+          BTC/ETH, BNB/SOL — возврат к среднему при отклонении.
+        </div>
+        <div class="card-meta">
+          <span class="card-tag">Z-score</span>
+          <span class="card-tag">Корреляция</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Info row -->
+    <div class="section-title">
+      <span class="st-label">О платформе</span>
+      <div class="st-line"></div>
+    </div>
+
+    <div class="info-row">
+      <div class="info-block">
+        <div class="ib-title">Как это работает</div>
+        <div class="ib-list">
+          <div class="ib-item"><div class="ib-dot ok"></div><div class="ib-text"><strong>Агрегация данных</strong> — REST и WebSocket запросы к 8 биржам каждые 60 секунд</div></div>
+          <div class="ib-item"><div class="ib-dot ok"></div><div class="ib-text"><strong>Расчёт спреда</strong> — реальные цены с учётом глубины книги ордеров (VWAP)</div></div>
+          <div class="ib-item"><div class="ib-dot ok"></div><div class="ib-text"><strong>Фильтрация</strong> — по бирже, стратегии, спреду, фандингу, статусу переводов</div></div>
+          <div class="ib-item"><div class="ib-dot ok"></div><div class="ib-text"><strong>Мониторинг позиции</strong> — P&L калькулятор и графики в реальном времени</div></div>
+        </div>
+      </div>
+      <div class="info-block">
+        <div class="ib-title">Поддерживаемые биржи</div>
+        <div class="ib-list">
+          <div class="ib-item"><div class="ib-dot ok"></div><div class="ib-text"><strong>Binance, Bybit, OKX</strong> — прямой API без прокси</div></div>
+          <div class="ib-item"><div class="ib-dot ok"></div><div class="ib-text"><strong>Gate.io, BingX, MEXC, KuCoin</strong> — через CORS proxy</div></div>
+          <div class="ib-item"><div class="ib-dot ok"></div><div class="ib-text"><strong>Bitget</strong> — прямой API</div></div>
+          <div class="ib-item"><div class="ib-dot soon"></div><div class="ib-text"><strong>Другие биржи</strong> — в процессе добавления</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      <div class="fn-icon">ℹ️</div>
+      <div class="fn-text">
+        AXIOM находится в активной разработке. На данный момент доступен только скринер
+        <strong>фьючерсного арбитража (CEX-CEX)</strong>. Остальные модули будут запускаться
+        поочерёдно по мере готовности.
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

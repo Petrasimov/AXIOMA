@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Logs v1 — Terminal Stream</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-primary: #060606; --bg-secondary: #0a1a25; --bg-card: #0d2033;
+    --bg-hover: #112840; --accent: #2F6997; --accent-bright: #3d87c0;
+    --text-primary: #e8f4fd; --text-secondary: #6a8fa8; --text-muted: #3d6680;
+    --success: #00c97a; --error: #e03e3e; --warning: #f0a500; --border: #1a3a52;
+    --font-sans: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+  }
+  body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-sans); display: flex; height: 100vh; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar { width: 60px; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 0; gap: 4px; }
+  .s-logo { display: flex; align-items: center; justify-content: center; padding: 0 12px 20px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .s-logo-icon { width: 36px; height: 36px; background: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--accent); letter-spacing: 1px; border-radius: 4px; }
+  .s-tab { display: flex; align-items: center; justify-content: center; padding: 10px 0; cursor: pointer; color: var(--text-secondary); font-size: 13px; border-left: 2px solid transparent; }
+  .s-tab.active { color: var(--accent-bright); border-left-color: var(--accent-bright); background: var(--bg-hover); }
+
+  /* Main */
+  .main { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+  /* Header */
+  .header { height: 72px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 16px; flex-shrink: 0; }
+  .h-title { font-size: 18px; font-weight: 700; letter-spacing: 2px; }
+  .h-live { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10px; color: var(--success); letter-spacing: 1px; }
+  .h-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .h-sep { flex: 1; }
+  .h-search { background: var(--bg-card); border: 1px solid var(--border); color: var(--text-primary); font-family: var(--font-mono); font-size: 12px; padding: 6px 12px; width: 240px; outline: none; }
+  .h-search::placeholder { color: var(--text-muted); }
+  .h-search:focus { border-color: var(--accent); }
+  .h-btn { padding: 6px 14px; font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 1px; background: none; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; }
+  .h-btn.active { border-color: var(--accent-bright); color: var(--accent-bright); background: rgba(61,135,192,0.1); }
+
+  /* Toolbar */
+  .toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--bg-secondary); flex-shrink: 0; flex-wrap: wrap; }
+  .t-label { font-size: 9px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; }
+  .t-pills { display: flex; gap: 4px; }
+  .t-pill { padding: 4px 12px; font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 1px; background: none; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; }
+  .t-pill.info.active  { border-color: var(--accent-bright); color: var(--accent-bright); background: rgba(61,135,192,0.1); }
+  .t-pill.warn.active  { border-color: var(--warning); color: var(--warning); background: rgba(240,165,0,0.1); }
+  .t-pill.error.active { border-color: var(--error); color: var(--error); background: rgba(224,62,62,0.1); }
+  .t-pill.ok.active    { border-color: var(--success); color: var(--success); background: rgba(0,201,122,0.1); }
+  .t-pill.debug.active { border-color: var(--text-muted); color: var(--text-muted); background: rgba(61,102,128,0.1); }
+  .t-divider { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+  .t-counter { font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); margin-left: auto; }
+  .t-counter span { margin-left: 10px; }
+  .t-counter .e { color: var(--error); }
+  .t-counter .w { color: var(--warning); }
+  .t-counter .o { color: var(--success); }
+
+  /* Log stream */
+  .log-area { flex: 1; overflow-y: auto; font-family: var(--font-mono); font-size: 12px; line-height: 1.7; background: #04111a; }
+  .log-area::-webkit-scrollbar { width: 4px; }
+  .log-area::-webkit-scrollbar-track { background: #04111a; }
+  .log-area::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .log-group-header { padding: 10px 16px 4px; font-size: 9px; letter-spacing: 2px; color: var(--text-muted); border-bottom: 1px solid #0d1f2d; margin-top: 8px; display: flex; align-items: center; gap: 8px; }
+  .log-group-header::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .log-row { display: flex; align-items: flex-start; gap: 0; padding: 2px 0; border-bottom: 1px solid rgba(26,58,82,0.3); transition: background .1s; cursor: pointer; }
+  .log-row:hover { background: rgba(17,40,64,0.5); }
+  .log-row.expanded { background: rgba(13,32,51,0.8); }
+
+  .log-num { width: 48px; text-align: right; padding: 0 10px; color: var(--text-muted); font-size: 10px; flex-shrink: 0; user-select: none; line-height: 1.7; }
+  .log-time { width: 80px; padding: 0 8px; color: var(--text-muted); flex-shrink: 0; font-size: 11px; line-height: 1.7; }
+  .log-level { width: 54px; padding: 0 6px; font-size: 9px; font-weight: 700; letter-spacing: 1px; flex-shrink: 0; line-height: 1.7; }
+  .log-level.info  { color: var(--accent-bright); }
+  .log-level.warn  { color: var(--warning); }
+  .log-level.error { color: var(--error); }
+  .log-level.ok    { color: var(--success); }
+  .log-level.debug { color: var(--text-muted); }
+
+  .log-source { width: 90px; padding: 0 6px; color: var(--text-muted); font-size: 10px; flex-shrink: 0; line-height: 1.7; }
+  .log-msg { flex: 1; padding: 0 6px; color: var(--text-secondary); line-height: 1.7; word-break: break-all; }
+  .log-msg .hl { color: var(--text-primary); }
+  .log-msg .val { color: var(--accent-bright); }
+  .log-msg .ok  { color: var(--success); }
+  .log-msg .err { color: var(--error); }
+  .log-msg .warn{ color: var(--warning); }
+
+  .log-detail { padding: 8px 48px 8px 232px; background: rgba(4,17,26,0.8); border-bottom: 1px solid var(--border); font-size: 11px; color: var(--text-muted); white-space: pre; line-height: 1.6; }
+
+  /* Status bar */
+  .statusbar { height: 24px; background: #071825; border-top: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; gap: 20px; flex-shrink: 0; }
+  .sb-item { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); letter-spacing: 0.5px; display: flex; align-items: center; gap: 5px; }
+  .sb-dot { width: 5px; height: 5px; border-radius: 50%; }
+  .sb-dot.ok { background: var(--success); }
+  .sb-dot.err { background: var(--error); }
+  .sb-dot.warn { background: var(--warning); }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="s-logo"><div class="s-logo-icon">AX</div></div>
+  <div class="s-tab">🏠</div>
+  <div class="s-tab">📈</div>
+  <div class="s-tab">%</div>
+  <div class="s-tab">📖</div>
+  <div class="s-tab active">{ }</div>
+</div>
+
+<div class="main">
+
+  <div class="header">
+    <span class="h-title">LOGS</span>
+    <div class="h-live"><div class="h-dot"></div>LIVE STREAM</div>
+    <div class="h-sep"></div>
+    <input class="h-search" placeholder="grep: filter logs...">
+    <button class="h-btn active">⬇ AUTO-SCROLL</button>
+    <button class="h-btn">🗑 CLEAR</button>
+    <button class="h-btn">⬇ EXPORT</button>
+  </div>
+
+  <div class="toolbar">
+    <span class="t-label">LEVEL</span>
+    <div class="t-pills">
+      <button class="t-pill ok active">✓ OK</button>
+      <button class="t-pill info active">ℹ INFO</button>
+      <button class="t-pill warn active">⚠ WARN</button>
+      <button class="t-pill error active">✗ ERROR</button>
+      <button class="t-pill debug active">· DEBUG</button>
+    </div>
+    <div class="t-divider"></div>
+    <span class="t-label">SOURCE</span>
+    <div class="t-pills">
+      <button class="t-pill info active">FRONTEND</button>
+      <button class="t-pill info active">API</button>
+      <button class="t-pill info active">WEBSOCKET</button>
+      <button class="t-pill info active">SERVER</button>
+      <button class="t-pill info active">DATABASE</button>
+    </div>
+    <span class="t-counter">
+      <span class="o">✓ 124 ok</span>
+      <span class="w">⚠ 8 warn</span>
+      <span class="e">✗ 3 error</span>
+      <span>· 1432 total</span>
+    </span>
+  </div>
+
+  <div class="log-area">
+
+    <div class="log-group-header">SERVER — 14:30:00</div>
+
+    <div class="log-row">
+      <span class="log-num">1</span>
+      <span class="log-time">14:30:01.002</span>
+      <span class="log-level ok">OK</span>
+      <span class="log-source">SERVER</span>
+      <span class="log-msg">Vite dev server started on <span class="val">http://localhost:5173</span> — ready in <span class="ok">312ms</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">2</span>
+      <span class="log-time">14:30:01.118</span>
+      <span class="log-level ok">OK</span>
+      <span class="log-source">SERVER</span>
+      <span class="log-msg">Proxy configured: <span class="val">/gate-api</span> → gateio.ws · <span class="val">/bingx-api</span> → bingx.com · <span class="val">/mexc-api</span> → mexc.com · <span class="val">/kucoin-api</span> → kucoin.com</span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">3</span>
+      <span class="log-time">14:30:01.201</span>
+      <span class="log-level info">INFO</span>
+      <span class="log-source">SERVER</span>
+      <span class="log-msg">HMR WebSocket listening on port <span class="val">5173</span></span>
+    </div>
+
+    <div class="log-group-header">FRONTEND — 14:30:02</div>
+
+    <div class="log-row">
+      <span class="log-num">4</span>
+      <span class="log-time">14:30:02.045</span>
+      <span class="log-level ok">OK</span>
+      <span class="log-source">FRONTEND</span>
+      <span class="log-msg">React <span class="val">18.2.0</span> mounted — root element <span class="val">#root</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">5</span>
+      <span class="log-time">14:30:02.112</span>
+      <span class="log-level ok">OK</span>
+      <span class="log-source">FRONTEND</span>
+      <span class="log-msg">App state initialised — favorites: <span class="val">3</span> · hidden: <span class="val">0</span> · activeTrades: <span class="val">1</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">6</span>
+      <span class="log-time">14:30:02.190</span>
+      <span class="log-level info">INFO</span>
+      <span class="log-source">FRONTEND</span>
+      <span class="log-msg">enrichOpportunities() started — <span class="val">20</span> mock opportunities queued</span>
+    </div>
+
+    <div class="log-group-header">API — 14:30:02 → 14:30:04</div>
+
+    <div class="log-row">
+      <span class="log-num">7</span>
+      <span class="log-time">14:30:02.210</span>
+      <span class="log-level info">INFO</span>
+      <span class="log-source">API</span>
+      <span class="log-msg">Parallel fetch started: <span class="val">Binance</span> · <span class="val">Bybit</span> · <span class="val">OKX</span> · <span class="val">Gate</span> · <span class="val">MEXC</span> · <span class="val">KuCoin</span> · <span class="val">Bitget</span> · <span class="val">BingX</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">8</span>
+      <span class="log-time">14:30:02.801</span>
+      <span class="log-level ok">OK</span>
+      <span class="log-source">API</span>
+      <span class="log-msg">Binance fapi.binance.com — funding: <span class="ok">+0.0102%</span> · volume: <span class="val">$2.4B</span> · latency: <span class="ok">591ms</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">9</span>
+      <span class="log-time">14:30:02.934</span>
+      <span class="log-level ok">OK</span>
+      <span class="log-source">API</span>
+      <span class="log-msg">Bybit api.bybit.com — funding: <span class="ok">+0.0085%</span> · volume: <span class="val">$1.1B</span> · latency: <span class="ok">724ms</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">10</span>
+      <span class="log-time">14:30:03.102</span>
+      <span class="log-level ok">OK</span>
+      <span class="log-source">API</span>
+      <span class="log-msg">OKX okx.com — funding: <span class="warn">-0.0031%</span> · volume: <span class="val">$890M</span> · latency: <span class="ok">892ms</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">11</span>
+      <span class="log-time">14:30:03.240</span>
+      <span class="log-level warn">WARN</span>
+      <span class="log-source">API</span>
+      <span class="log-msg">Gate /gate-api slow response — latency: <span class="warn">2140ms</span> (threshold: 2000ms) — data received, continuing</span>
+    </div>
+    <div class="log-row expanded" onclick="this.classList.toggle('expanded'); this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+      <span class="log-num">12</span>
+      <span class="log-time">14:30:03.891</span>
+      <span class="log-level error">ERROR</span>
+      <span class="log-source">API</span>
+      <span class="log-msg"><span class="err">KuCoin fetch failed</span> — contract BTCUSDTM not found · fallback: null · <span class="val">↓ click to expand</span></span>
+    </div>
+    <div class="log-detail">
+  Source:   api.js → fetchKuCoin('BTC')
+  Endpoint: /kucoin-api/api/v1/contracts/BTCUSDTM
+  Response: 400 Bad Request
+  Body:     { "code": "400100", "msg": "Contract does not exist" }
+
+  Fix:      Use symbol XBTUSDTM instead of BTCUSDTM
+            In api.js: fetchKuCoin(sym) → adjust symbol mapping for BTC
+    </div>
+    <div class="log-row">
+      <span class="log-num">13</span>
+      <span class="log-time">14:30:04.011</span>
+      <span class="log-level ok">OK</span>
+      <span class="log-source">API</span>
+      <span class="log-msg">MEXC · Bitget · BingX — all ok · avg latency: <span class="ok">1.2s</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">14</span>
+      <span class="log-time">14:30:04.015</span>
+      <span class="log-level info">INFO</span>
+      <span class="log-source">API</span>
+      <span class="log-msg">Cache write: <span class="val">7</span> exchanges cached · TTL: <span class="val">55s</span> · KuCoin: skipped (error)</span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">15</span>
+      <span class="log-time">14:30:04.018</span>
+      <span class="log-level ok">OK</span>
+      <span class="log-source">FRONTEND</span>
+      <span class="log-msg">enrichOpportunities() done — <span class="ok">19/20</span> enriched · 1 used mock fallback · render triggered</span>
+    </div>
+
+    <div class="log-group-header">WEBSOCKET — 14:30:05</div>
+
+    <div class="log-row">
+      <span class="log-num">16</span>
+      <span class="log-time">14:30:05.200</span>
+      <span class="log-level info">INFO</span>
+      <span class="log-source">WEBSOCKET</span>
+      <span class="log-msg">connectOrderBook('binance', 'BTC', 'futures') — connecting to <span class="val">wss://fstream.binance.com</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">17</span>
+      <span class="log-time">14:30:05.487</span>
+      <span class="log-level ok">OK</span>
+      <span class="log-source">WEBSOCKET</span>
+      <span class="log-msg">Binance WS connected — first snapshot: bids=<span class="val">20</span> asks=<span class="val">20</span> · latency: <span class="ok">287ms</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">18</span>
+      <span class="log-time">14:30:05.502</span>
+      <span class="log-level info">INFO</span>
+      <span class="log-source">WEBSOCKET</span>
+      <span class="log-msg">connectOrderBook('bybit', 'BTC', 'futures') — connecting to <span class="val">wss://stream.bybit.com</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">19</span>
+      <span class="log-time">14:30:05.831</span>
+      <span class="log-level ok">OK</span>
+      <span class="log-source">WEBSOCKET</span>
+      <span class="log-msg">Bybit WS connected — first snapshot: bids=<span class="val">25</span> asks=<span class="val">25</span> · latency: <span class="ok">329ms</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">20</span>
+      <span class="log-time">14:30:07.120</span>
+      <span class="log-level warn">WARN</span>
+      <span class="log-source">WEBSOCKET</span>
+      <span class="log-msg">OKX WS reconnect attempt <span class="warn">2/5</span> — connection dropped (code 1006, no reason)</span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">21</span>
+      <span class="log-time">14:30:09.440</span>
+      <span class="log-level ok">OK</span>
+      <span class="log-source">WEBSOCKET</span>
+      <span class="log-msg">OKX WS reconnected — resuming stream</span>
+    </div>
+
+    <div class="log-group-header">API REFRESH CYCLE — 14:31:04 (т60s)</div>
+
+    <div class="log-row">
+      <span class="log-num">22</span>
+      <span class="log-time">14:31:04.015</span>
+      <span class="log-level info">INFO</span>
+      <span class="log-source">API</span>
+      <span class="log-msg">Cache check — <span class="val">7</span> hits (fresh) · <span class="val">0</span> misses · next refresh in <span class="val">55s</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">23</span>
+      <span class="log-time">14:31:04.016</span>
+      <span class="log-level debug">DEBUG</span>
+      <span class="log-source">FRONTEND</span>
+      <span class="log-msg">useMemo recalc — opportunities: <span class="val">14</span> filtered / 20 total · sort: <span class="val">spread</span> · time: <span class="ok">2ms</span></span>
+    </div>
+    <div class="log-row">
+      <span class="log-num">24</span>
+      <span class="log-time">14:31:04.018</span>
+      <span class="log-level debug">DEBUG</span>
+      <span class="log-source">FRONTEND</span>
+      <span class="log-msg">React render — <span class="val">OpportunityGrid</span> · cards: <span class="val">14</span> · skipped (no state change): <span class="val">Header StatsRow Sidebar</span></span>
+    </div>
+
+  </div>
+
+  <div class="statusbar">
+    <div class="sb-item"><div class="sb-dot ok"></div>SERVER OK</div>
+    <div class="sb-item"><div class="sb-dot ok"></div>FRONTEND OK</div>
+    <div class="sb-item"><div class="sb-dot warn"></div>API 1 WARN</div>
+    <div class="sb-item"><div class="sb-dot err"></div>KuCoin ERR</div>
+    <div class="sb-item"><div class="sb-dot ok"></div>WS 2 ACTIVE</div>
+    <div class="sb-item" style="margin-left:auto">1432 entries · last updated 14:31:04</div>
+  </div>
+
+</div>
+</body>
+</html>

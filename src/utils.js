@@ -43,7 +43,6 @@ export function getSpreadGrade(spread) {
   return { label: 'LOW',  bg: '#6a8fa822', color: '#6a8fa8' }
 }
 
-
 export function calcProfit(spread, tradeAmount) {
     return (spread * tradeAmount / 100).toFixed(2)
 }
@@ -71,4 +70,56 @@ export function getTransferIcon(val) {
     return { icon: '❓'}
 }
 
+export function calcVwap(orders, usdAmount) {
+    if (!orders || orders.length === 0) return null
 
+    let remaining = usdAmount
+    let totalCost = 0
+    let totalQty = 0
+
+    for (const [price, qty] of orders) {
+        if (remaining <= 0) break
+
+        const available = qty * price 
+        const spend = Math.min(remaining, available)
+        const bought = spend / price 
+
+        totalCost += bought * price
+        totalQty += bought
+        remaining -= spend
+    }
+
+    if (totalQty === 0) return null
+    return totalCost / totalQty
+    
+}
+
+export function calcMaxVolume(orders, targetPrice, side) {
+    if (!orders || orders.length === 0 || !targetPrice) return null
+
+    let totalUsd = 0
+    let count = 0
+
+    if (side === 'long') {
+        // Идём по asks снизу вверх, останавливаемся когда цена >= targetPrice
+        for (const [price, qty] of orders) {
+            const p = parseFloat(price)
+            const q = parseFloat(qty)
+            if (p >= targetPrice) break
+            totalUsd += p * q
+            count++
+        }
+    } else {
+        // Идём по bids сверху вниз, останавливаемся когда цена <= targetPrice
+        for (const [price, qty] of orders) {
+            const p = parseFloat(price)
+            const q = parseFloat(qty)
+            if (p <= targetPrice) break
+            totalUsd += p * q
+            count++
+        }
+    }
+
+    if (totalUsd === 0) return null
+    return { usd: totalUsd, count }
+}

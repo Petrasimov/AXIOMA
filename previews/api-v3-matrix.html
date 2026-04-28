@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>AXIOMA — API Tester v3 (Matrix)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary:    #060606;
+  --bg-secondary:  #0a1a25;
+  --bg-card:       #0d2033;
+  --bg-hover:      #112840;
+  --accent:        #2F6997;
+  --accent-bright: #3d87c0;
+  --text-primary:  #e8f4fd;
+  --text-secondary:#6a8fa8;
+  --text-muted:    #3d6680;
+  --success:       #00c97a;
+  --error:         #e03e3e;
+  --warning:       #f0a500;
+  --border:        #1a3a52;
+  --font-sans:     'Inter', sans-serif;
+  --font-mono:     'JetBrains Mono', monospace;
+}
+
+body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-sans); height: 100vh; display: flex; overflow: hidden; }
+
+.sidebar { width: 60px; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; padding: 16px 0; gap: 8px; flex-shrink: 0; }
+.sb-logo { font-family: var(--font-mono); font-size: 9px; font-weight: 700; color: var(--accent-bright); letter-spacing: 2px; writing-mode: vertical-rl; transform: rotate(180deg); margin-bottom: 16px; }
+.sb-item { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border: 1px solid transparent; cursor: pointer; font-size: 11px; color: var(--text-muted); font-weight: 700; transition: all .15s; border-radius: 2px; }
+.sb-item.active { border-color: var(--accent); color: var(--accent-bright); background: rgba(47,105,151,0.12); }
+.sb-item:not(.active) { opacity: 0.35; }
+
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+
+.header { height: 52px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 16px; flex-shrink: 0; }
+.header-title { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--text-secondary); letter-spacing: 2px; }
+.header-sep { flex: 1; }
+.mode-group { display: flex; border: 1px solid var(--border); }
+.mode-btn { padding: 5px 16px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 1.5px; background: none; border: none; border-right: 1px solid var(--border); color: var(--text-muted); cursor: pointer; transition: all .15s; }
+.mode-btn:last-child { border-right: none; }
+.mode-btn.active { background: rgba(47,105,151,0.18); color: var(--accent-bright); }
+
+/* ── Content ── */
+.content-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 16px;
+  gap: 12px;
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.run-all-btn {
+  padding: 8px 24px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  background: rgba(0,201,122,0.08);
+  border: 1px solid var(--success);
+  color: var(--success);
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.run-all-btn:hover { background: rgba(0,201,122,0.18); }
+
+.filter-pills { display: flex; gap: 0; border: 1px solid var(--border); }
+.filter-pill {
+  padding: 7px 14px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  background: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all .15s;
+}
+.filter-pill:last-child { border-right: none; }
+.filter-pill.active { background: rgba(47,105,151,0.15); color: var(--accent-bright); }
+
+.summary-chips { display: flex; gap: 8px; margin-left: auto; }
+.s-chip {
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.s-chip-label { font-size: 8px; color: var(--text-muted); letter-spacing: 1px; }
+
+/* ── Matrix ── */
+.matrix-wrap {
+  flex: 1;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+  gap: 0;
+  border: 1px solid var(--border);
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+/* Header row */
+.matrix-head {
+  display: grid;
+  grid-template-columns: 160px repeat(4, 1fr) 100px;
+  border-bottom: 2px solid var(--border);
+  background: #071825;
+}
+
+.mh-cell {
+  padding: 10px 14px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mh-cell:last-child { border-right: none; }
+.mh-cell.active-col { color: var(--accent-bright); background: rgba(47,105,151,0.07); }
+
+/* Body */
+.matrix-body {
+  overflow-y: auto;
+}
+.matrix-body::-webkit-scrollbar { width: 4px; }
+.matrix-body::-webkit-scrollbar-track { background: var(--bg-secondary); }
+.matrix-body::-webkit-scrollbar-thumb { background: var(--border); }
+
+.matrix-row {
+  display: grid;
+  grid-template-columns: 160px repeat(4, 1fr) 100px;
+  border-bottom: 1px solid var(--border);
+  transition: background .15s;
+}
+.matrix-row:last-child { border-bottom: none; }
+.matrix-row:hover { background: var(--bg-hover); }
+
+.mr-ex {
+  padding: 12px 14px;
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mr-ex-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; transition: background .3s; }
+.mr-ex-dot.ok  { background: var(--success); box-shadow: 0 0 6px rgba(0,201,122,0.3); }
+.mr-ex-dot.err { background: var(--error); }
+.mr-ex-dot.run { background: var(--warning); animation: pulse 0.8s infinite; }
+.mr-ex-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+.mr-cell {
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background .15s;
+  position: relative;
+}
+.mr-cell:last-child { border-right: none; }
+.mr-cell:hover { background: rgba(47,105,151,0.1); }
+.mr-cell.active-col { background: rgba(47,105,151,0.04); }
+
+.cell-badge {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  border: 2px solid var(--border);
+  background: var(--bg-card);
+  transition: all .3s;
+  position: relative;
+}
+.cell-badge.idle { border-color: var(--border); }
+.cell-badge.ok { border-color: var(--success); background: rgba(0,201,122,0.1); }
+.cell-badge.err { border-color: var(--error); background: rgba(224,62,62,0.1); }
+.cell-badge.run { border-color: var(--warning); animation: pulse 0.8s infinite; }
+
+.cell-val {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 2px;
+}
+
+.mr-action { display: flex; align-items: center; justify-content: center; padding: 8px; cursor: pointer; }
+.row-run-btn {
+  padding: 4px 12px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all .15s;
+}
+.row-run-btn:hover { border-color: var(--accent); color: var(--accent-bright); }
+
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* ── Detail panel (slide from bottom) ── */
+.detail-panel {
+  position: fixed;
+  bottom: 0; left: 60px; right: 0;
+  height: 0;
+  background: var(--bg-secondary);
+  border-top: 2px solid var(--border);
+  transition: height .3s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 100;
+}
+.detail-panel.open { height: 280px; }
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #071825;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.detail-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text-secondary);
+}
+.detail-close {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 3px 10px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  transition: all .15s;
+  display: flex;
+  gap: 8px;
+}
+.detail-close:hover { border-color: var(--error); color: var(--error); }
+.detail-copy { border-color: var(--border); color: var(--text-muted); }
+.detail-copy:hover { border-color: var(--accent-bright) !important; color: var(--accent-bright) !important; }
+.detail-copy.done { border-color: var(--success) !important; color: var(--success) !important; }
+
+.detail-body {
+  flex: 1;
+  padding: 10px 16px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.8;
+  background: #04111a;
+}
+.detail-body::-webkit-scrollbar { width: 4px; }
+.detail-body::-webkit-scrollbar-track { background: #04111a; }
+.detail-body::-webkit-scrollbar-thumb { background: var(--border); }
+.dl { display: flex; gap: 12px; }
+.dl-t { color: var(--text-muted); flex-shrink: 0; }
+.dl-m { }
+.dl-m.ok  { color: var(--success); }
+.dl-m.err { color: var(--error); }
+.dl-m.info { color: var(--accent-bright); }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sb-logo">AXIOMA</div>
+  <div class="sb-item">FF</div>
+  <div class="sb-item active">&lt;/&gt;</div>
+</aside>
+
+<div class="main">
+  <header class="header">
+    <span class="header-title">API</span>
+    <div class="header-sep"></div>
+    <div class="mode-group">
+      <button class="mode-btn active">FUTURES</button>
+      <button class="mode-btn">FUNDING</button>
+    </div>
+  </header>
+
+  <div class="content-wrap">
+    <div class="toolbar">
+      <button class="run-all-btn" onclick="runAll()">▶ ТЕСТ ВСЕГО</button>
+      <div class="filter-pills">
+        <button class="filter-pill active" onclick="setFilter(this,'all')">ВСЕ</button>
+        <button class="filter-pill" onclick="setFilter(this,'funding')">📈 FUNDING</button>
+        <button class="filter-pill" onclick="setFilter(this,'volume')">📊 VOLUME</button>
+        <button class="filter-pill" onclick="setFilter(this,'transfer')">🔄 TRANSFER</button>
+        <button class="filter-pill" onclick="setFilter(this,'ws')">⚡ WS</button>
+      </div>
+      <div class="summary-chips">
+        <div class="s-chip">
+          <span class="s-chip-label">OK</span>
+          <span id="sum-ok" style="color:var(--success)">0</span>
+        </div>
+        <div class="s-chip">
+          <span class="s-chip-label">ERR</span>
+          <span id="sum-err" style="color:var(--error)">0</span>
+        </div>
+        <div class="s-chip">
+          <span class="s-chip-label">TOTAL</span>
+          <span id="sum-total" style="color:var(--text-secondary)">0/32</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="matrix-wrap">
+      <div class="matrix-head">
+        <div class="mh-cell">БИРЖА</div>
+        <div class="mh-cell" id="col-funding">📈 FUNDING RATE</div>
+        <div class="mh-cell" id="col-volume">📊 VOLUME 24H</div>
+        <div class="mh-cell" id="col-transfer">🔄 DEPOSIT/WD</div>
+        <div class="mh-cell" id="col-ws">⚡ WEBSOCKET</div>
+        <div class="mh-cell">ДЕЙСТВИЕ</div>
+      </div>
+      <div class="matrix-body" id="matrix-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Panel -->
+<div class="detail-panel" id="detail-panel">
+  <div class="detail-header">
+    <span class="detail-title" id="detail-title">ДЕТАЛИ</span>
+    <div style="display:flex;gap:8px">
+      <button class="detail-close detail-copy" onclick="copyDetail()">COPY</button>
+      <button class="detail-close" onclick="closeDetail()">✕ ЗАКРЫТЬ</button>
+    </div>
+  </div>
+  <div class="detail-body" id="detail-body"></div>
+</div>
+
+<script>
+const EXCHANGES = ['Binance','Bybit','OKX','Gate','KuCoin','MEXC','Bitget','BingX']
+const TESTS = ['funding','volume','transfer','ws']
+const TEST_ICONS = { funding:'📈', volume:'📊', transfer:'🔄', ws:'⚡' }
+
+// state[ex][test] = { status: idle/run/ok/err, val: string, logs: [] }
+const state = {}
+EXCHANGES.forEach(ex => {
+  state[ex] = {}
+  TESTS.forEach(t => { state[ex][t] = { status: 'idle', val: '', logs: [] } })
+})
+
+let sumOk = 0, sumErr = 0, sumDone = 0
+const TOTAL = EXCHANGES.length * TESTS.length
+
+function buildMatrix() {
+  const body = document.getElementById('matrix-body')
+  body.innerHTML = ''
+  EXCHANGES.forEach((ex, i) => {
+    const row = document.createElement('div')
+    row.className = 'matrix-row'
+    row.id = 'mr-' + i
+    row.innerHTML = `
+      <div class="mr-ex">
+        <div class="mr-ex-dot" id="ex-dot-${i}"></div>
+        <div class="mr-ex-name">${ex}</div>
+      </div>
+      ${TESTS.map(t => `
+        <div class="mr-cell" id="cell-${i}-${t}" onclick="showDetail('${ex}','${t}')">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+            <div class="cell-badge idle" id="badge-${i}-${t}">·</div>
+            <div class="cell-val" id="val-${i}-${t}"></div>
+          </div>
+        </div>`).join('')}
+      <div class="mr-action">
+        <button class="row-run-btn" onclick="runExchange('${ex}',${i})">▶ ТЕСТ</button>
+      </div>`
+    body.appendChild(row)
+  })
+}
+
+buildMatrix()
+
+function ts() { return new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit',second:'2-digit'}) }
+
+function setCell(exIdx, testId, status, val='') {
+  const badge = document.getElementById(`badge-${exIdx}-${testId}`)
+  const valEl = document.getElementById(`val-${exIdx}-${testId}`)
+  const icons = { idle:'·', run:'⟳', ok:'✓', err:'✗' }
+  badge.className = 'cell-badge ' + status
+  badge.textContent = icons[status]
+  valEl.textContent = val
+  valEl.style.color = status === 'ok' ? 'var(--success)' : status === 'err' ? 'var(--error)' : 'var(--text-muted)'
+  updateExDot(exIdx)
+  updateSummary()
+}
+
+function updateExDot(i) {
+  const statuses = TESTS.map(t => state[EXCHANGES[i]][t].status)
+  const dot = document.getElementById('ex-dot-' + i)
+  if (statuses.some(s=>s==='run')) dot.className='mr-ex-dot run'
+  else if (statuses.every(s=>s==='ok')) dot.className='mr-ex-dot ok'
+  else if (statuses.some(s=>s==='err')) dot.className='mr-ex-dot err'
+  else dot.className='mr-ex-dot'
+}
+
+function updateSummary() {
+  sumOk = 0; sumErr = 0; sumDone = 0
+  EXCHANGES.forEach(ex => TESTS.forEach(t => {
+    const s = state[ex][t].status
+    if (s==='ok') { sumOk++; sumDone++ }
+    if (s==='err') { sumErr++; sumDone++ }
+  }))
+  document.getElementById('sum-ok').textContent = sumOk
+  document.getElementById('sum-err').textContent = sumErr
+  document.getElementById('sum-total').textContent = `${sumDone}/${TOTAL}`
+}
+
+async function runExchange(ex, exIdx) {
+  for (const t of TESTS) {
+    await runCell(ex, exIdx, t)
+  }
+}
+
+async function runCell(ex, exIdx, testId) {
+  state[ex][testId].status = 'run'
+  state[ex][testId].logs = []
+  setCell(exIdx, testId, 'run')
+
+  const log = (emoji, msg, cls='') => {
+    const line = `${ts()} ${emoji} ${msg}`
+    state[ex][testId].logs.push(line)
+    if (isDetailOpen(ex, testId)) appendDetailLine(emoji, msg, cls)
+  }
+
+  log('🔄', `Запрос к ${ex}...`, 'info')
+  await delay(400 + Math.random()*700)
+
+  const fail = Math.random() < 0.08
+  if (fail) {
+    state[ex][testId].status = 'err'
+    log('❌', `HTTP 429: rate limit exceeded`, 'err')
+    setCell(exIdx, testId, 'err', 'ERR')
+  } else {
+    state[ex][testId].status = 'ok'
+    const { val, line } = getMock(testId, ex)
+    log('✅', line, 'ok')
+    setCell(exIdx, testId, 'ok', val)
+  }
+}
+
+function getMock(testId, ex) {
+  if (testId === 'funding') {
+    const rate = ((Math.random()-0.5)*0.04).toFixed(4)
+    return { val: rate+'%', line: `rate=${rate}%, next=${String(Math.floor(Math.random()*8)).padStart(2,'0')}:${String(Math.floor(Math.random()*60)).padStart(2,'0')}:00` }
+  }
+  if (testId === 'volume') {
+    const v = (Math.random()*500+50).toFixed(0)
+    return { val: '$'+v+'M', line: `volume=$${v}M USDT` }
+  }
+  if (testId === 'transfer') {
+    const d = Math.random()>0.1, w = Math.random()>0.15
+    return { val: `D:${d?'✅':'❌'} W:${w?'✅':'❌'}`, line: `deposit=${d?'✅ открыт':'🚫 закрыт'}  withdraw=${w?'✅ открыт':'🚫 закрыт'}` }
+  }
+  if (testId === 'ws') {
+    const ms = Math.floor(Math.random()*300+80)
+    return { val: ms+'ms', line: `подключён, bids=${Math.floor(Math.random()*50+10)}, asks=${Math.floor(Math.random()*50+10)}, latency=${ms}ms` }
+  }
+}
+
+async function runAll() {
+  for (let i = 0; i < EXCHANGES.length; i++) {
+    for (const t of TESTS) {
+      await runCell(EXCHANGES[i], i, t)
+    }
+  }
+}
+
+// Detail panel
+let currentDetail = null
+function isDetailOpen(ex, t) { return currentDetail && currentDetail.ex===ex && currentDetail.t===t }
+
+function showDetail(ex, t) {
+  currentDetail = { ex, t }
+  const panel = document.getElementById('detail-panel')
+  const title = document.getElementById('detail-title')
+  title.textContent = `${TEST_ICONS[t]} ${ex.toUpperCase()} — ${t.toUpperCase()}`
+  renderDetail(ex, t)
+  panel.classList.add('open')
+}
+
+function renderDetail(ex, t) {
+  const body = document.getElementById('detail-body')
+  body.innerHTML = ''
+  const logs = state[ex][t].logs
+  if (!logs.length) { body.innerHTML = '<span style="color:var(--text-muted)">— нет данных, запустите тест</span>'; return }
+  logs.forEach(line => {
+    const div = document.createElement('div')
+    div.className = 'dl'
+    const parts = line.split(' ')
+    const time = parts[0]
+    const rest = parts.slice(1).join(' ')
+    div.innerHTML = `<span class="dl-t">${time}</span><span class="dl-m ${rest.includes('❌')?'err':rest.includes('✅')?'ok':''}">${rest}</span>`
+    body.appendChild(div)
+  })
+}
+
+function appendDetailLine(emoji, msg, cls) {
+  const body = document.getElementById('detail-body')
+  const div = document.createElement('div')
+  div.className = 'dl'
+  div.innerHTML = `<span class="dl-t">${ts()}</span><span class="dl-m ${cls}">${emoji} ${msg}</span>`
+  body.appendChild(div)
+  body.scrollTop = body.scrollHeight
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('open')
+  currentDetail = null
+}
+
+function copyDetail() {
+  if (!currentDetail) return
+  const text = state[currentDetail.ex][currentDetail.t].logs.join('\n')
+  navigator.clipboard.writeText(text)
+  const btn = event.target
+  btn.textContent = '✓ COPIED'
+  btn.classList.add('done')
+  setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('done') }, 2000)
+}
+
+function setFilter(el, col) {
+  document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'))
+  el.classList.add('active')
+  const cols = ['funding','volume','transfer','ws']
+  cols.forEach(c => {
+    const cells = document.querySelectorAll(`[id$="-${c}"]`)
+    cells.forEach(cell => {
+      if (col === 'all' || col === c) cell.style.display = ''
+      else cell.style.display = 'none'
+    })
+    const head = document.getElementById('col-' + c)
+    if (head) head.classList.toggle('active-col', col === c)
+  })
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)) }
+</script>
+</body>
+</html>

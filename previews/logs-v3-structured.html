@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Logs v3 — Structured Panels</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-primary: #060606; --bg-secondary: #0a1a25; --bg-card: #0d2033;
+    --bg-hover: #112840; --accent: #2F6997; --accent-bright: #3d87c0;
+    --text-primary: #e8f4fd; --text-secondary: #6a8fa8; --text-muted: #3d6680;
+    --success: #00c97a; --error: #e03e3e; --warning: #f0a500; --border: #1a3a52;
+    --font-sans: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+  }
+  body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-sans); display: flex; height: 100vh; overflow: hidden; }
+
+  .sidebar { width: 60px; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 0; gap: 4px; flex-shrink: 0; }
+  .s-logo { display: flex; align-items: center; justify-content: center; padding: 0 12px 20px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .s-logo-icon { width: 36px; height: 36px; background: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--accent); border-radius: 4px; }
+  .s-tab { display: flex; align-items: center; justify-content: center; padding: 10px 0; cursor: pointer; color: var(--text-secondary); border-left: 2px solid transparent; }
+  .s-tab.active { color: var(--accent-bright); border-left-color: var(--accent-bright); background: var(--bg-hover); }
+
+  .main { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+  .header { height: 72px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 16px; flex-shrink: 0; }
+  .h-title { font-size: 18px; font-weight: 700; letter-spacing: 2px; }
+  .h-live { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10px; color: var(--success); letter-spacing: 1px; }
+  .h-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+  .h-sep { flex: 1; }
+  .h-time { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+  .h-btn { padding: 6px 14px; font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 1px; background: none; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; }
+
+  /* Main grid */
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto 1fr; gap: 0; flex: 1; overflow: hidden; }
+
+  /* Top row: 3 panels side by side */
+  .panel { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
+  .panel:last-child { border-right: none; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .ph-left { display: flex; align-items: center; gap: 8px; }
+  .ph-name { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--text-secondary); }
+  .ph-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .ph-dot.ok   { background: var(--success); box-shadow: 0 0 5px rgba(0,201,122,0.4); }
+  .ph-dot.warn { background: var(--warning); box-shadow: 0 0 5px rgba(240,165,0,0.4); animation: pulse 2s infinite; }
+  .ph-dot.err  { background: var(--error);   box-shadow: 0 0 5px rgba(224,62,62,0.4); animation: pulse 1s infinite; }
+  .ph-right { display: flex; align-items: center; gap: 8px; }
+  .ph-badge { font-family: var(--font-mono); font-size: 9px; font-weight: 700; padding: 2px 7px; }
+  .ph-badge.ok   { color: var(--success); border: 1px solid rgba(0,201,122,0.3); }
+  .ph-badge.warn { color: var(--warning); border: 1px solid rgba(240,165,0,0.3); }
+  .ph-badge.err  { color: var(--error);   border: 1px solid rgba(224,62,62,0.3); }
+  .ph-badge.info { color: var(--accent-bright); border: 1px solid rgba(61,135,192,0.3); }
+
+  .panel-body { flex: 1; overflow-y: auto; }
+  .panel-body::-webkit-scrollbar { width: 3px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* Log items */
+  .li { padding: 7px 14px; border-bottom: 1px solid rgba(26,58,82,0.4); cursor: pointer; transition: background .1s; }
+  .li:hover { background: var(--bg-hover); }
+  .li-head { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+  .li-time { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); }
+  .li-lvl { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.5px; }
+  .li-lvl.ok    { color: var(--success); }
+  .li-lvl.info  { color: var(--accent-bright); }
+  .li-lvl.warn  { color: var(--warning); }
+  .li-lvl.error { color: var(--error); }
+  .li-lvl.debug { color: var(--text-muted); }
+  .li-msg { font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary); line-height: 1.5; }
+  .li-msg .hl   { color: var(--text-primary); }
+  .li-msg .val  { color: var(--accent-bright); }
+  .li-msg .ok   { color: var(--success); }
+  .li-msg .err  { color: var(--error); }
+  .li-msg .warn { color: var(--warning); }
+  .li-detail { margin-top: 6px; padding: 6px 10px; background: #04111a; border-left: 2px solid var(--border); font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); white-space: pre; line-height: 1.6; display: none; }
+  .li.expanded .li-detail { display: block; }
+  .li-detail .fix { color: var(--warning); }
+  .li-detail .err { color: var(--error); }
+  .li-detail .val { color: var(--accent-bright); }
+
+  /* Metrics panel (bottom full width) */
+  .metrics-row { grid-column: 1 / -1; border-top: 1px solid var(--border); background: var(--bg-secondary); display: flex; overflow: hidden; }
+  .metric-block { flex: 1; padding: 12px 20px; border-right: 1px solid var(--border); display: flex; align-items: center; gap: 16px; }
+  .metric-block:last-child { border-right: none; }
+  .mb-icon { font-size: 18px; }
+  .mb-info { flex: 1; }
+  .mb-name { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
+  .mb-val { font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--text-primary); margin-bottom: 2px; }
+  .mb-sub { font-size: 10px; color: var(--text-muted); }
+  .mb-bar { width: 120px; }
+  .mb-bar-track { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 4px; }
+  .mb-bar-fill { height: 100%; border-radius: 2px; }
+  .mb-bar-label { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); }
+
+  /* Sparkline SVG */
+  .spark { display: flex; align-items: center; }
+
+  /* Panel sections */
+  .section-head { padding: 5px 14px; font-size: 9px; font-weight: 700; letter-spacing: 1.5px; color: var(--text-muted); background: rgba(7,24,37,0.6); border-bottom: 1px solid rgba(26,58,82,0.5); text-transform: uppercase; }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="s-logo"><div class="s-logo-icon">AX</div></div>
+  <div class="s-tab">🏠</div>
+  <div class="s-tab">📈</div>
+  <div class="s-tab">%</div>
+  <div class="s-tab">📖</div>
+  <div class="s-tab active">{ }</div>
+</div>
+
+<div class="main">
+  <div class="header">
+    <span class="h-title">LOGS</span>
+    <div class="h-live"><div class="h-dot"></div>&nbsp;LIVE</div>
+    <div class="h-sep"></div>
+    <span class="h-time">14:31:22</span>
+    <button class="h-btn">PAUSE</button>
+    <button class="h-btn">EXPORT</button>
+  </div>
+
+  <div class="grid">
+
+    <!-- Panel 1: Frontend + Server -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="ph-left">
+          <div class="ph-dot ok"></div>
+          <span class="ph-name">FRONTEND · SERVER</span>
+        </div>
+        <div class="ph-right">
+          <span class="ph-badge ok">HEALTHY</span>
+          <span class="ph-badge info">433</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="section-head">SERVER</div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:01</span><span class="li-lvl ok">OK</span></div>
+          <div class="li-msg">Vite <span class="val">5.4.2</span> started · port <span class="val">5173</span> · ready <span class="ok">312ms</span></div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:01</span><span class="li-lvl ok">OK</span></div>
+          <div class="li-msg">Proxies: <span class="val">/gate-api /bingx-api /mexc-api /kucoin-api /binance-api</span></div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:01</span><span class="li-lvl info">INFO</span></div>
+          <div class="li-msg">HMR WebSocket ready on port <span class="val">5173</span></div>
+        </div>
+
+        <div class="section-head">FRONTEND</div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:02</span><span class="li-lvl ok">OK</span></div>
+          <div class="li-msg">React <span class="val">18.2.0</span> mounted · root <span class="val">#root</span></div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:02</span><span class="li-lvl ok">OK</span></div>
+          <div class="li-msg">State init · favorites: <span class="val">3</span> · hidden: <span class="val">0</span> · activeTrades: <span class="val">1</span></div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:04</span><span class="li-lvl ok">OK</span></div>
+          <div class="li-msg">enrichOpportunities done · <span class="ok">19/20</span> enriched · render <span class="ok">2ms</span></div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:04</span><span class="li-lvl info">INFO</span></div>
+          <div class="li-msg">useMemo recalc · 14 opps after filters · sort: <span class="val">spread</span></div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:31:02</span><span class="li-lvl warn">WARN</span></div>
+          <div class="li-msg">Modal open → 60s polling <span class="warn">paused</span> · interval cleared</div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:31:04</span><span class="li-lvl info">INFO</span></div>
+          <div class="li-msg">Refresh cycle #2 · cache: <span class="val">7 hits</span> · 0 misses</div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:31:04</span><span class="li-lvl ok">OK</span></div>
+          <div class="li-msg">React render · <span class="val">OpportunityGrid</span> · skipped: Header StatsRow Sidebar</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel 2: API / Fetch -->
+    <div class="panel">
+      <div class="panel-head">
+        <div class="ph-left">
+          <div class="ph-dot warn"></div>
+          <span class="ph-name">API / CACHE</span>
+        </div>
+        <div class="ph-right">
+          <span class="ph-badge err">1 ERR</span>
+          <span class="ph-badge warn">2 WARN</span>
+          <span class="ph-badge info">89</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="section-head">FETCH CYCLE — 14:30:02</div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:02</span><span class="li-lvl info">INFO</span></div>
+          <div class="li-msg">Parallel fetch: 8 exchanges · BTCUSDT</div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:02</span><span class="li-lvl ok">OK</span></div>
+          <div class="li-msg">Binance — funding <span class="ok">+0.0102%</span> · vol <span class="val">$2.4B</span> · <span class="ok">591ms</span></div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:02</span><span class="li-lvl ok">OK</span></div>
+          <div class="li-msg">Bybit — funding <span class="ok">+0.0085%</span> · vol <span class="val">$1.1B</span> · <span class="ok">724ms</span></div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:03</span><span class="li-lvl ok">OK</span></div>
+          <div class="li-msg">OKX — funding <span class="warn">-0.0031%</span> · vol <span class="val">$890M</span> · <span class="ok">892ms</span></div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:03</span><span class="li-lvl warn">WARN</span></div>
+          <div class="li-msg">Gate response slow: <span class="warn">2140ms</span> · threshold 2000ms · data ok</div>
+        </div>
+        <div class="li expanded" onclick="this.classList.toggle('expanded')">
+          <div class="li-head"><span class="li-time">14:30:03</span><span class="li-lvl error">ERROR</span></div>
+          <div class="li-msg"><span class="err">KuCoin: contract BTCUSDTM not found</span> · fetchKuCoin · <span class="val">↓</span></div>
+          <div class="li-detail"><span class="err">400</span> /kucoin-api/api/v1/contracts/BTCUSDTM
+{"code":"400100","msg":"Contract does not exist"}
+
+<span class="fix">Fix:</span> Use XBTUSDTM for BTC futures on KuCoin
+      api.js → fetchKuCoin: sym === 'BTC' ? 'XBT' : sym</div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:04</span><span class="li-lvl ok">OK</span></div>
+          <div class="li-msg">MEXC · Bitget · BingX — ok · avg <span class="ok">1.2s</span></div>
+        </div>
+
+        <div class="section-head">CACHE</div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:04</span><span class="li-lvl info">INFO</span></div>
+          <div class="li-msg">Write: <span class="val">7</span> entries · TTL <span class="val">55s</span> · KuCoin skipped</div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:11</span><span class="li-lvl warn">WARN</span></div>
+          <div class="li-msg">MEXC TTL expired early — re-fetch triggered</div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:31:04</span><span class="li-lvl info">INFO</span></div>
+          <div class="li-msg">Cycle #2 · <span class="val">7 hits</span> · 0 misses · all fresh</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel 3: WebSocket -->
+    <div class="panel" style="border-right:none">
+      <div class="panel-head">
+        <div class="ph-left">
+          <div class="ph-dot warn"></div>
+          <span class="ph-name">WEBSOCKET</span>
+        </div>
+        <div class="ph-right">
+          <span class="ph-badge err">2 ERR</span>
+          <span class="ph-badge ok">2 ACTIVE</span>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="section-head">CONNECTIONS</div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:05</span><span class="li-lvl info">INFO</span></div>
+          <div class="li-msg">connectOrderBook binance · BTC · futures</div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:05</span><span class="li-lvl ok">OK</span></div>
+          <div class="li-msg">Binance WS connected · bids=20 asks=20 · <span class="ok">287ms</span></div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:05</span><span class="li-lvl info">INFO</span></div>
+          <div class="li-msg">connectOrderBook bybit · BTC · futures</div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:05</span><span class="li-lvl ok">OK</span></div>
+          <div class="li-msg">Bybit WS connected · bids=25 asks=25 · <span class="ok">329ms</span></div>
+        </div>
+
+        <div class="section-head">EVENTS</div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:07</span><span class="li-lvl error">ERROR</span></div>
+          <div class="li-msg"><span class="err">OKX WS dropped</span> · code 1006 · reconnect 1/5</div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:30:09</span><span class="li-lvl ok">OK</span></div>
+          <div class="li-msg">OKX WS reconnected · stream resumed</div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:31:12</span><span class="li-lvl error">ERROR</span></div>
+          <div class="li-msg"><span class="err">OKX WS dropped again</span> · code 1006 · 2/5</div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:31:20</span><span class="li-lvl info">INFO</span></div>
+          <div class="li-msg">Binance WS tick · topBid <span class="val">$67,241</span> · topAsk <span class="val">$67,244</span></div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:31:20</span><span class="li-lvl info">INFO</span></div>
+          <div class="li-msg">Bybit WS tick · topBid <span class="val">$67,240</span> · topAsk <span class="val">$67,243</span></div>
+        </div>
+        <div class="li">
+          <div class="li-head"><span class="li-time">14:31:21</span><span class="li-lvl debug">DEBUG</span></div>
+          <div class="li-msg">VWAP calc · $1000 · asks 3 levels · avg <span class="val">$67,244.20</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom metrics -->
+    <div class="metrics-row">
+      <div class="metric-block">
+        <div class="mb-icon">⚡</div>
+        <div class="mb-info">
+          <div class="mb-name">API LATENCY</div>
+          <div class="mb-val" style="color:var(--success)">842<span style="font-size:11px;color:var(--text-muted)">ms</span></div>
+          <div class="mb-sub">avg across 7 exchanges</div>
+        </div>
+        <div class="mb-bar">
+          <div class="mb-bar-track"><div class="mb-bar-fill" style="width:42%;background:var(--success)"></div></div>
+          <div class="mb-bar-label">good &lt; 2000ms</div>
+        </div>
+      </div>
+      <div class="metric-block">
+        <div class="mb-icon">🔄</div>
+        <div class="mb-info">
+          <div class="mb-name">CACHE HIT RATE</div>
+          <div class="mb-val" style="color:var(--success)">87<span style="font-size:11px;color:var(--text-muted)">%</span></div>
+          <div class="mb-sub">7 hits / 1 miss this cycle</div>
+        </div>
+        <div class="mb-bar">
+          <div class="mb-bar-track"><div class="mb-bar-fill" style="width:87%;background:var(--success)"></div></div>
+          <div class="mb-bar-label">target &gt; 80%</div>
+        </div>
+      </div>
+      <div class="metric-block">
+        <div class="mb-icon">🔌</div>
+        <div class="mb-info">
+          <div class="mb-name">WS CONNECTIONS</div>
+          <div class="mb-val">2<span style="font-size:11px;color:var(--text-muted)">/8</span></div>
+          <div class="mb-sub">Binance + Bybit active</div>
+        </div>
+        <div class="mb-bar">
+          <div class="mb-bar-track"><div class="mb-bar-fill" style="width:25%;background:var(--accent-bright)"></div></div>
+          <div class="mb-bar-label">reconnects: OKX 2</div>
+        </div>
+      </div>
+      <div class="metric-block">
+        <div class="mb-icon">🎨</div>
+        <div class="mb-info">
+          <div class="mb-name">RENDER TIME</div>
+          <div class="mb-val" style="color:var(--success)">2<span style="font-size:11px;color:var(--text-muted)">ms</span></div>
+          <div class="mb-sub">OpportunityGrid · 14 cards</div>
+        </div>
+        <div class="mb-bar">
+          <div class="mb-bar-track"><div class="mb-bar-fill" style="width:2%;background:var(--success)"></div></div>
+          <div class="mb-bar-label">budget 16ms (60fps)</div>
+        </div>
+      </div>
+      <div class="metric-block">
+        <div class="mb-icon">❌</div>
+        <div class="mb-info">
+          <div class="mb-name">ERRORS</div>
+          <div class="mb-val" style="color:var(--error)">3</div>
+          <div class="mb-sub">KuCoin API · OKX WS ×2</div>
+        </div>
+        <div class="mb-bar">
+          <div class="mb-bar-track"><div class="mb-bar-fill" style="width:20%;background:var(--error)"></div></div>
+          <div class="mb-bar-label">target: 0</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

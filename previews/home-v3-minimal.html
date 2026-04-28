@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Home v3 — Minimal Terminal</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-primary: #060606; --bg-secondary: #0a1a25; --bg-card: #0d2033;
+    --bg-hover: #112840; --accent: #2F6997; --accent-bright: #3d87c0;
+    --text-primary: #e8f4fd; --text-secondary: #6a8fa8; --text-muted: #3d6680;
+    --success: #00c97a; --error: #e03e3e; --warning: #f0a500; --border: #1a3a52;
+    --font-sans: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+  }
+  body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-sans); display: flex; height: 100vh; overflow: hidden; }
+
+  .sidebar { width: 60px; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 0; gap: 4px; flex-shrink: 0; }
+  .s-logo { display: flex; align-items: center; justify-content: center; padding: 0 12px 20px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .s-logo-icon { width: 36px; height: 36px; background: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--accent); border-radius: 4px; }
+  .s-tab { display: flex; align-items: center; justify-content: center; padding: 10px 0; cursor: pointer; color: var(--text-secondary); border-left: 2px solid transparent; font-size: 18px; }
+  .s-tab.active { color: var(--accent-bright); border-left-color: var(--accent-bright); background: var(--bg-hover); }
+  .s-tab.dim { opacity: 0.35; cursor: not-allowed; }
+
+  .main { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+  .header { height: 72px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 32px; flex-shrink: 0; }
+  .h-title { font-size: 18px; font-weight: 700; letter-spacing: 2px; }
+
+  .content { flex: 1; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; }
+  .content::-webkit-scrollbar { width: 4px; }
+  .content::-webkit-scrollbar-thumb { background: var(--border); }
+
+  /* Top hero — full width */
+  .hero-panel {
+    grid-column: 1 / -1;
+    border-bottom: 1px solid var(--border);
+    padding: 52px 64px;
+    background: linear-gradient(135deg, #0a1a25 0%, #060606 60%);
+    display: flex; align-items: center; gap: 64px;
+    position: relative; overflow: hidden;
+  }
+  .hero-panel::after {
+    content: 'AXIOM'; position: absolute; right: 48px; top: 50%;
+    transform: translateY(-50%); font-size: 160px; font-weight: 900;
+    color: rgba(47,105,151,0.06); letter-spacing: 16px; pointer-events: none;
+    font-family: var(--font-sans);
+  }
+
+  .hero-logo-wrap { flex-shrink: 0; }
+  .hero-logo {
+    width: 88px; height: 88px; background: white; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; font-weight: 800; color: var(--accent); letter-spacing: 2px;
+  }
+
+  .hero-text { flex: 1; max-width: 560px; }
+  .hero-kicker { font-family: var(--font-mono); font-size: 10px; letter-spacing: 3px; color: var(--accent-bright); margin-bottom: 12px; }
+  .hero-name { font-size: 52px; font-weight: 800; letter-spacing: 8px; line-height: 1; margin-bottom: 16px; }
+  .hero-name span { color: var(--accent-bright); }
+  .hero-desc { font-size: 14px; color: var(--text-secondary); line-height: 1.9; }
+  .hero-desc strong { color: var(--text-primary); font-weight: 600; }
+
+  .hero-status { flex-shrink: 0; text-align: right; }
+  .hs-label { font-family: var(--font-mono); font-size: 9px; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; }
+  .hs-val { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--success); display: flex; align-items: center; gap: 8px; justify-content: flex-end; margin-bottom: 6px; }
+  .hs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+
+  /* Bottom left — screener table */
+  .screeners-panel { border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .panel-head {
+    padding: 16px 24px; border-bottom: 1px solid var(--border);
+    font-size: 9px; font-weight: 700; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase;
+    background: var(--bg-secondary); display: flex; align-items: center; justify-content: space-between;
+  }
+  .ph-count { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); }
+
+  .screener-table { flex: 1; overflow-y: auto; }
+  .screener-table::-webkit-scrollbar { width: 3px; }
+  .screener-table::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .st-head { display: grid; grid-template-columns: 1fr 90px 110px; padding: 8px 24px; }
+  .st-head span { font-size: 8px; font-weight: 700; letter-spacing: 1.5px; color: var(--text-muted); text-transform: uppercase; }
+
+  .st-row {
+    display: grid; grid-template-columns: 1fr 90px 110px;
+    padding: 14px 24px; border-bottom: 1px solid rgba(26,58,82,0.5);
+    align-items: center; cursor: default; transition: background .15s;
+  }
+  .st-row:hover { background: var(--bg-hover); }
+  .st-row.clickable { cursor: pointer; }
+  .st-row.clickable:hover { background: rgba(47,105,151,0.12); }
+
+  .sr-name { display: flex; align-items: center; gap: 10px; }
+  .sr-icon { font-size: 15px; }
+  .sr-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 2px; }
+  .sr-sub { font-size: 10px; color: var(--text-muted); }
+  .sr-type { font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); }
+  .sr-status { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 1px; padding: 3px 10px; text-align: center; }
+  .sr-status.active { color: var(--success); border: 1px solid rgba(0,201,122,0.4); background: rgba(0,201,122,0.07); }
+  .sr-status.soon   { color: var(--warning); border: 1px solid rgba(240,165,0,0.3); }
+  .sr-status.future { color: var(--text-muted); border: 1px solid var(--border); }
+
+  /* Bottom right — about + exchanges */
+  .info-panel { display: flex; flex-direction: column; overflow-y: auto; }
+  .info-panel::-webkit-scrollbar { width: 3px; }
+  .info-panel::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .about-block { padding: 28px 32px; border-bottom: 1px solid var(--border); }
+  .ab-title { font-size: 9px; font-weight: 700; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 16px; }
+  .ab-text { font-size: 13px; color: var(--text-secondary); line-height: 1.8; }
+  .ab-text strong { color: var(--text-primary); }
+  .ab-text p { margin-bottom: 12px; }
+  .ab-text p:last-child { margin-bottom: 0; }
+
+  .metrics-block { padding: 28px 32px; border-bottom: 1px solid var(--border); }
+  .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .metric { padding: 14px 16px; background: var(--bg-secondary); border: 1px solid var(--border); }
+  .m-val { font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+  .m-label { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; color: var(--text-muted); text-transform: uppercase; }
+
+  .exchanges-block { padding: 28px 32px; }
+  .ex-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(26,58,82,0.4); }
+  .ex-row:last-child { border-bottom: none; }
+  .ex-name { font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+  .ex-color { width: 8px; height: 8px; border-radius: 2px; }
+  .ex-features { display: flex; gap: 6px; }
+  .ex-feat { font-family: var(--font-mono); font-size: 8px; color: var(--text-muted); padding: 2px 6px; border: 1px solid var(--border); letter-spacing: 0.5px; }
+  .ex-feat.on { color: var(--accent-bright); border-color: rgba(61,135,192,0.25); }
+
+  .notice {
+    margin: 0 32px 32px; padding: 16px 20px;
+    border: 1px solid rgba(61,135,192,0.25); border-left: 3px solid var(--accent-bright);
+    background: rgba(47,105,151,0.06);
+  }
+  .notice-text { font-size: 12px; color: var(--text-secondary); line-height: 1.7; }
+  .notice-text strong { color: var(--text-primary); }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="s-logo"><div class="s-logo-icon">AX</div></div>
+  <div class="s-tab active">🏠</div>
+  <div class="s-tab">📈</div>
+  <div class="s-tab dim">%</div>
+  <div class="s-tab dim">📖</div>
+  <div class="s-tab">{ }</div>
+</div>
+
+<div class="main">
+  <div class="header">
+    <span class="h-title">ГЛАВНАЯ</span>
+  </div>
+
+  <div class="content">
+
+    <!-- Hero -->
+    <div class="hero-panel">
+      <div class="hero-logo-wrap">
+        <div class="hero-logo">AX</div>
+      </div>
+      <div class="hero-text">
+        <div class="hero-kicker">CRYPTO ARBITRAGE SCREENER</div>
+        <div class="hero-name">AXIO<span>M</span></div>
+        <div class="hero-desc">
+          Платформа для поиска <strong>арбитражных возможностей</strong> на криптовалютном рынке.
+          Агрегируем данные с 8 бирж в реальном времени — ищем ценовые расхождения для
+          <strong>нейтральных к рынку стратегий</strong> с контролируемым риском.
+        </div>
+      </div>
+      <div class="hero-status">
+        <div class="hs-label">Статус</div>
+        <div class="hs-val"><div class="hs-dot"></div>АКТИВЕН</div>
+        <div style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted)">1 скринер работает</div>
+      </div>
+    </div>
+
+    <!-- Screeners table -->
+    <div class="screeners-panel">
+      <div class="panel-head">
+        Скринеры
+        <span class="ph-count">1 активен · 2 скоро · 2 в плане</span>
+      </div>
+
+      <div class="screener-table">
+        <div class="st-head">
+          <span>Стратегия</span>
+          <span>Тип</span>
+          <span>Статус</span>
+        </div>
+
+        <div class="st-row clickable">
+          <div class="sr-name">
+            <span class="sr-icon">📈</span>
+            <div>
+              <div class="sr-title">Фьючерсный арбитраж</div>
+              <div class="sr-sub">Futures / Futures</div>
+            </div>
+          </div>
+          <div class="sr-type">CEX-CEX</div>
+          <div><span class="sr-status active">● АКТИВЕН</span></div>
+        </div>
+
+        <div class="st-row">
+          <div class="sr-name">
+            <span class="sr-icon">🔄</span>
+            <div>
+              <div class="sr-title">Спот-фьючерсный</div>
+              <div class="sr-sub">Spot / Futures</div>
+            </div>
+          </div>
+          <div class="sr-type">CEX-CEX</div>
+          <div><span class="sr-status soon">СКОРО</span></div>
+        </div>
+
+        <div class="st-row">
+          <div class="sr-name">
+            <span class="sr-icon">💰</span>
+            <div>
+              <div class="sr-title">Фандинг арбитраж</div>
+              <div class="sr-sub">Funding Rate Yield</div>
+            </div>
+          </div>
+          <div class="sr-type">CEX-CEX</div>
+          <div><span class="sr-status soon">СКОРО</span></div>
+        </div>
+
+        <div class="st-row">
+          <div class="sr-name">
+            <span class="sr-icon">⛓</span>
+            <div>
+              <div class="sr-title">DEX-CEX арбитраж</div>
+              <div class="sr-sub">Decentralized / CEX</div>
+            </div>
+          </div>
+          <div class="sr-type">DEX-CEX</div>
+          <div><span class="sr-status future">В ПЛАНЕ</span></div>
+        </div>
+
+        <div class="st-row">
+          <div class="sr-name">
+            <span class="sr-icon">🔀</span>
+            <div>
+              <div class="sr-title">Треугольный</div>
+              <div class="sr-sub">Triangular / Internal</div>
+            </div>
+          </div>
+          <div class="sr-type">CEX</div>
+          <div><span class="sr-status future">В ПЛАНЕ</span></div>
+        </div>
+
+        <div class="st-row">
+          <div class="sr-name">
+            <span class="sr-icon">📊</span>
+            <div>
+              <div class="sr-title">Статистический</div>
+              <div class="sr-sub">Pairs Trading</div>
+            </div>
+          </div>
+          <div class="sr-type">CEX-CEX</div>
+          <div><span class="sr-status future">В ПЛАНЕ</span></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Info panel -->
+    <div class="info-panel">
+
+      <div class="about-block">
+        <div class="ab-title">О платформе</div>
+        <div class="ab-text">
+          <p>
+            AXIOM — это инструментарий для трейдеров, использующих <strong>арбитражные стратегии</strong> на криптовалютных рынках.
+            Платформа не предоставляет торговых рекомендаций и не управляет средствами.
+          </p>
+          <p>
+            Мы предоставляем <strong>скринер</strong> — инструмент для поиска и анализа неэффективностей цен между биржами.
+            Решение о сделке всегда остаётся за трейдером.
+          </p>
+        </div>
+      </div>
+
+      <div class="metrics-block">
+        <div class="ab-title">Параметры сервиса</div>
+        <div class="metrics-grid">
+          <div class="metric">
+            <div class="m-val" style="color:var(--success)">8</div>
+            <div class="m-label">Бирж подключено</div>
+          </div>
+          <div class="metric">
+            <div class="m-val">60s</div>
+            <div class="m-label">Интервал обновления</div>
+          </div>
+          <div class="metric">
+            <div class="m-val">55s</div>
+            <div class="m-label">TTL кэша данных</div>
+          </div>
+          <div class="metric">
+            <div class="m-val" style="color:var(--accent-bright)">WS</div>
+            <div class="m-label">Книга ордеров live</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="exchanges-block">
+        <div class="ab-title">Поддерживаемые биржи</div>
+        <div class="ex-row">
+          <div class="ex-name"><div class="ex-color" style="background:#F3BA2F"></div>Binance</div>
+          <div class="ex-features"><span class="ex-feat on">REST</span><span class="ex-feat on">WS</span><span class="ex-feat on">Transfer</span></div>
+        </div>
+        <div class="ex-row">
+          <div class="ex-name"><div class="ex-color" style="background:#F7A600"></div>Bybit</div>
+          <div class="ex-features"><span class="ex-feat on">REST</span><span class="ex-feat on">WS</span><span class="ex-feat on">Transfer</span></div>
+        </div>
+        <div class="ex-row">
+          <div class="ex-name"><div class="ex-color" style="background:#ccc"></div>OKX</div>
+          <div class="ex-features"><span class="ex-feat on">REST</span><span class="ex-feat on">WS</span><span class="ex-feat on">Transfer</span></div>
+        </div>
+        <div class="ex-row">
+          <div class="ex-name"><div class="ex-color" style="background:#2354E6"></div>Gate.io</div>
+          <div class="ex-features"><span class="ex-feat on">REST</span><span class="ex-feat on">WS</span><span class="ex-feat on">Transfer</span></div>
+        </div>
+        <div class="ex-row">
+          <div class="ex-name"><div class="ex-color" style="background:#00A550"></div>KuCoin</div>
+          <div class="ex-features"><span class="ex-feat on">REST</span><span class="ex-feat on">WS</span><span class="ex-feat on">Transfer</span></div>
+        </div>
+        <div class="ex-row">
+          <div class="ex-name"><div class="ex-color" style="background:#00B897"></div>MEXC</div>
+          <div class="ex-features"><span class="ex-feat on">REST</span><span class="ex-feat on">WS</span><span class="ex-feat on">Transfer</span></div>
+        </div>
+        <div class="ex-row">
+          <div class="ex-name"><div class="ex-color" style="background:#00F0FF"></div>Bitget</div>
+          <div class="ex-features"><span class="ex-feat on">REST</span><span class="ex-feat on">WS</span><span class="ex-feat on">Transfer</span></div>
+        </div>
+        <div class="ex-row">
+          <div class="ex-name"><div class="ex-color" style="background:#1DA2B4"></div>BingX</div>
+          <div class="ex-features"><span class="ex-feat on">REST</span><span class="ex-feat on">WS</span><span class="ex-feat on">Transfer</span></div>
+        </div>
+      </div>
+
+      <div class="notice">
+        <div class="notice-text">
+          Платформа находится в активной разработке. Сейчас доступен только
+          <strong>скринер фьючерсного арбитража (CEX-CEX)</strong>.
+          Остальные модули запускаются поочерёдно.
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

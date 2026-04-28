@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Home v2 — Status + Roadmap</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg-primary: #060606; --bg-secondary: #0a1a25; --bg-card: #0d2033;
+    --bg-hover: #112840; --accent: #2F6997; --accent-bright: #3d87c0;
+    --text-primary: #e8f4fd; --text-secondary: #6a8fa8; --text-muted: #3d6680;
+    --success: #00c97a; --error: #e03e3e; --warning: #f0a500; --border: #1a3a52;
+    --font-sans: 'Inter', sans-serif; --font-mono: 'JetBrains Mono', monospace;
+  }
+  body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-sans); display: flex; height: 100vh; overflow: hidden; }
+
+  .sidebar { width: 60px; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 0; gap: 4px; flex-shrink: 0; }
+  .s-logo { display: flex; align-items: center; justify-content: center; padding: 0 12px 20px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+  .s-logo-icon { width: 36px; height: 36px; background: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: var(--accent); border-radius: 4px; }
+  .s-tab { display: flex; align-items: center; justify-content: center; padding: 10px 0; cursor: pointer; color: var(--text-secondary); border-left: 2px solid transparent; font-size: 18px; }
+  .s-tab.active { color: var(--accent-bright); border-left-color: var(--accent-bright); background: var(--bg-hover); }
+  .s-tab.dim { opacity: 0.35; cursor: not-allowed; }
+
+  .main { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+  .header { height: 72px; background: var(--bg-secondary); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 32px; flex-shrink: 0; }
+  .h-title { font-size: 18px; font-weight: 700; letter-spacing: 2px; }
+  .h-sep { flex: 1; }
+  .h-live { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10px; color: var(--success); letter-spacing: 1px; }
+  .h-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+
+  .body { display: flex; flex: 1; overflow: hidden; }
+
+  /* Left panel */
+  .left { width: 420px; min-width: 420px; border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+  .left::-webkit-scrollbar { width: 3px; }
+  .left::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .brand-block {
+    padding: 40px 36px 32px; border-bottom: 1px solid var(--border);
+    background: linear-gradient(160deg, #0d2033 0%, #060606 100%);
+  }
+  .brand-logo {
+    width: 64px; height: 64px; background: white; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800; color: var(--accent); letter-spacing: 2px;
+    margin-bottom: 20px;
+  }
+  .brand-name { font-size: 32px; font-weight: 800; letter-spacing: 5px; margin-bottom: 6px; }
+  .brand-tagline { font-family: var(--font-mono); font-size: 10px; letter-spacing: 2.5px; color: var(--accent-bright); margin-bottom: 20px; }
+  .brand-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.8; }
+  .brand-desc strong { color: var(--text-primary); }
+
+  .stat-row {
+    display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: 1px solid var(--border);
+  }
+  .stat { padding: 18px 24px; border-right: 1px solid var(--border); text-align: center; }
+  .stat:last-child { border-right: none; }
+  .stat-val { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+  .stat-label { font-size: 9px; font-weight: 700; letter-spacing: 1.5px; color: var(--text-muted); text-transform: uppercase; }
+
+  .how-block { padding: 28px 36px; border-bottom: 1px solid var(--border); }
+  .block-title { font-size: 9px; font-weight: 700; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 16px; }
+  .step { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 16px; }
+  .step:last-child { margin-bottom: 0; }
+  .step-num {
+    width: 24px; height: 24px; min-width: 24px; border-radius: 50%;
+    background: var(--bg-card); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--accent-bright);
+    margin-top: 2px;
+  }
+  .step-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+  .step-text strong { color: var(--text-primary); }
+
+  .exchanges-block { padding: 28px 36px; }
+  .ex-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ex-chip {
+    display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+    background: var(--bg-card); border: 1px solid var(--border); font-size: 11px;
+    color: var(--text-secondary); font-family: var(--font-mono);
+  }
+  .ex-dot { width: 5px; height: 5px; border-radius: 50%; }
+
+  /* Right panel — roadmap */
+  .right { flex: 1; overflow-y: auto; padding: 32px 40px; }
+  .right::-webkit-scrollbar { width: 4px; }
+  .right::-webkit-scrollbar-thumb { background: var(--border); }
+
+  .roadmap-title { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 28px; }
+
+  .roadmap { display: flex; flex-direction: column; gap: 0; position: relative; }
+  .roadmap::before {
+    content: ''; position: absolute; left: 19px; top: 20px; bottom: 20px; width: 1px;
+    background: var(--border);
+  }
+
+  .rm-item { display: flex; gap: 24px; margin-bottom: 4px; }
+  .rm-left { display: flex; flex-direction: column; align-items: center; gap: 0; flex-shrink: 0; padding-top: 14px; }
+  .rm-circle {
+    width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 16px; flex-shrink: 0;
+    z-index: 1; position: relative;
+  }
+  .rm-circle.active { background: rgba(0,201,122,0.12); border: 2px solid var(--success); }
+  .rm-circle.soon   { background: rgba(240,165,0,0.1);  border: 2px solid rgba(240,165,0,0.4); }
+  .rm-circle.future { background: var(--bg-card); border: 2px solid var(--border); }
+
+  .rm-body {
+    flex: 1; background: var(--bg-secondary); border: 1px solid var(--border);
+    padding: 18px 22px; margin-bottom: 12px; transition: border-color .2s;
+  }
+  .rm-body:hover { border-color: var(--accent); }
+  .rm-body.active-body { border-color: rgba(0,201,122,0.25); }
+
+  .rm-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .rm-name { font-size: 14px; font-weight: 700; color: var(--text-primary); letter-spacing: 0.5px; }
+  .rm-badge { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 1px; padding: 3px 10px; }
+  .rm-badge.active { color: var(--success); border: 1px solid rgba(0,201,122,0.4); background: rgba(0,201,122,0.07); }
+  .rm-badge.soon   { color: var(--warning); border: 1px solid rgba(240,165,0,0.3); }
+  .rm-badge.future { color: var(--text-muted); border: 1px solid var(--border); }
+
+  .rm-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 12px; }
+  .rm-features { display: flex; flex-wrap: wrap; gap: 6px; }
+  .rm-feat {
+    font-family: var(--font-mono); font-size: 9px; padding: 2px 8px;
+    border: 1px solid var(--border); color: var(--text-muted);
+  }
+  .rm-feat.on { color: var(--accent-bright); border-color: rgba(61,135,192,0.3); }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="s-logo"><div class="s-logo-icon">AX</div></div>
+  <div class="s-tab active">🏠</div>
+  <div class="s-tab">📈</div>
+  <div class="s-tab dim">%</div>
+  <div class="s-tab dim">📖</div>
+  <div class="s-tab">{ }</div>
+</div>
+
+<div class="main">
+  <div class="header">
+    <span class="h-title">ГЛАВНАЯ</span>
+    <div class="h-sep"></div>
+    <div class="h-live"><div class="h-dot"></div>&nbsp;ДАННЫЕ ОБНОВЛЯЮТСЯ</div>
+  </div>
+
+  <div class="body">
+
+    <!-- Left -->
+    <div class="left">
+
+      <div class="brand-block">
+        <div class="brand-logo">AX</div>
+        <div class="brand-name">AXIOM</div>
+        <div class="brand-tagline">CRYPTO ARBITRAGE SCREENER</div>
+        <div class="brand-desc">
+          Платформа для мониторинга <strong>арбитражных возможностей</strong> на криптовалютном рынке в реальном времени.
+          Агрегируем данные с крупнейших бирж и ищем неэффективности цен для <strong>нейтральных к рынку стратегий</strong>.
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat">
+          <div class="stat-val" style="color:var(--success)">8</div>
+          <div class="stat-label">Биржи</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val">60s</div>
+          <div class="stat-label">Обновление</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" style="color:var(--accent-bright)">1</div>
+          <div class="stat-label">Скринер</div>
+        </div>
+      </div>
+
+      <div class="how-block">
+        <div class="block-title">Принцип работы</div>
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-text"><strong>Сбор данных</strong> — REST + WebSocket к 8 биржам, обновление каждые 60 секунд</div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-text"><strong>Расчёт спреда</strong> — разница цен с учётом глубины книги ордеров (VWAP)</div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-text"><strong>Фильтрация</strong> — по спреду, фандингу, доступности переводов, объёму</div>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <div class="step-text"><strong>Мониторинг</strong> — live графики и P&L калькулятор по открытой позиции</div>
+        </div>
+      </div>
+
+      <div class="exchanges-block">
+        <div class="block-title">Биржи</div>
+        <div class="ex-grid">
+          <div class="ex-chip"><div class="ex-dot" style="background:#F3BA2F"></div>Binance</div>
+          <div class="ex-chip"><div class="ex-dot" style="background:#F7A600"></div>Bybit</div>
+          <div class="ex-chip"><div class="ex-dot" style="background:#ddd"></div>OKX</div>
+          <div class="ex-chip"><div class="ex-dot" style="background:#2354E6"></div>Gate</div>
+          <div class="ex-chip"><div class="ex-dot" style="background:#00A550"></div>KuCoin</div>
+          <div class="ex-chip"><div class="ex-dot" style="background:#00B897"></div>MEXC</div>
+          <div class="ex-chip"><div class="ex-dot" style="background:#00F0FF"></div>Bitget</div>
+          <div class="ex-chip"><div class="ex-dot" style="background:#1DA2B4"></div>BingX</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right — roadmap -->
+    <div class="right">
+      <div class="roadmap-title">Модули платформы</div>
+
+      <div class="roadmap">
+
+        <div class="rm-item">
+          <div class="rm-left"><div class="rm-circle active">📈</div></div>
+          <div class="rm-body active-body">
+            <div class="rm-head">
+              <span class="rm-name">Фьючерсный арбитраж</span>
+              <span class="rm-badge active">● АКТИВЕН</span>
+            </div>
+            <div class="rm-desc">
+              Скринер расхождений цен между фьючерсными контрактами на разных биржах (CEX-CEX).
+              Одновременный LONG на одной бирже и SHORT на другой устраняет рыночный риск.
+              Прибыль формируется за счёт конвергенции цен и положительного фандинга.
+            </div>
+            <div class="rm-features">
+              <span class="rm-feat on">Live данные</span>
+              <span class="rm-feat on">WS книга ордеров</span>
+              <span class="rm-feat on">VWAP расчёт</span>
+              <span class="rm-feat on">P&L калькулятор</span>
+              <span class="rm-feat on">8 бирж</span>
+              <span class="rm-feat on">Фандинг мониторинг</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="rm-item">
+          <div class="rm-left"><div class="rm-circle soon">🔄</div></div>
+          <div class="rm-body">
+            <div class="rm-head">
+              <span class="rm-name">Спот-фьючерсный арбитраж</span>
+              <span class="rm-badge soon">СКОРО</span>
+            </div>
+            <div class="rm-desc">
+              Расхождения между спотовым рынком одной биржи и фьючерсным контрактом другой.
+              Учитывает стоимость переноса позиции, ставку фандинга и расходы на перевод активов.
+            </div>
+            <div class="rm-features">
+              <span class="rm-feat">Спот + Фьючерсы</span>
+              <span class="rm-feat">Учёт фандинга</span>
+              <span class="rm-feat">Стоимость перевода</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="rm-item">
+          <div class="rm-left"><div class="rm-circle soon">💰</div></div>
+          <div class="rm-body">
+            <div class="rm-head">
+              <span class="rm-name">Фандинг арбитраж</span>
+              <span class="rm-badge soon">СКОРО</span>
+            </div>
+            <div class="rm-desc">
+              Мониторинг аномальных ставок фандинга на разных биржах. Сбор положительного фандинга
+              при нейтральной позиции через хедж на спотовом рынке.
+            </div>
+            <div class="rm-features">
+              <span class="rm-feat">Ставки 3 периода</span>
+              <span class="rm-feat">Межбиржевой</span>
+              <span class="rm-feat">Yield расчёт</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="rm-item">
+          <div class="rm-left"><div class="rm-circle future">⛓</div></div>
+          <div class="rm-body">
+            <div class="rm-head">
+              <span class="rm-name">DEX-CEX арбитраж</span>
+              <span class="rm-badge future">В ПЛАНЕ</span>
+            </div>
+            <div class="rm-desc">
+              Расхождения между децентрализованными протоколами (Uniswap, dYdX, GMX) и
+              централизованными биржами. Требует on-chain исполнения и учёта Gas.
+            </div>
+            <div class="rm-features">
+              <span class="rm-feat">EVM совместимые</span>
+              <span class="rm-feat">Solana</span>
+              <span class="rm-feat">Gas калькулятор</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="rm-item">
+          <div class="rm-left"><div class="rm-circle future">🔀</div></div>
+          <div class="rm-body">
+            <div class="rm-head">
+              <span class="rm-name">Треугольный арбитраж</span>
+              <span class="rm-badge future">В ПЛАНЕ</span>
+            </div>
+            <div class="rm-desc">
+              Поиск неэффективности внутри одной биржи через цепочку из трёх торговых пар.
+              Не требует межбиржевых переводов — всё исполняется на одной площадке.
+            </div>
+            <div class="rm-features">
+              <span class="rm-feat">Внутрибиржевой</span>
+              <span class="rm-feat">Без переводов</span>
+              <span class="rm-feat">Высокая частота</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

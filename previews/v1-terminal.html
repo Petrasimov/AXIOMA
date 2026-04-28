@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>V1 — Terminal Split</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg:       #080c14;
+  --bg-card:  #0d1220;
+  --bg-panel: #0b0f1c;
+  --border:   #18263a;
+  --border2:  #1e2e44;
+  --text:     #e2e8f0;
+  --sec:      #8896a8;
+  --muted:    #3d506a;
+  --accent:   #00c97a;
+  --warn:     #f0a500;
+  --err:      #e05050;
+  --mono: 'JetBrains Mono', monospace;
+  --sans: 'Inter', sans-serif;
+}
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* === FAKE BG === */
+.fake-bg {
+  position: fixed; inset: 0;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  pointer-events: none;
+}
+.fake-sidebar {
+  background: var(--bg-card);
+  border-right: 1px solid var(--border);
+  opacity: 0.5;
+}
+.fake-main {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: 48px repeat(3, 160px);
+  gap: 10px;
+  opacity: 0.18;
+}
+.fake-header { grid-column: 1/-1; background: var(--bg-card); border: 1px solid var(--border); }
+.fake-card   { background: var(--bg-card); border: 1px solid var(--border); }
+
+/* === OVERLAY === */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10;
+}
+
+/* === MODAL === */
+.modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border2);
+  width: 940px;
+  box-shadow: 0 32px 96px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.03);
+  display: flex; flex-direction: column;
+  max-height: 90vh;
+}
+
+/* HEADER */
+.mh {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  flex-shrink: 0;
+}
+.mh-left  { display: flex; align-items: center; gap: 12px; }
+.mh-right { display: flex; align-items: center; gap: 14px; }
+
+.symbol {
+  font-family: var(--mono);
+  font-size: 17px; font-weight: 700;
+  color: var(--text); letter-spacing: 1px;
+}
+.badge {
+  font-size: 9px; font-weight: 700; letter-spacing: 2px;
+  padding: 3px 8px; border: 1px solid;
+}
+.badge-ff { color: var(--accent); border-color: var(--accent); background: rgba(0,201,122,0.08); }
+
+.live {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 9px; color: var(--accent); letter-spacing: 1.5px;
+}
+.live-dot {
+  width: 6px; height: 6px; background: var(--accent);
+  border-radius: 50%; animation: blink 1.4s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.25} }
+
+.spread-now {
+  font-family: var(--mono); font-size: 22px; font-weight: 700;
+  color: var(--accent);
+}
+.hot {
+  font-size: 9px; font-weight: 700; letter-spacing: 2px;
+  padding: 2px 7px; background: rgba(0,201,122,0.1);
+  border: 1px solid rgba(0,201,122,0.25); color: var(--accent);
+}
+.funding-box {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 1px;
+}
+.funding-label { font-size: 8px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; }
+.funding-time  { font-family: var(--mono); font-size: 13px; color: var(--warn); }
+
+.close {
+  background: none; border: 1px solid var(--border2);
+  color: var(--sec); width: 30px; height: 30px;
+  cursor: pointer; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.close:hover { border-color: var(--err); color: var(--err); }
+
+/* BODY GRID */
+.mb {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  flex: 1; min-height: 0;
+}
+
+/* LEFT */
+.col-l {
+  border-right: 1px solid var(--border);
+  padding: 18px;
+  display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto;
+}
+
+.ex-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 14px;
+}
+.ex-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.ex-name { display: flex; align-items: center; gap: 8px; }
+.ex-icon {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; font-weight: 700; color: #000;
+}
+.ex-title-wrap {}
+.ex-title  { font-size: 14px; font-weight: 700; color: var(--text); }
+.ex-role   { font-size: 9px; letter-spacing: 1px; color: var(--muted); }
+.ex-side-badge {
+  font-size: 8px; letter-spacing: 1.5px; padding: 2px 6px;
+  border: 1px solid; font-weight: 700;
+}
+.buy-badge  { color: var(--accent); border-color: rgba(0,201,122,0.3); }
+.sell-badge { color: var(--err);    border-color: rgba(224,80,80,0.3); }
+
+.ex-price {
+  font-family: var(--mono); font-size: 24px; font-weight: 700;
+  color: var(--text); margin-bottom: 12px;
+}
+
+.ex-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.ex-metric { display: flex; flex-direction: column; gap: 2px; }
+.ex-m-label { font-size: 8px; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; }
+.ex-m-val   { font-family: var(--mono); font-size: 12px; color: var(--text); }
+.pos { color: var(--accent) !important; }
+.neg { color: var(--err)    !important; }
+.neu { color: var(--warn)   !important; }
+
+.spread-sep {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 12px;
+  background: rgba(0,201,122,0.04);
+  border: 1px solid rgba(0,201,122,0.12);
+}
+.ss-left { display: flex; align-items: center; gap: 8px; }
+.ss-label { font-size: 9px; color: var(--muted); letter-spacing: 1.5px; }
+.ss-val   { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--accent); }
+.ss-diff  { font-family: var(--mono); font-size: 11px; color: var(--sec); }
+.ss-right { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+/* RIGHT */
+.col-r {
+  padding: 18px;
+  display: flex; flex-direction: column; gap: 18px;
+  overflow-y: auto;
+}
+
+.section-title {
+  font-size: 8px; letter-spacing: 2px; color: var(--muted);
+  text-transform: uppercase; margin-bottom: 8px;
+}
+
+.chart-wrap { position: relative; }
+.chart-svg  { width: 100%; display: block; }
+
+.chart-legend {
+  display: flex; gap: 14px; margin-top: 8px; flex-wrap: wrap;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 9px; color: var(--sec);
+}
+.leg-line { width: 16px; height: 2px; }
+.leg-dash { width: 16px; height: 0; border-top: 2px dashed; }
+
+/* Calculator */
+.calc-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 16px;
+}
+.calc-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+}
+.calc-label { font-size: 11px; color: var(--sec); white-space: nowrap; }
+.calc-input {
+  flex: 1;
+  background: var(--bg-card); border: 1px solid var(--border2);
+  color: var(--text); padding: 8px 12px;
+  font-family: var(--mono); font-size: 14px;
+  outline: none; transition: border-color 0.15s;
+}
+.calc-input:focus { border-color: var(--accent); }
+.calc-results { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.calc-item { display: flex; flex-direction: column; gap: 3px; }
+.calc-item-label { font-size: 8px; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; }
+.calc-item-val   { font-family: var(--mono); font-size: 18px; font-weight: 700; }
+
+/* FOOTER */
+.mf {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 20px; border-top: 1px solid var(--border);
+  background: var(--bg-panel); flex-shrink: 0;
+}
+.route { display: flex; align-items: center; gap: 8px; }
+.route-label { font-size: 8px; color: var(--muted); letter-spacing: 1.5px; }
+.route-step  { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--sec); }
+.route-icon  {
+  width: 14px; height: 14px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 7px; font-weight: 700; color: #000;
+}
+.route-arr { color: var(--muted); font-size: 10px; }
+.route-warn { font-size: 10px; color: var(--warn); margin-left: 6px; }
+.risk { display: flex; align-items: center; gap: 8px; }
+.risk-label { font-size: 8px; color: var(--muted); letter-spacing: 1.5px; }
+.risk-bar   { display: flex; gap: 2px; }
+.risk-seg   { width: 12px; height: 5px; }
+.risk-val   { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+.age-box    { font-size: 10px; color: var(--sec); font-family: var(--mono); }
+</style>
+</head>
+<body>
+
+<!-- FAKE BG -->
+<div class="fake-bg">
+  <div class="fake-sidebar"></div>
+  <div class="fake-main">
+    <div class="fake-header"></div>
+    <div class="fake-card"></div><div class="fake-card"></div>
+    <div class="fake-card"></div><div class="fake-card"></div>
+    <div class="fake-card"></div><div class="fake-card"></div>
+    <div class="fake-card"></div><div class="fake-card"></div>
+    <div class="fake-card"></div><div class="fake-card"></div>
+    <div class="fake-card"></div><div class="fake-card"></div>
+  </div>
+</div>
+
+<!-- OVERLAY -->
+<div class="overlay">
+  <div class="modal">
+
+    <!-- HEADER -->
+    <div class="mh">
+      <div class="mh-left">
+        <span class="symbol">BTCUSDT</span>
+        <span class="badge badge-ff">FF</span>
+        <span class="live"><span class="live-dot"></span>LIVE</span>
+        <span class="spread-now" id="spread-display">3.24%</span>
+        <span class="hot">HOT</span>
+      </div>
+      <div class="mh-right">
+        <div class="funding-box">
+          <span class="funding-label">NEXT FUNDING</span>
+          <span class="funding-time" id="funding-timer">03:57:22</span>
+        </div>
+        <button class="close">✕</button>
+      </div>
+    </div>
+
+    <!-- BODY -->
+    <div class="mb">
+
+      <!-- LEFT -->
+      <div class="col-l">
+
+        <!-- BUY Exchange -->
+        <div class="ex-card">
+          <div class="ex-top">
+            <div class="ex-name">
+              <div class="ex-icon" style="background:#F0B90B">B</div>
+              <div class="ex-title-wrap">
+                <div class="ex-title">Binance</div>
+                <div class="ex-role">BID EXCHANGE</div>
+              </div>
+            </div>
+            <span class="ex-side-badge buy-badge">BUY / LONG</span>
+          </div>
+          <div class="ex-price">$67,240.50</div>
+          <div class="ex-grid">
+            <div class="ex-metric">
+              <span class="ex-m-label">Funding Rate</span>
+              <span class="ex-m-val pos">+0.0100%</span>
+            </div>
+            <div class="ex-metric">
+              <span class="ex-m-label">Период</span>
+              <span class="ex-m-val">каждые 8h</span>
+            </div>
+            <div class="ex-metric">
+              <span class="ex-m-label">Объём 24h</span>
+              <span class="ex-m-val">$125M</span>
+            </div>
+            <div class="ex-metric">
+              <span class="ex-m-label">Open Interest</span>
+              <span class="ex-m-val">$2.4B</span>
+            </div>
+            <div class="ex-metric">
+              <span class="ex-m-label">Депозит</span>
+              <span class="ex-m-val pos">✓ Открыт</span>
+            </div>
+            <div class="ex-metric">
+              <span class="ex-m-label">Вывод</span>
+              <span class="ex-m-val pos">✓ Открыт</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Spread separator -->
+        <div class="spread-sep">
+          <div class="ss-left">
+            <span class="ss-label">СПРЕД</span>
+            <span class="ss-val">3.24%</span>
+            <span class="ss-diff">BID ← $2,179.60 → ASK</span>
+          </div>
+          <span class="ss-right">ВОЗРАСТ: 5м</span>
+        </div>
+
+        <!-- SELL Exchange -->
+        <div class="ex-card">
+          <div class="ex-top">
+            <div class="ex-name">
+              <div class="ex-icon" style="background:#F7A600">B</div>
+              <div class="ex-title-wrap">
+                <div class="ex-title">Bybit</div>
+                <div class="ex-role">ASK EXCHANGE</div>
+              </div>
+            </div>
+            <span class="ex-side-badge sell-badge">SELL / SHORT</span>
+          </div>
+          <div class="ex-price">$69,420.10</div>
+          <div class="ex-grid">
+            <div class="ex-metric">
+              <span class="ex-m-label">Funding Rate</span>
+              <span class="ex-m-val neg">-0.0050%</span>
+            </div>
+            <div class="ex-metric">
+              <span class="ex-m-label">Период</span>
+              <span class="ex-m-val">каждые 8h</span>
+            </div>
+            <div class="ex-metric">
+              <span class="ex-m-label">Объём 24h</span>
+              <span class="ex-m-val">$98M</span>
+            </div>
+            <div class="ex-metric">
+              <span class="ex-m-label">Open Interest</span>
+              <span class="ex-m-val">$1.8B</span>
+            </div>
+            <div class="ex-metric">
+              <span class="ex-m-label">Депозит</span>
+              <span class="ex-m-val pos">✓ Открыт</span>
+            </div>
+            <div class="ex-metric">
+              <span class="ex-m-label">Вывод</span>
+              <span class="ex-m-val neg">✗ Закрыт</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT -->
+      <div class="col-r">
+
+        <!-- CHART -->
+        <div>
+          <div class="section-title">Spread History — последние 30 минут</div>
+          <div class="chart-wrap">
+            <svg class="chart-svg" id="chart" viewBox="0 0 480 210" xmlns="http://www.w3.org/2000/svg"></svg>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item">
+              <div class="leg-line" style="background:var(--accent)"></div>
+              Текущий спред
+            </div>
+            <div class="legend-item">
+              <div class="leg-dash" style="border-color:var(--muted)"></div>
+              Цель выхода (0.30%)
+            </div>
+            <div class="legend-item">
+              <div class="leg-line" style="background:rgba(0,201,122,0.3);height:8px"></div>
+              Зона профита
+            </div>
+          </div>
+        </div>
+
+        <!-- CALCULATOR -->
+        <div class="calc-box">
+          <div class="section-title">Калькулятор P&L</div>
+          <div class="calc-row">
+            <span class="calc-label">Сумма входа $</span>
+            <input class="calc-input" type="number" id="amount" value="10000" min="100">
+          </div>
+          <div class="calc-results">
+            <div class="calc-item">
+              <span class="calc-item-label">Профит сейчас</span>
+              <span class="calc-item-val pos" id="p-now">+$324</span>
+            </div>
+            <div class="calc-item">
+              <span class="calc-item-label">При цели 0.30%</span>
+              <span class="calc-item-val pos" id="p-target">+$294</span>
+            </div>
+            <div class="calc-item">
+              <span class="calc-item-label">ROI / спред</span>
+              <span class="calc-item-val pos" id="p-roi">3.24%</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="mf">
+      <div class="route">
+        <span class="route-label">МАРШРУТ</span>
+        <span class="route-step">
+          <div class="route-icon" style="background:#F0B90B">B</div> Binance
+        </span>
+        <span class="route-arr">→</span>
+        <span class="route-step">
+          <div class="route-icon" style="background:#F7A600">B</div> Bybit
+        </span>
+        <span class="route-warn">⚠ Вывод на Bybit закрыт</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:20px">
+        <div class="age-box">🕐 Возраст: 5м</div>
+        <div class="risk">
+          <span class="risk-label">РИСК</span>
+          <div class="risk-bar" id="risk-bar"></div>
+          <span class="risk-val">7/10</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// Risk bar
+const rb = document.getElementById('risk-bar');
+for (let i = 0; i < 10; i++) {
+  const s = document.createElement('div');
+  s.className = 'risk-seg';
+  s.style.background = i < 7 ? 'var(--accent)' : 'var(--border2)';
+  rb.appendChild(s);
+}
+
+// Spread chart
+(function() {
+  const svg = document.getElementById('chart');
+  const W = 480, H = 210;
+  const PL = 44, PR = 14, PT = 18, PB = 30;
+  const cW = W - PL - PR, cH = H - PT - PB;
+
+  const data = [2.05, 2.32, 2.71, 3.08, 3.35, 3.51, 3.48, 3.39, 3.33, 3.28, 3.24];
+  const TARGET = 0.30;
+  const YMAX = 4.0, YMIN = 0;
+
+  const tx = i => PL + (i / (data.length - 1)) * cW;
+  const ty = v => PT + (1 - (v - YMIN) / (YMAX - YMIN)) * cH;
+
+  function smooth(pts) {
+    let d = `M ${pts[0][0]} ${pts[0][1]}`;
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i-1], [x1, y1] = pts[i];
+      const cx = (x0 + x1) / 2;
+      d += ` C ${cx},${y0} ${cx},${y1} ${x1},${y1}`;
+    }
+    return d;
+  }
+
+  const pts = data.map((v, i) => [tx(i), ty(v)]);
+  const linePath = smooth(pts);
+  const lastX = pts[pts.length-1][0];
+  const tY = ty(TARGET);
+
+  let html = `<defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#00c97a" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#00c97a" stop-opacity="0.03"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>`;
+
+  // Grid
+  [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0].forEach(v => {
+    const y = ty(v);
+    html += `<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#18263a" stroke-width="1"/>`;
+    html += `<text x="${PL-4}" y="${y+4}" font-size="9" fill="#3d506a" text-anchor="end" font-family="monospace">${v.toFixed(1)}</text>`;
+  });
+
+  // Time labels
+  const times = ['-30m','','-20m','','-10m','','-5m','','','','\u25CF NOW'];
+  data.forEach((_, i) => {
+    if (times[i]) {
+      const col = i === data.length-1 ? '#00c97a' : '#3d506a';
+      html += `<text x="${tx(i)}" y="${H-6}" font-size="8" fill="${col}" text-anchor="middle" font-family="monospace">${times[i]}</text>`;
+    }
+  });
+
+  // Target line
+  html += `<line x1="${PL}" y1="${tY}" x2="${W-PR}" y2="${tY}" stroke="#3d506a" stroke-width="1" stroke-dasharray="5,4"/>`;
+  html += `<text x="${PL+4}" y="${tY-4}" font-size="8" fill="#3d506a" font-family="monospace">TARGET 0.30%</text>`;
+
+  // Fill area
+  const fillPath = linePath + ` L ${lastX},${tY} L ${PL},${tY} Z`;
+  html += `<path d="${fillPath}" fill="url(#g1)"/>`;
+
+  // Glow line (thicker, blurred)
+  html += `<path d="${linePath}" fill="none" stroke="#00c97a" stroke-width="4" opacity="0.25" filter="url(#glow)"/>`;
+  // Main line
+  html += `<path d="${linePath}" fill="none" stroke="#00c97a" stroke-width="2"/>`;
+
+  // Entry dot (current)
+  const [ex, ey] = pts[pts.length-1];
+  html += `<circle cx="${ex}" cy="${ey}" r="4" fill="#00c97a" stroke="#080c14" stroke-width="2"/>`;
+  html += `<circle cx="${ex}" cy="${ey}" r="4" fill="none" stroke="#00c97a" stroke-width="1.5">
+    <animate attributeName="r" from="4" to="14" dur="2s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" from="0.7" to="0" dur="2s" repeatCount="indefinite"/>
+  </circle>`;
+  // Entry label
+  html += `<text x="${ex}" y="${ey-12}" font-size="9" fill="#00c97a" text-anchor="middle" font-family="monospace" font-weight="bold">3.24%</text>`;
+
+  svg.innerHTML = html;
+})();
+
+// Calculator
+const amountEl = document.getElementById('amount');
+function updateCalc() {
+  const a = parseFloat(amountEl.value) || 0;
+  const spread = 3.24, target = 0.30;
+  document.getElementById('p-now').textContent    = `+$${(spread * a / 100).toFixed(2)}`;
+  document.getElementById('p-target').textContent = `+$${((spread - target) * a / 100).toFixed(2)}`;
+  document.getElementById('p-roi').textContent     = `${spread}%`;
+}
+amountEl.addEventListener('input', updateCalc);
+updateCalc();
+
+// Funding countdown
+let secs = 3 * 3600 + 57 * 60 + 22;
+function tickFunding() {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  document.getElementById('funding-timer').textContent =
+    `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  if (secs > 0) secs--;
+}
+tickFunding();
+setInterval(tickFunding, 1000);
+
+// Live spread animation
+let live = 3.24;
+setInterval(() => {
+  live = Math.max(3.10, Math.min(3.40, live + (Math.random() - 0.5) * 0.04));
+  document.getElementById('spread-display').textContent = live.toFixed(2) + '%';
+  updateCalc();
+}, 3000);
+</script>
+</body>
+</html>

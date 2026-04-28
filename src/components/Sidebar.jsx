@@ -174,9 +174,8 @@ const style = `
 `
 
 
-function Sidebar({ activeTab, onTabChange }) {
+function Sidebar({ activeTab, onTabChange, activePage, onPageChange }) {
     const [futuresSubTab, setFuturesSubTab] = useState('cex-cex')
-    const [devOpen, setDevOpen] = useState(false)
 
     return (
         <>
@@ -198,14 +197,13 @@ function Sidebar({ activeTab, onTabChange }) {
                     return (
                         <div key={tab.id}>
                             <div
-                                className={`sidebar-tab ${tab.id === 'developers' ? (devOpen ? 'active' : '') : (activeTab === tab.id ? 'active' : '')} ${!tab.enabled ? 'disabled' : ''}`} 
+                                className={`sidebar-tab ${isActive ? 'active' : ''} ${!tab.enabled ? 'disabled' : ''}`}
                                 onClick={() => {
-                                    if (tab.id === 'developers') {
-                                        setDevOpen(o => !o)
-                                    } else {
-                                        tab.enabled && onTabChange(tab.id)
-                                    }
-                                }} 
+                                    if (!tab.enabled) return
+                                    onTabChange(tab.id)
+                                    if (tab.id !== 'developers') onPageChange?.('futures')
+                                }}
+
                             >
                                 {Icon && <Icon size={16} />}
                                 <span>{tab.label}</span>
@@ -215,7 +213,7 @@ function Sidebar({ activeTab, onTabChange }) {
                                 <>
                                     <div
                                         className={`sidebar-subtab ${futuresSubTab === 'cex-cex' ? 'active' : ''}`}
-                                        onClick={() => setFuturesSubTab('cex-cex')}
+                                        onClick={() => { setFuturesSubTab('cex-cex'); onPageChange?.('futures') }}
                                     >
                                         <ArrowLeftRight size={13} />
                                         CEX-CEX
@@ -227,9 +225,12 @@ function Sidebar({ activeTab, onTabChange }) {
                                 </>
                             )}
 
-                            {tab.id === 'developers' && devOpen && (
+                            {tab.id === 'developers' && isActive && (
                                 <>
-                                    <div className="sidebar-subtab disabled">
+                                    <div
+                                        className={`sidebar-subtab ${activePage === 'api' ? 'active' : ''}`}
+                                        onClick={() => onPageChange?.('api')}
+                                    >
                                         API
                                     </div>
                                     <div className="sidebar-subtab disabled">

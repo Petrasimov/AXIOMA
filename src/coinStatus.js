@@ -1,4 +1,5 @@
 import { hmacHex, hmacBase64 } from './sign.js'
+import { rlFetch } from './rateLimiter.js'
 
 const statusCache = {}
 const STATUS_TTL = 5 * 60 * 1000  // 5 минут
@@ -19,13 +20,14 @@ export async function getBinanceStatus(symbol) {
         const query = `timestamp=${ts}&recvWindow=60000`
         const sig = await hmacHex(secret, query)
 
-        const res = await fetch(
+        const res = await rlFetch(
+            'binance', 200,
             `/binance-api/sapi/v1/capital/config/getall?${query}&signature=${sig}`,
             { headers: { 'X-MBX-APIKEY': apiKey } }
         )
         if (!res.ok) {
             const text = await res.text()
-            console.warn('Binance raw:', res.status, text.slice(0,300))
+            console.warn('Binance raw:', res.status, text.slice(0, 300))
             return { deposit: true, withdraw: true }
         }
         const data = await res.json()
@@ -60,7 +62,8 @@ export async function getBybitStatus(symbol) {
         const queryString = `coin=${symbol.toUpperCase()}`
         const sig = await hmacHex(secret, ts + apiKey + recvWindow + queryString)
 
-        const res = await fetch(
+        const res = await rlFetch(
+            'bybit', 150,
             `https://api.bybit.com/v5/asset/coin/query-info?${queryString}`,
             { headers: {
                 'X-BAPI-API-KEY': apiKey,
@@ -69,6 +72,7 @@ export async function getBybitStatus(symbol) {
                 'X-BAPI-RECV-WINDOW': recvWindow
             }}
         )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         const chains = data.result?.rows?.[0]?.chains ?? []
         const result = {
@@ -97,14 +101,17 @@ async function fetchAllOKXStatus() {
         const path = '/api/v5/asset/currencies'
         const sig = await hmacBase64(secret, ts + 'GET' + path)
 
-        const res = await fetch(`https://www.okx.com${path}`, {
-            headers: {
+        const res = await rlFetch(
+            'okx', 300,
+            `https://www.okx.com${path}`,
+            { headers: {
                 'OK-ACCESS-KEY': apiKey,
                 'OK-ACCESS-SIGN': sig,
                 'OK-ACCESS-TIMESTAMP': ts,
                 'OK-ACCESS-PASSPHRASE': passphrase
-            }
-        })
+            }}
+        )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         const map = {}
         for (const chain of (data.data ?? [])) {
@@ -139,10 +146,12 @@ export async function getMEXCStatus(symbol) {
         const query = `timestamp=${ts}&recvWindow=60000`
         const sig = await hmacHex(secret, query)
 
-        const res = await fetch(
+        const res = await rlFetch(
+            'mexc', 300,
             `/mexc-spot-api/api/v3/capital/config/getall?${query}&signature=${sig}`,
             { headers: { 'X-MEXC-APIKEY': apiKey } }
         )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         if (!Array.isArray(data)) {
             console.warn('MEXC error:', data)
@@ -173,10 +182,12 @@ export async function getBingXStatus(symbol) {
         const params = `timestamp=${ts}`
         const sig = await hmacHex(secret, params)
 
-        const res = await fetch(
+        const res = await rlFetch(
+            'bingx', 250,
             `/bingx-api/openApi/wallets/v1/capital/config/getall?${params}&signature=${sig}`,
             { headers: { 'X-BX-APIKEY': apiKey } }
         )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         const coin = data.data?.find(c => c.coin === symbol.toUpperCase())
         const result = {
@@ -198,7 +209,8 @@ async function fetchAllBitgetStatus() {
     if (isFreshStatus(BITGET_ALL_KEY)) return statusCache[BITGET_ALL_KEY].data
 
     try {
-        const res = await fetch('https://api.bitget.com/api/v2/spot/public/coins')
+        const res = await rlFetch('bitget', 200, 'https://api.bitget.com/api/v2/spot/public/coins')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         const map = {}
         for (const coin of (data.data ?? [])) {
@@ -227,9 +239,11 @@ export async function getKuCoinStatus(symbol) {
     if (isFreshStatus(key)) return statusCache[key].data
 
     try {
-        const res = await fetch(
+        const res = await rlFetch(
+            'kucoin', 200,
             `/kucoin-spot-api/api/v2/currencies/${symbol.toUpperCase()}`
         )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         const chains = data.data?.chains ?? []
         const result = {
