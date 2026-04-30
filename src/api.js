@@ -24,8 +24,8 @@ export async function fetchBinance(symbol) {
 
         try {
             const [tickerRes, fundRes] = await Promise.all([
-                fetch(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}USDT`),
-                fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}USDT`)
+                fetch(`/binance-fapi/fapi/v1/ticker/24hr?symbol=${symbol}USDT`),
+                fetch(`/binance-fapi/fapi/v1/premiumIndex?symbol=${symbol}USDT`)
             ])
 
             const ticker = await tickerRes.json()
@@ -118,7 +118,7 @@ export async function fetchBybit(symbol) {
 
     try {
         const res = await fetch(
-            `https://api.bybit.com/v5/market/tickers?category=linear&symbol=${symbol}USDT`
+            `/bybit-api/v5/market/tickers?category=linear&symbol=${symbol}USDT`
         )
         const data = await res.json()
         const ticker = data.result.list[0]
@@ -319,4 +319,35 @@ export async function enrichOpportunities(mockOpportunitiesms) {
     })
 
     return Promise.all(promises)
+}
+
+export async function enrichSingleOpportunity(opp) {
+    const sym = opp.symbol.replace(/USDT$/, '')
+    const [bidData, askData] = await Promise.all([
+        FETCHERS[opp.bid_ex] ? FETCHERS[opp.bid_ex](sym) : null,
+        FETCHERS[opp.ask_ex] ? FETCHERS[opp.ask_ex](sym) : null,
+    ])
+    return {
+        ...opp,
+        bid_funding: bidData ? {
+            ...opp.bid_funding,
+            rate: bidData.funding * 100,
+            next_time: bidData.nextFunding ? Math.floor(bidData.nextFunding / 1000) : opp.bid_funding.next_time
+        } : opp.bid_funding,
+        ask_funding: askData ? {
+            ...opp.ask_funding,
+            rate: askData.funding * 100,
+            next_time: askData.nextFunding ? Math.floor(askData.nextFunding / 1000) : opp.ask_funding.next_time
+        } : opp.ask_funding,
+        bid_volume: bidData?.volume ?? opp.bid_volume,
+        ask_volume: askData?.volume ?? opp.ask_volume,
+        bid_transfer: bidData ? { deposit: bidData.deposit, withdraw: bidData.withdraw } : opp.bid_transfer,
+        ask_transfer: askData ? { deposit: askData.deposit, withdraw: askData.withdraw } : opp.ask_transfer,
+    }
+}
+
+export function clearCacheForOpp(opp) {
+    const sym = opp.symbol.replace(/USDT$/, '')
+    delete cache[`${opp.bid_ex}_${sym}`]
+    delete cache[`${opp.ask_ex}_${sym}`]
 }

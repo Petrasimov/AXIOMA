@@ -43,6 +43,16 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/binance-api/, '')
       },
+      '/binance-fapi': {
+        target: 'https://fapi.binance.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/binance-fapi/, '')
+      },
+      '/bybit-api': {
+        target: 'https://api.bybit.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/bybit-api/, '')
+      },
     }
   },
 })
