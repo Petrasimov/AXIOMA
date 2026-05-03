@@ -262,7 +262,7 @@ function ExLogo({ info }) {
 // ─── Chart ────────────────────────────────────────────────────────────────────
 function Chart({ mode, history, avgLong, avgShort, entrySpread }) {
   const W = 500, H = 210
-  const PL = 10, PR = 58, PT = 16, PB = 26
+  const PL = 10, PR = 76, PT = 16, PB = 26
   const cW = W - PL - PR, cH = H - PT - PB
 
   const hasData = history.length >= 2
@@ -281,6 +281,10 @@ function Chart({ mode, history, avgLong, avgShort, entrySpread }) {
 
   const txFn = len => i => PL + (i / Math.max(len - 1, 1)) * cW
   const tyFn = (min, max) => v => PT + (1 - (v - min) / Math.max(max - min, 0.0001)) * cH
+  const padRange = (min, max) => {
+    const pad = Math.max((max - min) * 0.10, Math.abs(min) * 0.0001)
+    return [min - pad, max + pad]
+  }
 
   function YAxis({ ty, min, max, count = 4, fmt, annotations = [] }) {
     const vals = []
@@ -328,14 +332,13 @@ function Chart({ mode, history, avgLong, avgShort, entrySpread }) {
     )
   }
 
-  if (!hasData) return <div className="chart-empty">Накопление данных...</div>
+  if (!hasData) return <div className="chart-empty">Собираем данные...</div>
 
   // ── entry-prices ──
   if (mode === 'entry-prices') {
     const bids = history.map(p => p.bid)
     const asks = history.map(p => p.ask)
-    const min = Math.min(...bids, ...asks)
-    const max = Math.max(...bids, ...asks)
+    const [min, max] = padRange(Math.min(...bids, ...asks), Math.max(...bids, ...asks))
     const ty = tyFn(min, max)
     const tx = txFn(history.length)
 
@@ -346,13 +349,19 @@ function Chart({ mode, history, avgLong, avgShort, entrySpread }) {
     const [lbx, lby] = bidPts[bidPts.length - 1]
     const [lax, lay] = askPts[askPts.length - 1]
 
-    const fmt = v => v >= 1000 ? v.toFixed(0) : v >= 1 ? v.toFixed(3) : v.toFixed(5)
-    const annotations = hasAvg
-      ? [
-          { val: parseFloat(avgLong), color: '#00c97a' },
-          { val: parseFloat(avgShort), color: '#e03e3e' },
-        ]
-      : []
+    const range = max - min
+    const dec = range < 0.0005 ? 6 : range < 0.005 ? 5 : range < 0.5 ? 4 : range < 50 ? 3 : range < 500 ? 2 : 0
+    const fmt = v => v.toFixed(dec)
+    const curBid = bids[bids.length - 1]
+    const curAsk = asks[asks.length - 1]
+    const annotations = [
+      { val: curBid, color: '#00c97a' },
+      { val: curAsk, color: '#e03e3e' },
+      ...(hasAvg ? [
+        { val: parseFloat(avgLong),  color: '#00c97a88' },
+        { val: parseFloat(avgShort), color: '#e03e3e88' },
+      ] : []),
+    ]
 
     return (
       <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
@@ -413,8 +422,7 @@ function Chart({ mode, history, avgLong, avgShort, entrySpread }) {
     const bids = history.map(p => p.bid)
     const asks = history.map(p => p.ask)
     const allV = [...bids, ...asks, parseFloat(avgLong), parseFloat(avgShort)]
-    const min = Math.min(...allV)
-    const max = Math.max(...allV)
+    const [min, max] = padRange(Math.min(...allV), Math.max(...allV))
     const ty = tyFn(min, max)
     const tx = txFn(history.length)
 
@@ -424,13 +432,19 @@ function Chart({ mode, history, avgLong, avgShort, entrySpread }) {
     const askPath = smooth(askPts)
     const [lbx, lby] = bidPts[bidPts.length - 1]
     const [lax, lay] = askPts[askPts.length - 1]
-    const fmt = v => v >= 1000 ? v.toFixed(0) : v >= 1 ? v.toFixed(3) : v.toFixed(5)
+    const range = max - min
+    const dec = range < 0.0005 ? 6 : range < 0.005 ? 5 : range < 0.5 ? 4 : range < 50 ? 3 : range < 500 ? 2 : 0
+    const fmt = v => v.toFixed(dec)
+    const curBidEx = bids[bids.length - 1]
+    const curAskEx = asks[asks.length - 1]
 
     return (
       <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
         <YAxis ty={ty} min={min} max={max} fmt={fmt} annotations={[
-          { val: parseFloat(avgLong), color: '#00c97a' },
-          { val: parseFloat(avgShort), color: '#e03e3e' },
+          { val: curBidEx, color: '#00c97a' },
+          { val: curAskEx, color: '#e03e3e' },
+          { val: parseFloat(avgLong),  color: '#00c97a88' },
+          { val: parseFloat(avgShort), color: '#e03e3e88' },
         ]} />
         <path d={bidPath} fill="none" stroke="#00c97a" strokeWidth="1.8" />
         <path d={askPath} fill="none" stroke="#e03e3e" strokeWidth="1.8" />
@@ -565,7 +579,7 @@ function DetailModal({
   onTrade, initialAvgLong, initialAvgShort, isActiveTrade, onRemoveTrade,
 }) {
   const [chartMode, setChartMode] = useState('entry-prices')
-  const [liveHistory, setLiveHistory] = useState([{ bid: opp.bid_price, ask: opp.ask_price }])
+  const [liveHistory, setLiveHistory] = useState([])
   const [bidBook, setBidBook] = useState(null)
   const [askBook, setAskBook] = useState(null)
   const [avgLong, setAvgLong] = useState(initialAvgLong || '')
@@ -581,9 +595,9 @@ function DetailModal({
     : opp.spread
 
   useEffect(() => {
-    if (vwapBid) latestBid.current = vwapBid
-    if (vwapAsk) latestAsk.current = vwapAsk
-  }, [vwapBid, vwapAsk])
+    latestBid.current = vwapBid ?? opp.bid_price
+    latestAsk.current = vwapAsk ?? opp.ask_price
+  }, [vwapBid, vwapAsk, opp.bid_price, opp.ask_price])
 
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose() }
@@ -603,23 +617,34 @@ function DetailModal({
     return () => { bidWs.close(); askWs.close() }
   }, [opp.bid_ex, opp.ask_ex, opp.symbol, opp.strategy])
 
+  const intervalRef = useRef(null)
+  const phaseTimerRef = useRef(null)
+
   useEffect(() => {
-    const t = setInterval(() => {
+    const tick = () => {
       setLiveHistory(prev =>
         [...prev, { bid: latestBid.current, ask: latestAsk.current }].slice(-60)
       )
-    }, 3000)
-    return () => clearInterval(t)
+    }
+
+    intervalRef.current = setInterval(tick, 5000)
+
+    phaseTimerRef.current = setTimeout(() => {
+      clearInterval(intervalRef.current)
+      intervalRef.current = setInterval(tick, 60000)
+    }, 60000)
+
+    return () => {
+      clearInterval(intervalRef.current)
+      clearTimeout(phaseTimerRef.current)
+    }
   }, [])
 
-  useEffect(() => {
-    if (!opp.bid_price || !opp.ask_price) return
-    setLiveHistory(prev => {
-      const last = prev[prev.length - 1]
-      if (last?.bid === opp.bid_price && last?.ask === opp.ask_price) return prev
-      return [...prev, { bid: opp.bid_price, ask: opp.ask_price }].slice(-60)
-    })
-  }, [opp.bid_price, opp.ask_price])
+  const curBid = vwapBid ?? opp.bid_price
+  const curAsk = vwapAsk ?? opp.ask_price
+  const chartHistory = liveHistory.length > 0
+    ? [...liveHistory, { bid: curBid, ask: curAsk }]
+    : []
 
   const spreadColor = getSpreadColor(liveSpread)
   const spreadGrade = getSpreadGrade(liveSpread)
@@ -756,7 +781,7 @@ function DetailModal({
               <div className="chart-area">
                 <Chart
                   mode={chartMode}
-                  history={liveHistory}
+                  history={chartHistory}
                   avgLong={avgLong}
                   avgShort={avgShort}
                   entrySpread={opp.spread}

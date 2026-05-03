@@ -198,6 +198,7 @@ function App() {
       liveOppRef.current = enriched
     }
 
+    refreshLive()
     liveOppIntervalRef.current = setInterval(refreshLive, 10000)
     return () => clearInterval(liveOppIntervalRef.current)
   }, [selected])
