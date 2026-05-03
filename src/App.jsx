@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import Sidebar from "./components/Sidebar";
 import Header from "./components/Header";
-import { mockData } from "./mockData.js";
 import { EXCHANGES } from "./constants.js";
 import StatsRow from "./components/StatsRow.jsx";
 import OpportunityGrid from "./components/OpportunityGrid.jsx";
@@ -11,6 +10,7 @@ import LoadingScreen from "./components/LoadingScreen.jsx";
 import ActiveTradesBar from "./components/ActiveTradesBar.jsx";
 import ApiPage from "./components/ApiPage.jsx";
 import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp } from "./api.js";
+import { calcVwap } from "./utils.js";
 
 const DEFAULT_FILTERS = {
   strategy: { sf: true, ff: true },
@@ -34,6 +34,7 @@ function App() {
   const [selectedActiveTrade, setSelectedActiveTrade] = useState(null)
   const [liveData, setLiveData] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [rawData, setRawData] = useState(null)
 
   const intervalRef = useRef(null)
   const liveOppIntervalRef = useRef(null)
@@ -95,7 +96,14 @@ function App() {
   }
 
   const opportunities = useMemo(() => {
-    let result = [...(liveData || mockData)]
+    let result = (liveData || []).map(opp => {
+        if (!opp.raw_bid || !opp.raw_ask) return opp
+        const bid_price = calcVwap(opp.raw_bid, filters.tradeAmount)
+        const ask_price = calcVwap(opp.raw_ask, filters.tradeAmount)
+        if (!bid_price || !ask_price) return opp
+        const spread = (ask_price - bid_price) / bid_price * 100
+        return { ...opp, bid_price, ask_price, spread }
+    })
 
     if (!filters.strategy.sf) result = result.filter(o => o.strategy !== 'sf')
     if (!filters.strategy.ff) result = result.filter(o => o.strategy !== 'ff')
@@ -129,14 +137,20 @@ function App() {
       return depOk === filters.transfer.deposit && wdOk === filters.transfer.withdraw
     })
 
-    if (filters.onlyPositiveFunding) {
-      result = result.filter(o => {
-        const bidRate = o.bid_funding?.rate ?? 0
-        const askRate = o.ask_funding?.rate ?? 0
-        const fs = o.strategy === 'sf' ? askRate : askRate - bidRate
-        return fs > 0
-      })
-    }
+    // НОВЫЙ — null пропускается ✅
+    result = result.filter(o => {
+      const bidDep = o.bid_transfer?.deposit
+      const askDep = o.ask_transfer?.deposit
+      const bidWd  = o.bid_transfer?.withdraw
+      const askWd  = o.ask_transfer?.withdraw
+      const depOk = (bidDep === null || askDep === null)
+        ? true
+        : !!(bidDep && askDep)
+      const wdOk = (bidWd === null || askWd === null)
+        ? true
+        : !!(bidWd && askWd)
+      return depOk === filters.transfer.deposit && wdOk === filters.transfer.withdraw
+    })
 
     result.sort((a, b) => {
       if (sortMode === 'spread') return b.spread - a.spread
@@ -157,27 +171,36 @@ function App() {
   }, [filters, sortMode, liveData, hidden, favorites])
 
   const hiddenOpportunities = useMemo(() => {
-    return (liveData || mockData).filter(o => hidden.includes(o.id))
+    return (liveData || []).filter(o => hidden.includes(o.id))
   }, [hidden, liveData])
 
-  // Главный 60-секундный поллинг — пауза при открытой модалке или не-futures странице
+  // Эффект 1 — разовая загрузка FinalData.json при mount
   useEffect(() => {
-    if (selected !== null || activePage !== 'futures') {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-      return
-    }
+      fetch('/FinalData.json')
+          .then(r => r.json())
+          .then(data => setRawData(data.opportunities.slice(0, 200)))
+          .catch(err => console.error('FinalData load failed:', err))
+  }, [])
 
-    async function refresh() {
-      const enriched = await enrichOpportunities(mockData)
-      setLiveData(enriched)
-      setIsLoading(false)
-    }
+  // Эффект 2 — обогащение + polling каждые 60s, пауза при открытой модалке
+  useEffect(() => {
+      if (!rawData) return
+      if (selected !== null || activePage !== 'futures') {
+          clearInterval(intervalRef.current)
+          intervalRef.current = null
+          return
+      }
 
-    refresh()
-    intervalRef.current = setInterval(refresh, 60000)
-    return () => clearInterval(intervalRef.current)
-  }, [selected, activePage])
+      async function refresh() {
+          const enriched = await enrichOpportunities(rawData, filters.tradeAmount)
+          setLiveData(enriched)
+          setIsLoading(false)
+      }
+
+      refresh()
+      intervalRef.current = setInterval(refresh, 60000)
+      return () => clearInterval(intervalRef.current)
+  }, [rawData, selected, activePage])
 
   // 10-секундный поллинг liveOpp пока модалка открыта
   useEffect(() => {
