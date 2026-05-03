@@ -123,3 +123,8 @@ export function calcMaxVolume(orders, targetPrice, side) {
     if (totalUsd === 0) return null
     return { usd: totalUsd, count }
 }
+
+export function parseExchange(str) {
+    const idx = str.lastIndexOf('_')
+    return { id: str.slice(0, idx), market: str.slice(idx + 1) }
+}

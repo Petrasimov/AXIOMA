@@ -607,11 +607,12 @@ function DetailModal({
 
   useEffect(() => {
     const sym = opp.symbol.replace(/USDT$/, '')
-    const bidMarket = opp.strategy === 'sf' ? 'spot' : 'futures'
+    const bidMarket = opp.bid_market || (opp.strategy === 'sf' ? 'spot' : 'futures')
+    const askMarket = opp.ask_market || 'futures'
     const bidWs = connectOrderBook(opp.bid_ex, sym, bidMarket, data => {
       setBidBook(data)
     })
-    const askWs = connectOrderBook(opp.ask_ex, sym, 'futures', data => {
+    const askWs = connectOrderBook(opp.ask_ex, sym, askMarket, data => {
       setAskBook(data)
     })
     return () => { bidWs.close(); askWs.close() }

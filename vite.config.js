@@ -53,6 +53,22 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/bybit-api/, '')
       },
+      '/bybit-api': {
+        target: 'https://api.bybit.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/bybit-api/, '')
+      },
+      // ← ДОБАВИТЬ ПОСЛЕ ЭТОГО БЛОКА:
+      '/okx-api': {
+        target: 'https://www.okx.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/okx-api/, '')
+      },
+      '/bitget-api': {
+        target: 'https://api.bitget.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/bitget-api/, '')
+      },
     }
   },
 })
