@@ -143,12 +143,6 @@ function App() {
       result = result.filter(o => o.spread >= filters.minSpread)
     }
 
-    result = result.filter(o => {
-      const depOk = !!(o.bid_transfer?.deposit && o.ask_transfer?.deposit)
-      const wdOk  = !!(o.bid_transfer?.withdraw && o.ask_transfer?.withdraw)
-      return depOk === filters.transfer.deposit && wdOk === filters.transfer.withdraw
-    })
-
     // НОВЫЙ — null пропускается ✅
     result = result.filter(o => {
       const bidDep = o.bid_transfer?.deposit
