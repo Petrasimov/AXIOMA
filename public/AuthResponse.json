@@ -1,0 +1,8 @@
+{
+    "userId": 1234567890128,
+    "login": "Test",
+    "isCexCexPaid": true,
+    "isDexCexPaid": true,
+    "isAdmin": false,
+    "isActive": true
+}

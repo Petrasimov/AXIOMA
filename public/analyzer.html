@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>FinalData Analyzer</title>
+<style>
+  body { background: #060606; color: #e8f4fd; font-family: 'JetBrains Mono', monospace; padding: 20px; }
+  h1 { color: #3d87c0; margin-bottom: 20px; font-size: 16px; letter-spacing: 2px; }
+  .section { margin-bottom: 24px; }
+  .section-title { font-size: 11px; letter-spacing: 2px; color: #6a8fa8; margin-bottom: 8px; text-transform: uppercase; }
+  .row { display: flex; gap: 12px; align-items: center; padding: 5px 10px; border: 1px solid #1a3a52; margin-bottom: 3px; font-size: 11px; }
+  .row:hover { background: #112840; }
+  .symbol { color: #fff; font-weight: 700; min-width: 120px; }
+  .exchange { color: #3d87c0; min-width: 160px; }
+  .strategy { color: #f0a500; min-width: 60px; }
+  .count { color: #00c97a; min-width: 40px; }
+  .err { color: #e03e3e; }
+  input { background: #0a1a25; border: 1px solid #1a3a52; color: #e8f4fd; padding: 8px 12px; font-family: inherit; font-size: 12px; width: 300px; outline: none; margin-bottom: 12px; }
+  input:focus { border-color: #3d87c0; }
+  .stats { display: flex; gap: 20px; margin-bottom: 20px; }
+  .stat { padding: 10px 16px; border: 1px solid #1a3a52; background: #0a1a25; }
+  .stat-val { font-size: 20px; font-weight: 700; color: #00c97a; }
+  .stat-label { font-size: 9px; color: #6a8fa8; letter-spacing: 1px; }
+  button { background: rgba(61,135,192,0.1); border: 1px solid #3d87c0; color: #3d87c0; padding: 8px 16px; cursor: pointer; font-family: inherit; font-size: 11px; letter-spacing: 1px; }
+  button:hover { background: rgba(61,135,192,0.2); }
+  .tag { font-size: 9px; padding: 2px 6px; border: 1px solid; margin-left: 4px; }
+  .tag-dup { color: #f0a500; border-color: #f0a500; }
+  .tag-err { color: #e03e3e; border-color: #e03e3e; }
+</style>
+</head>
+<body>
+<h1>FINALDATA.JSON — ANALYZER</h1>
+
+<div id="loading" style="color:#6a8fa8">Загружаю FinalData.json...</div>
+<div id="app" style="display:none">
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-val" id="total">0</div>
+      <div class="stat-label">ВСЕГО ЗАПИСЕЙ</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="unique-symbols">0</div>
+      <div class="stat-label">УНИКАЛЬНЫХ МОНЕТ</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="duplicates" style="color:#f0a500">0</div>
+      <div class="stat-label">МОНЕТ С ДУБЛЯМИ</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val" id="exchanges-count">0</div>
+      <div class="stat-label">УНИКАЛЬНЫХ БИРЖ</div>
+    </div>
+  </div>
+
+  <!-- Поиск по монете -->
+  <div class="section">
+    <div class="section-title">🔍 Поиск монеты</div>
+    <input type="text" id="search" placeholder="Введи символ: AUDIO, NUMI, ST, PHB..." oninput="searchSymbol()">
+    <div id="search-results"></div>
+  </div>
+
+  <!-- Монеты с дублями -->
+  <div class="section">
+    <div class="section-title">⚠️ Монеты с несколькими возможностями (топ 20)</div>
+    <div id="duplicates-list"></div>
+  </div>
+
+  <!-- Все биржи в файле -->
+  <div class="section">
+    <div class="section-title">📊 Все биржи в файле (уникальные bid_ex/ask_ex)</div>
+    <div id="exchanges-list"></div>
+  </div>
+
+</div>
+
+<script>
+let data = []
+
+fetch('/FinalData.json')
+  .then(r => r.json())
+  .then(json => {
+    data = json.opportunities
+    document.getElementById('loading').style.display = 'none'
+    document.getElementById('app').style.display = 'block'
+    analyze()
+  })
+  .catch(e => {
+    document.getElementById('loading').textContent = 'Ошибка загрузки: ' + e.message
+    document.getElementById('loading').style.color = '#e03e3e'
+  })
+
+function analyze() {
+  // Статистика
+  document.getElementById('total').textContent = data.length
+
+  // Группировка по символу
+  const bySymbol = {}
+  const allExchanges = new Set()
+
+  for (const opp of data) {
+    if (!bySymbol[opp.symbol]) bySymbol[opp.symbol] = []
+    bySymbol[opp.symbol].push(opp)
+    allExchanges.add(opp.bid_ex)
+    allExchanges.add(opp.ask_ex)
+  }
+
+  const uniqueSymbols = Object.keys(bySymbol)
+  document.getElementById('unique-symbols').textContent = uniqueSymbols.length
+
+  const withDuplicates = uniqueSymbols.filter(s => bySymbol[s].length > 1)
+  document.getElementById('duplicates').textContent = withDuplicates.length
+  document.getElementById('exchanges-count').textContent = allExchanges.size
+
+  // Топ дублей
+  const sorted = withDuplicates
+    .sort((a, b) => bySymbol[b].length - bySymbol[a].length)
+    .slice(0, 20)
+
+  const dupList = document.getElementById('duplicates-list')
+  dupList.innerHTML = sorted.map(sym => {
+    const opps = bySymbol[sym]
+    return `<div class="row">
+      <span class="symbol">${sym}</span>
+      <span class="count">${opps.length} вар.</span>
+      <span style="color:#6a8fa8;font-size:10px">${opps.map(o => o.bid_ex + ' → ' + o.ask_ex).join(' | ')}</span>
+    </div>`
+  }).join('')
+
+  // Биржи
+  const exchList = document.getElementById('exchanges-list')
+  exchList.innerHTML = [...allExchanges].sort().map(ex => `
+    <div class="row">
+      <span class="exchange">${ex}</span>
+      <span style="color:#6a8fa8;font-size:10px">${data.filter(o => o.bid_ex === ex || o.ask_ex === ex).length} записей</span>
+    </div>
+  `).join('')
+}
+
+function searchSymbol() {
+  const q = document.getElementById('search').value.trim().toUpperCase()
+  const results = document.getElementById('search-results')
+
+  if (!q) { results.innerHTML = ''; return }
+
+  const found = data.filter(o => o.symbol.includes(q))
+
+  if (!found.length) {
+    results.innerHTML = '<div style="color:#e03e3e;font-size:11px;padding:8px">Не найдено</div>'
+    return
+  }
+
+  results.innerHTML = found.map(o => `
+    <div class="row">
+      <span class="symbol">${o.symbol}</span>
+      <span class="exchange">${o.bid_ex}</span>
+      <span style="color:#6a8fa8">→</span>
+      <span class="exchange">${o.ask_ex}</span>
+      <span class="strategy">${o.strategy.toUpperCase()}</span>
+      <span style="color:#6a8fa8;font-size:10px">${o.time?.slice(0,16) ?? ''}</span>
+    </div>
+  `).join('')
+}
+</script>
+</body>
+</html>
