@@ -11,45 +11,60 @@ import ActiveTradesBar from "./components/ActiveTradesBar.jsx";
 import ApiPage from "./components/ApiPage.jsx";
 import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp } from "./api.js";
 import { calcVwap } from "./utils.js";
+import HomePage from "./components/HomePage.jsx";
 
 const DEFAULT_FILTERS = {
   strategy: { sf: true, ff: true },
   exchanges: Object.keys(EXCHANGES),
   minSpread: 0,
-  tradeAmount: 1000,
+  tradeAmount: 100,
   funding: { positive: true, negative: true },
   transfer: { deposit: true, withdraw: true },
   onlyPositiveFunding: false,
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState('futures')
-  const [activePage, setActivePage] = useState('futures')
-  const [sortMode, setSortMode] = useState('spread')
-  const [viewMode, setViewMode] = useState('grid')
+  const [activeTab, setActiveTab] = useState(() => {
+    try { return localStorage.getItem('activeTab') || 'main' }
+    catch { return 'main' }
+  })
+  const [activePage, setActivePage] = useState(() => {
+    try { return localStorage.getItem('activePage') || 'home' }
+    catch { return 'home' }
+  })
+  const [sortMode, setSortMode] = useState(() => {
+    try { return localStorage.getItem('sortMode') || 'spread' }
+    catch { return 'spread' }
+  })
+  const [viewMode, setViewMode] = useState(() => {
+    try { return localStorage.getItem('viewMode') || 'grid' }
+    catch { return 'grid' }
+  })
+  const [filters, setFilters] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('userFilters'))
+      return saved ? { ...DEFAULT_FILTERS, ...saved } : DEFAULT_FILTERS
+    }
+    catch { return DEFAULT_FILTERS }
+  })
   const [filterOpen, setFilterOpen] = useState(false)
-  const [filters, setFilters] = useState(DEFAULT_FILTERS)
   const [selected, setSelected] = useState(null)
   const [liveOpp, setLiveOpp] = useState(null)
   const [selectedActiveTrade, setSelectedActiveTrade] = useState(null)
   const [liveData, setLiveData] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [rawData, setRawData] = useState(null)
-
   const intervalRef = useRef(null)
   const liveOppIntervalRef = useRef(null)
   const liveOppRef = useRef(null)
-
   const [favorites, setFavorites] = useState(() => {
     try { return JSON.parse(localStorage.getItem('favorites')) || [] }
     catch { return [] }
   })
-
   const [hidden, setHidden] = useState(() => {
     try { return JSON.parse(localStorage.getItem('hidden')) || [] }
     catch { return [] }
   })
-
   const [activeTrades, setActiveTrades] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem('activeTrades'))
@@ -65,7 +80,6 @@ function App() {
       return next
     })
   }
-
   const toggleHidden = (id) => {
     setHidden(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -73,7 +87,6 @@ function App() {
       return next
     })
   }
-
   const addActiveTrade = (trade) => {
     setActiveTrades(prev => {
       if (prev.length >= 5) return prev
@@ -82,7 +95,6 @@ function App() {
       return next
     })
   }
-
   const removeActiveTrade = (id) => {
     setActiveTrades(prev => {
       const next = prev.filter(t => t.id !== id)
@@ -169,7 +181,6 @@ function App() {
 
     return result
   }, [filters, sortMode, liveData, hidden, favorites])
-
   const hiddenOpportunities = useMemo(() => {
     return (liveData || []).filter(o => hidden.includes(o.id))
   }, [hidden, liveData])
@@ -178,10 +189,9 @@ function App() {
   useEffect(() => {
       fetch('/FinalData.json')
           .then(r => r.json())
-          .then(data => setRawData(data.opportunities.slice(0, 200)))
+          .then(data => setRawData(data.opportunities))
           .catch(err => console.error('FinalData load failed:', err))
   }, [])
-
   // Эффект 2 — обогащение + polling каждые 60s, пауза при открытой модалке
   useEffect(() => {
       if (!rawData) return
@@ -201,7 +211,6 @@ function App() {
       intervalRef.current = setInterval(refresh, 60000)
       return () => clearInterval(intervalRef.current)
   }, [rawData, selected, activePage])
-
   // 10-секундный поллинг liveOpp пока модалка открыта
   useEffect(() => {
     if (!selected) {
@@ -225,23 +234,41 @@ function App() {
     liveOppIntervalRef.current = setInterval(refreshLive, 10000)
     return () => clearInterval(liveOppIntervalRef.current)
   }, [selected])
+  // Сохранение настроек пользователя
+  useEffect(() => {
+    try { localStorage.setItem('sortMode', sortMode) }
+    catch {}
+  }, [sortMode])
+  useEffect(() => {
+    try { localStorage.setItem('viewMode', viewMode) }
+    catch {}
+  }, [viewMode])
+  useEffect(() => {
+    try { localStorage.setItem('userFilters', JSON.stringify(filters)) }
+    catch {}
+  }, [filters])
+  useEffect(() => {
+    try { localStorage.setItem('activeTab', activeTab) }
+    catch {}
+  }, [activeTab])
+  useEffect(() => {
+    try { localStorage.setItem('activePage', activePage) }
+    catch {}
+  }, [activePage])
 
   const handleOpenModal = (opp) => {
     setSelected(opp)
     setSelectedActiveTrade(null)
   }
-
   const handleOpenActiveTrade = (trade) => {
     setSelected(trade.opp)
     setSelectedActiveTrade(trade)
   }
-
   const handleCloseModal = () => {
     setSelected(null)
     setSelectedActiveTrade(null)
     setLiveOpp(null)
   }
-
   const handleTrade = (opp, avgLong, avgShort) => {
     const trade = {
       id: `${opp.id}_${Date.now()}`,
@@ -264,7 +291,9 @@ function App() {
       />
 
       <div className="main-area" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-        {activePage === 'api' ? (
+        {activePage === 'home' ? (
+          <HomePage onOpenScanner={() => { setActiveTab('futures'); setActivePage('futures') }} />
+        ) : activePage === 'api' ? (  
           <ApiPage />
         ) : (
           <>

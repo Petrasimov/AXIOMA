@@ -201,9 +201,9 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange }) {
                                 onClick={() => {
                                     if (!tab.enabled) return
                                     onTabChange(tab.id)
-                                    if (tab.id !== 'developers') onPageChange?.('futures')
+                                    if (tab.id === 'main') onPageChange?.('home')
+                                    else if (tab.id !== 'developers') onPageChange?.('futures')
                                 }}
-
                             >
                                 {Icon && <Icon size={16} />}
                                 <span>{tab.label}</span>

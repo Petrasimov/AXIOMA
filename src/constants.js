@@ -73,7 +73,7 @@ export const SORT_OPTIONS = [
 ]
 
 export const TABS = [
-    {id: 'main', label: 'Home', enabled: false},
+    {id: 'main', label: 'Home', enabled: true},
     {id: 'futures', label: 'Futures', enabled: true},
     {id: 'funding', label: 'Funding', enabled: false},
     {id: 'promo', label: 'Training', enabled: false},
