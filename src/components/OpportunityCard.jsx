@@ -498,16 +498,18 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
 
   const profit   = calcProfit(opp.spread, tradeAmount)
   const sym      = opp.symbol.replace(/USDT$/, '')
-  const bidType  = opp.strategy === 'sf' ? 'SPOT' : 'FUTURES'
-  const askType  = 'FUTURES'
+  const bidType = opp.bid_market === 'spot' ? 'SPOT' : 'FUTURES'
+  const askType = opp.ask_market === 'spot' ? 'SPOT' : 'FUTURES'
   const stratLabel = opp.strategy === 'sf' ? 'SPOT · FUTURES' : 'FUTURES · FUTURES'
   const hasVariants = opp.variants?.length > 0
 
-  const bidUrl = opp.strategy === 'sf'
+  const bidUrl = opp.bid_market === 'spot'
     ? (EXCHANGES[opp.bid_ex]?.spotUrl?.(sym) ?? '#')
     : (EXCHANGES[opp.bid_ex]?.futuresUrl?.(sym) ?? '#')
-  const askUrl = EXCHANGES[opp.ask_ex]?.futuresUrl?.(sym) ?? '#'
-
+  const askUrl = opp.ask_market === 'spot'
+    ? (EXCHANGES[opp.ask_ex]?.spotUrl?.(sym) ?? '#')
+    : (EXCHANGES[opp.ask_ex]?.futuresUrl?.(sym) ?? '#')
+    
   function FundingRow({ rate, nextTime, isSpot }) {
     if (isSpot) return (
       <div className="side-row">
@@ -603,15 +605,19 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
               <div className="side-rows">
                 <div className="side-row">
                   <span className="side-row-label">Bid vol</span>
-                  <span className="side-row-value">{formatVolume(opp.ask_volume)}</span>
+                  <span className="side-row-value">
+                    {opp.ask_volume != null && opp.ask_volume > 0 ? formatVolume(opp.ask_volume) : 'N/A'}
+                  </span>
                 </div>
                 <div className="side-row">
                   <span className="side-row-label">Max size</span>
                   <span className="side-row-value" style={{ color: '#5bb8f5' }}>
-                    {opp.max_volume_entry ? '~' + formatVolume(opp.max_volume_entry) + ' $' : 'N/A'}
+                    {opp.ask_max_size != null && opp.ask_max_size > 0
+                      ? '~' + formatVolume(opp.ask_max_size) + ' $'
+                      : 'N/A'}
                   </span>
                 </div>
-                <FundingRow rate={askRate} nextTime={askNextTime} isSpot={false} />
+                <FundingRow rate={bidRate} nextTime={bidNextTime} isSpot={opp.bid_market === 'spot'} />
                 <div className="side-row">
                   <span className="side-row-label">Networks</span>
                   <TransferDots dep={opp.ask_transfer?.deposit} wdr={opp.ask_transfer?.withdraw} />
@@ -636,12 +642,16 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
               <div className="side-rows">
                 <div className="side-row">
                   <span className="side-row-label">Ask vol</span>
-                  <span className="side-row-value">{formatVolume(opp.bid_volume)}</span>
+                  <span className="side-row-value">
+                    {opp.bid_volume != null && opp.bid_volume > 0 ? formatVolume(opp.bid_volume) : 'N/A'}
+                  </span>
                 </div>
                 <div className="side-row">
                   <span className="side-row-label">Max size</span>
                   <span className="side-row-value" style={{ color: '#5bb8f5' }}>
-                    {opp.max_volume_entry ? '~' + formatVolume(opp.max_volume_entry) + ' $' : 'N/A'}
+                    {opp.bid_max_size != null && opp.bid_max_size > 0
+                      ? '~' + formatVolume(opp.bid_max_size) + ' $'
+                      : 'N/A'}
                   </span>
                 </div>
                 <FundingRow

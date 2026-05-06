@@ -3,7 +3,7 @@ import {
     getBybitStatus, getKuCoinStatus, getMEXCStatus,
     getOKXStatus
 } from './coinStatus.js'
-import { parseExchange, calcVwap } from './utils.js'
+import { parseExchange, calcVwap, calcMaxVolume } from './utils.js'
 import { rlFetch } from './rateLimiter.js'
 
 // ─── Rate limit intervals (ms между запросами, -10% от официальных лимитов) ──
@@ -50,12 +50,13 @@ export async function fetchBinance(symbol, market = 'futures') {
                     `/binance-api/api/v3/ticker/24hr?symbol=${symbol}USDT`),
                 getBinanceStatus(symbol)
             ])
+            if (!res.ok) return null
             const ticker = await res.json()
             if (!ticker || ticker.code) return null
             result = {
                 funding:     null,
                 nextFunding: null,
-                volume:      parseFloat(ticker.quoteVolume),
+                volume:      parseFloat(ticker.quoteVolume) || 0,
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
             }
@@ -67,11 +68,12 @@ export async function fetchBinance(symbol, market = 'futures') {
                 ]),
                 getBinanceStatus(symbol)
             ])
+            if (!tickerRes.ok || !fundRes.ok) return null
             const ticker = await tickerRes.json()
             const fund   = await fundRes.json()
             result = {
-                funding:     parseFloat(fund.lastFundingRate),
-                volume:      parseFloat(ticker.quoteVolume),
+                funding:     parseFloat(fund.lastFundingRate) || 0,
+                volume:      parseFloat(ticker.quoteVolume) || 0,
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
                 nextFunding: parseInt(fund.nextFundingTime)
@@ -99,13 +101,15 @@ export async function fetchBingX(symbol, market = 'futures') {
                     `/bingx-api/openApi/spot/v1/ticker/24hr?symbol=${symbol}-USDT`),
                 getBingXStatus(symbol)
             ])
-            const data   = await res.json()
-            const ticker = data.data
+            if (!res.ok) return null
+            const data = await res.json()
+            // BingX spot: data.data может быть объектом или массивом
+            const ticker = Array.isArray(data.data) ? data.data[0] : data.data
             if (!ticker) return null
             result = {
                 funding:     null,
                 nextFunding: null,
-                volume:      parseFloat(ticker.quoteVolume),
+                volume:      parseFloat(ticker.quoteVolume) || parseFloat(ticker.volume) || 0,
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
             }
@@ -117,14 +121,16 @@ export async function fetchBingX(symbol, market = 'futures') {
                 ]),
                 getBingXStatus(symbol)
             ])
+            if (!tickerRes.ok || !fundRes.ok) return null
             const tickerData = await tickerRes.json()
             const fundData   = await fundRes.json()
-            const ticker = tickerData.data
-            const fund   = fundData.data
+            // BingX futures: data может быть массивом или объектом
+            const ticker = Array.isArray(tickerData.data) ? tickerData.data[0] : tickerData.data
+            const fund   = Array.isArray(fundData.data)   ? fundData.data[0]   : fundData.data
             if (!ticker || !fund) return null
             result = {
-                funding:     parseFloat(fund.lastFundingRate),
-                volume:      parseFloat(ticker.quoteVolume),
+                funding:     parseFloat(fund.lastFundingRate) || 0,
+                volume:      parseFloat(ticker.quoteVolume) || parseFloat(ticker.volume) || 0,
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
                 nextFunding: parseInt(fund.nextFundingTime)
@@ -152,13 +158,14 @@ export async function fetchBitget(symbol, market = 'futures') {
                     `/bitget-api/api/v2/spot/market/tickers?symbol=${symbol}USDT`),
                 getBitgetStatus(symbol)
             ])
+            if (!res.ok) return null
             const data   = await res.json()
-            const ticker = data.data?.[0]
+            const ticker = Array.isArray(data.data) ? data.data[0] : data.data
             if (!ticker) return null
             result = {
                 funding:     null,
                 nextFunding: null,
-                volume:      parseFloat(ticker.usdtVolume),
+                volume:      parseFloat(ticker.usdtVolume) || parseFloat(ticker.quoteVolume) || 0,
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
             }
@@ -168,12 +175,13 @@ export async function fetchBitget(symbol, market = 'futures') {
                     `/bitget-api/api/v2/mix/market/ticker?symbol=${symbol}USDT&productType=USDT-FUTURES`),
                 getBitgetStatus(symbol)
             ])
+            if (!res.ok) return null
             const data   = await res.json()
-            const ticker = data.data?.[0]
+            const ticker = Array.isArray(data.data) ? data.data[0] : data.data
             if (!ticker) return null
             result = {
-                funding:     parseFloat(ticker.fundingRate),
-                volume:      parseFloat(ticker.usdtVolume),
+                funding:     parseFloat(ticker.fundingRate) || 0,
+                volume:      parseFloat(ticker.usdtVolume) || 0,
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
                 nextFunding: parseInt(ticker.nextFundingTime)
@@ -201,13 +209,14 @@ export async function fetchBybit(symbol, market = 'futures') {
                     `/bybit-api/v5/market/tickers?category=spot&symbol=${symbol}USDT`),
                 getBybitStatus(symbol)
             ])
+            if (!res.ok) return null
             const data   = await res.json()
             const ticker = data.result?.list?.[0]
             if (!ticker) return null
             result = {
                 funding:     null,
                 nextFunding: null,
-                volume:      parseFloat(ticker.turnover24h),
+                volume:      parseFloat(ticker.turnover24h) || 0,
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
             }
@@ -217,12 +226,13 @@ export async function fetchBybit(symbol, market = 'futures') {
                     `/bybit-api/v5/market/tickers?category=linear&symbol=${symbol}USDT`),
                 getBybitStatus(symbol)
             ])
+            if (!res.ok) return null
             const data   = await res.json()
             const ticker = data.result?.list?.[0]
             if (!ticker) return null
             result = {
-                funding:     parseFloat(ticker.fundingRate),
-                volume:      parseFloat(ticker.turnover24h),
+                funding:     parseFloat(ticker.fundingRate) || 0,
+                volume:      parseFloat(ticker.turnover24h) || 0,
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
                 nextFunding: parseInt(ticker.nextFundingTime)
@@ -245,21 +255,21 @@ export async function fetchGate(symbol, market = 'futures') {
         let result
 
         if (market === 'spot') {
-            // Gate: deposit/withdraw через публичный API currencies endpoint
             const [tickerRes, currencyRes] = await Promise.all([
                 rlFetch('gate', RL.gate,
                     `/gate-api/api/v4/spot/tickers?currency_pair=${symbol}_USDT`),
                 rlFetch('gate', RL.gate,
                     `/gate-api/api/v4/spot/currencies/${symbol}`)
             ])
+            if (!tickerRes.ok) return null
             const tickers  = await tickerRes.json()
-            const currency = await currencyRes.json()
+            const currency = currencyRes.ok ? await currencyRes.json() : {}
             const ticker   = tickers?.[0]
             if (!ticker) return null
             result = {
                 funding:     null,
                 nextFunding: null,
-                volume:      parseFloat(ticker.quote_volume),
+                volume:      parseFloat(ticker.quote_volume) || 0,
                 deposit:     !currency.deposit_disabled,
                 withdraw:    !currency.withdraw_disabled,
             }
@@ -269,12 +279,13 @@ export async function fetchGate(symbol, market = 'futures') {
                 rlFetch('gate', RL.gate, `/gate-api/api/v4/futures/usdt/contracts/${symbol}_USDT`),
                 rlFetch('gate', RL.gate, `/gate-api/api/v4/spot/currencies/${symbol}`)
             ])
+            if (!tickerRes.ok || !contractRes.ok) return null
             const tickers  = await tickerRes.json()
             const contract = await contractRes.json()
-            const currency = await currencyRes.json()
+            const currency = currencyRes.ok ? await currencyRes.json() : {}
             result = {
-                funding:     parseFloat(contract.funding_rate),
-                volume:      parseFloat(tickers[0]?.volume_24h_quote ?? 0),
+                funding:     parseFloat(contract.funding_rate) || 0,
+                volume:      parseFloat(tickers[0]?.volume_24h_quote ?? 0) || 0,
                 deposit:     !currency.deposit_disabled,
                 withdraw:    !currency.withdraw_disabled,
                 nextFunding: contract.funding_next_apply
@@ -311,7 +322,7 @@ export async function fetchKuCoin(symbol, market = 'futures') {
             result = {
                 funding:     null,
                 nextFunding: null,
-                volume:      parseFloat(stats.volValue),
+                volume:      parseFloat(stats.volValue) || 0,
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
             }
@@ -326,8 +337,8 @@ export async function fetchKuCoin(symbol, market = 'futures') {
             const contract = data.data
             if (!contract) return null
             result = {
-                funding:     parseFloat(contract.fundingFeeRate),
-                volume:      parseFloat(contract.turnoverOf24h),
+                funding:     parseFloat(contract.fundingFeeRate) || 0,
+                volume:      parseFloat(contract.turnoverOf24h) || 0,
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
                 nextFunding: contract.nextFundingRateTime
@@ -357,12 +368,13 @@ export async function fetchMEXC(symbol, market = 'futures') {
                     `/mexc-spot-api/api/v3/ticker/24hr?symbol=${symbol}USDT`),
                 getMEXCStatus(symbol)
             ])
+            if (!res.ok) return null
             const ticker = await res.json()
             if (!ticker || ticker.code) return null
             result = {
                 funding:     null,
                 nextFunding: null,
-                volume:      parseFloat(ticker.quoteVolume),
+                volume:      parseFloat(ticker.quoteVolume) || parseFloat(ticker.volume) || 0,
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
             }
@@ -374,13 +386,15 @@ export async function fetchMEXC(symbol, market = 'futures') {
                 ]),
                 getMEXCStatus(symbol)
             ])
+            if (!tickerRes.ok) return null
             const tickerData  = await tickerRes.json()
-            const fundingData = await fundingRes.json()
+            const fundingData = fundingRes.ok ? await fundingRes.json() : {}
             const ticker      = tickerData.data
             if (!ticker) return null
             result = {
-                funding:     parseFloat(ticker.fundingRate),
-                volume:      parseFloat(ticker.amount24),
+                funding:     parseFloat(ticker.fundingRate) || 0,
+                // MEXC: amount24 — объём в USDT за 24ч
+                volume:      parseFloat(ticker.amount24) || parseFloat(ticker.volume24) || 0,
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
                 nextFunding: fundingData?.data?.nextSettleTime ?? null
@@ -408,13 +422,15 @@ export async function fetchOKX(symbol, market = 'futures') {
                     `/okx-api/api/v5/market/ticker?instId=${symbol}-USDT`),
                 getOKXStatus(symbol)
             ])
+            if (!res.ok) return null
             const ticker = await res.json()
             const t      = ticker.data?.[0]
             if (!t) return null
             result = {
                 funding:     null,
                 nextFunding: null,
-                volume:      parseFloat(t.volCcy24h) * parseFloat(t.last),
+                // OKX spot: volCcy24h в базовой валюте, умножаем на last для USDT
+                volume:      (parseFloat(t.volCcy24h) || 0) * (parseFloat(t.last) || 0),
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
             }
@@ -427,14 +443,15 @@ export async function fetchOKX(symbol, market = 'futures') {
                 ]),
                 getOKXStatus(symbol)
             ])
+            if (!fundRes.ok || !tickerRes.ok) return null
             const fund   = await fundRes.json()
             const ticker = await tickerRes.json()
             const f = fund.data?.[0]
             const t = ticker.data?.[0]
             if (!f || !t) return null
             result = {
-                funding:     parseFloat(f.fundingRate),
-                volume:      parseFloat(t.volCcy24h) * parseFloat(t.last),
+                funding:     parseFloat(f.fundingRate) || 0,
+                volume:      (parseFloat(t.volCcy24h) || 0) * (parseFloat(t.last) || 0),
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
                 nextFunding: parseInt(f.fundingTime)
@@ -484,16 +501,20 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
 
                     const sym = rec.symbol.replace(/USDT$/, '')
 
-                    // VWAP считаем ДО запросов к биржам
+                    // VWAP цены по книге ордеров
                     const bid_price = calcVwap(rec.bid, tradeAmount)
                     const ask_price = calcVwap(rec.ask, tradeAmount)
 
                     if (!bid_price || !ask_price) return null
 
                     const spread = (ask_price - bid_price) / bid_price * 100
+                    if (spread <= 0 || spread > 50) return null
 
-                    if (spread <= 0) return null
-                    if (spread > 50) return null
+                    // Max size: сколько $ можно исполнить до уровня цены другой стороны
+                    // bid сторона (LONG): идём по asks, останавливаемся на ask_price
+                    // ask сторона (SHORT): идём по bids, останавливаемся на bid_price
+                    const bidMaxRes = calcMaxVolume(rec.bid, ask_price, 'long')
+                    const askMaxRes = calcMaxVolume(rec.ask, bid_price, 'short')
 
                     // Запрашиваем данные с правильным market
                     const [bidData, askData] = await Promise.all([
@@ -515,7 +536,9 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
                         raw_bid:     rec.bid,
                         raw_ask:     rec.ask,
                         first_seen:  rec.time,
-                        max_volume_entry: null,
+                        // Max size отдельно для каждой стороны
+                        bid_max_size: bidMaxRes?.usd ?? null,
+                        ask_max_size: askMaxRes?.usd ?? null,
                         bid_funding: {
                             rate: bidData?.funding != null
                                 ? bidData.funding * 100
