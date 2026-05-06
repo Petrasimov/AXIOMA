@@ -1,8 +1,8 @@
 {
-    "userId": 1234567890128,
+    "userId": 5295815261,
     "login": "Test",
     "isCexCexPaid": true,
     "isDexCexPaid": true,
-    "isAdmin": false,
+    "isAdmin": true,
     "isActive": true
 }

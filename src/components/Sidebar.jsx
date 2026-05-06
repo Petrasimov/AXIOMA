@@ -1,6 +1,15 @@
+/**
+ * Sidebar.jsx
+ *
+ * Изменения:
+ * - Вкладка Developers видна и доступна только если authUser?.isAdmin === true
+ * - UserProfile вместо footer когда авторизован
+ */
+
 import { useState } from "react"
 import { Home, TrendingUp, Percent, BookOpen, ArrowLeftRight, Shuffle, Code2 } from "lucide-react"
 import { TABS } from "../constants"
+import UserProfile from './UserProfile.jsx'
 
 const TAB_ICONS = {
     main: Home,
@@ -170,12 +179,12 @@ const style = `
     .sidebar:not(:hover) .sidebar-footer {
         opacity: 0;
     }
-        
 `
 
-
-function Sidebar({ activeTab, onTabChange, activePage, onPageChange }) {
+function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, onLogout }) {
     const [futuresSubTab, setFuturesSubTab] = useState('cex-cex')
+
+    const isAdmin = authUser?.isAdmin === true
 
     return (
         <>
@@ -193,6 +202,9 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange }) {
                 {TABS.map(tab => {
                     const Icon = TAB_ICONS[tab.id]
                     const isActive = activeTab === tab.id
+
+                    // Вкладка Developers — только для админов
+                    if (tab.id === 'developers' && !isAdmin) return null
 
                     return (
                         <div key={tab.id}>
@@ -225,7 +237,7 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange }) {
                                 </>
                             )}
 
-                            {tab.id === 'developers' && isActive && (
+                            {tab.id === 'developers' && isActive && isAdmin && (
                                 <>
                                     <div
                                         className={`sidebar-subtab ${activePage === 'api' ? 'active' : ''}`}
@@ -242,9 +254,15 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange }) {
                     )
                 })}
 
-                <div className="sidebar-footer">
-                    AXIOM v1.0
-                </div>
+                {/* Профиль / версия */}
+                {authUser ? (
+                    <UserProfile user={authUser} onLogout={onLogout} />
+                ) : (
+                    <div className="sidebar-footer">
+                        AXIOM v1.0
+                    </div>
+                )}
+
             </div>
         </>
     )
