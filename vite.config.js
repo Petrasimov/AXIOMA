@@ -53,12 +53,6 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/bybit-api/, '')
       },
-      '/bybit-api': {
-        target: 'https://api.bybit.com',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/bybit-api/, '')
-      },
-      // ← ДОБАВИТЬ ПОСЛЕ ЭТОГО БЛОКА:
       '/okx-api': {
         target: 'https://www.okx.com',
         changeOrigin: true,
@@ -68,6 +62,12 @@ export default defineConfig({
         target: 'https://api.bitget.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/bitget-api/, '')
+      },
+      '/backend': {
+          target: 'http://localhost:5000',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/backend/, ''),
+          secure: false,
       },
     }
   },

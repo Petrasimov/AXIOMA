@@ -12,7 +12,7 @@ import ApiPage from "./components/ApiPage.jsx";
 import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp } from "./api.js";
 import { calcVwap } from "./utils.js";
 import HomePage from "./components/HomePage.jsx";
-import { loadSession, checkAccess, saveSession, clearSession } from "./auth.js";
+import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings } from "./auth.js";
 import TelegramAuthModal from "./components/TelegramAuthModal.jsx";
 import AccessDenied from "./components/AccessDenied.jsx";
 
@@ -63,7 +63,6 @@ function App() {
   const [selectedActiveTrade, setSelectedActiveTrade] = useState(null)
   const [liveData, setLiveData] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [rawData, setRawData] = useState(null)
 
   const [favorites, setFavorites] = useState(() => {
     try { return JSON.parse(localStorage.getItem('favorites')) || [] }
@@ -125,6 +124,18 @@ function App() {
 
       // Обновляем сессию актуальными данными и переходим в ready
       const updatedUser = { ...auth.user, ...access }
+      // Применяем userSettings из БД к фильтрам
+      if (access.userSettings) {
+          setFilters(current => ({
+              ...current,
+              tradeAmount: access.userSettings.tradeAmount ?? current.tradeAmount,
+              minSpread:   access.userSettings.minSpread   ?? current.minSpread,
+              exchanges:   access.userSettings.exchanges   ?? current.exchanges,
+              strategy:    access.userSettings.strategy    ?? current.strategy,
+              funding:     access.userSettings.funding     ?? current.funding,
+              transfer:    access.userSettings.transfer    ?? current.transfer,
+          }))
+      }
       saveSession(updatedUser)
       sigRef.current = getSignature(updatedUser)
       setAuth({ status: 'ready', user: updatedUser })
@@ -289,15 +300,6 @@ function App() {
     return (liveData || []).filter(o => hidden.includes(o.id))
   }, [hidden, liveData])
 
-  // ── Эффект: загрузка FinalData.json ───────────────────────────────────────
-
-  useEffect(() => {
-    fetch('/FinalData.json')
-      .then(r => r.json())
-      .then(data => setRawData(data.opportunities))
-      .catch(err => console.error('FinalData load failed:', err))
-  }, [])
-
   // ── Эффект: запросы к биржам каждые 60с ───────────────────────────────────
   // Запускаются ТОЛЬКО когда:
   //   - status === 'ready'       (проверка доступа завершена)
@@ -310,30 +312,54 @@ function App() {
     auth.status === 'ready' &&
     auth.user?.isCexCexPaid === true &&
     activePage === 'futures' &&
-    selected === null &&
-    rawData !== null
+    selected === null
   )
 
   useEffect(() => {
     if (!canScan) {
-      clearInterval(scanIntervalRef.current)
-      scanIntervalRef.current = null
-      return
+        clearTimeout(scanIntervalRef.current)
+        scanIntervalRef.current = null
+        return
     }
 
+    let cancelled = false
+
     async function refresh() {
-      const enriched = await enrichOpportunities(rawData, filters.tradeAmount)
-      setLiveData(enriched)
-      setIsLoading(false)
+        try {
+            const res = await fetch('/backend/api/analysis/order-books-json', {
+                credentials: 'include',
+                cache: 'no-store',
+            })
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            const data = await res.json()
+            const rawOpps = data.opportunities || []
+
+            const enriched = await enrichOpportunities(rawOpps, filters.tradeAmount)
+
+            if (!cancelled) {
+                setLiveData(enriched)
+                setIsLoading(false)
+                // Сразу запускаем следующий цикл после завершения
+                scanIntervalRef.current = setTimeout(refresh, 55000)
+            }
+        } catch (err) {
+            console.error('[scan] refresh failed:', err)
+            if (!cancelled) {
+                setIsLoading(false)
+                // При ошибке — небольшая пауза 5с перед повтором
+                scanIntervalRef.current = setTimeout(refresh, 5000)
+            }
+        }
     }
 
     refresh()
-    scanIntervalRef.current = setInterval(refresh, 60000)
+
     return () => {
-      clearInterval(scanIntervalRef.current)
-      scanIntervalRef.current = null
+        cancelled = true
+        clearTimeout(scanIntervalRef.current)
+        scanIntervalRef.current = null
     }
-  }, [canScan, rawData])
+  }, [canScan])
 
   // ── Эффект: 10s поллинг liveOpp пока модалка открыта ─────────────────────
 
@@ -369,6 +395,12 @@ function App() {
   const handleOpenModal       = (opp)   => { setSelected(opp); setSelectedActiveTrade(null) }
   const handleOpenActiveTrade = (trade) => { setSelected(trade.opp); setSelectedActiveTrade(trade) }
   const handleCloseModal      = ()      => { setSelected(null); setSelectedActiveTrade(null); setLiveOpp(null) }
+  const handleSaveSettings = async () => {
+    const success = await saveUserSettings(auth.user?.userId, filters)
+      if (success) {
+          console.log('[App] Settings saved successfully')
+      }
+  }
   const handleTrade = (opp, avgLong, avgShort) => {
     const trade = { id: `${opp.id}_${Date.now()}`, opp, avgLong, avgShort, openedAt: new Date().toISOString() }
     addActiveTrade(trade)
@@ -451,11 +483,13 @@ function App() {
               }
 
               <FilterDrawer
-                open={filterOpen}
-                onClose={() => setFilterOpen(false)}
-                filters={filters}
-                onFilters={setFilters}
-                defaultFilters={DEFAULT_FILTERS}
+                  open={filterOpen}
+                  onClose={() => setFilterOpen(false)}
+                  filters={filters}
+                  onFilters={setFilters}
+                  defaultFilters={DEFAULT_FILTERS}
+                  onSaveSettings={handleSaveSettings}         
+                  canSave={auth.status === 'ready' && !!auth.user} 
               />
             </div>
           </>

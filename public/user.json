@@ -1,0 +1,25 @@
+{
+    "userId": 5295815261,
+    "userSettings": {
+        "exchanges": ["binance", "bybit", "okx", "gate", "kucoin", "mexc", "bitget", "bingx"],
+        "minSpread": 0,
+        "tradeAmount": 300,
+        "strategy": {
+            "ff": true,
+            "sf": true
+        },
+        "funding": {
+            "positive": true,
+            "negative": true
+        },
+        "transfer": {
+            "deposit": true,
+            "withdraw": true
+        }
+    },
+    "login": "Test",
+    "isCexCexPaid": true,
+    "isDexCexPaid": true,
+    "isAdmin": true,
+    "isActive": true
+}

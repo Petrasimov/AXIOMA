@@ -283,11 +283,7 @@ function TelegramAuthModal({ onSuccess }) {
                 }
 
                 if (!access.found) {
-                    const newUser = await registerUser(
-                        tgUser.id,
-                        tgUser.username || tgUser.first_name || `user_${tgUser.id}`,
-                        tgUser.photo_url || null
-                    )
+                    const newUser = await registerUser(tgUser)
                     const session = { ...newUser, photoUrl: tgUser.photo_url || null }
                     saveSession(session)
                     onSuccess(session)

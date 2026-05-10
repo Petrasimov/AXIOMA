@@ -146,7 +146,7 @@ const style = `
     color: var(--text-secondary);
     font-size: 12px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: border-color 0.15s, color 0.15s;
     font-family: var(--font-sans);
     letter-spacing: 1px;
   }
@@ -233,10 +233,35 @@ const style = `
     cursor: not-allowed;
   }
 
+  .filter-save {
+    width: 100%;
+    padding: 10px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .filter-save:hover {
+    border-color: var(--success);
+    color: var(--success);
+  }
+
+  .filter-save:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
 
 `
 
-function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters }) {
+function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSaveSettings, canSave }) {
     const toggleStrategy = (key) => {
         onFilters(f => ({ ...f, strategy: { ...f.strategy, [key]: !f.strategy[key] } }))
     }
@@ -410,8 +435,20 @@ function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters }) {
 
             </div>
 
+            
+
             <div className="drawer-footer">
-              <button className="reset-btn" onClick={() => onFilters(defaultFilters)}>
+              <button
+                  className="filter-save"
+                  onClick={onSaveSettings}
+                  disabled={!canSave}
+              >
+                  СОХРАНИТЬ НАСТРОЙКИ
+              </button>
+
+              <button className="reset-btn" 
+                  onClick={() => onFilters(defaultFilters)}
+              >
                 СБРОСИТЬ ФИЛЬТРЫ
               </button>
             </div>
