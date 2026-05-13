@@ -38,14 +38,24 @@ export function clearSession() {
 // TODO: заменить на fetch(`/api/users/${userId}`)
 
 export async function checkAccess(userId) {
+    // ════════════════════════════════════════════════════
+    // ШАГ 1 — Проверка доступа
+    const t0 = performance.now()
+    console.group('%c[ШАГ 1] Проверка доступа', 'color:#3d87c0;font-weight:bold')
+    console.log(`[ШАГ 1] userId=${userId} | источник: user.json`)
+    // ════════════════════════════════════════════════════
     try {
         const res = await fetch('/user.json', { cache: 'no-store' })
         if (!res.ok) throw new Error('fetch failed')
         const data = await res.json()
 
-        if (String(data.userId) !== String(userId)) return { found: false }
+        if (String(data.userId) !== String(userId)) {
+            console.warn(`[ШАГ 1] ❌ userId не совпал: ожидали ${userId}, получили ${data.userId}`)
+            console.groupEnd()
+            return { found: false }
+        }
 
-        return {
+        const result = {
             found:        true,
             userId:       data.userId,
             login:        data.login,
@@ -55,8 +65,15 @@ export async function checkAccess(userId) {
             isActive:     data.isActive      ?? true,
             userSettings: data.userSettings  ?? null,
         }
+
+        const t1 = performance.now()
+        console.log(`[ШАГ 1] ✅ Доступ: isCexCexPaid=${result.isCexCexPaid} | isAdmin=${result.isAdmin} | login=${result.login}`)
+        console.log(`[ШАГ 1] ⏱ Время: ${(t1 - t0).toFixed(0)}мс`)
+        console.groupEnd()
+        return result
     } catch (err) {
-        console.error('[auth] checkAccess error:', err)
+        console.error('[ШАГ 1] ❌ Ошибка:', err)
+        console.groupEnd()
         return null
     }
 }

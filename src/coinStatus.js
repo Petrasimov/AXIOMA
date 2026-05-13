@@ -134,10 +134,11 @@ export async function getOKXStatus(symbol) {
 }
 
 
-// ─── MEXC ───────────────────────────────────────────────────────
-export async function getMEXCStatus(symbol) {
-    const key = `mexc_status_${symbol}`
-    if (isFreshStatus(key)) return statusCache[key].data
+// ─── MEXC (batch: все монеты за один запрос) ────────────────────
+const MEXC_ALL_KEY = 'mexc_status_ALL'
+
+async function fetchAllMEXCStatus() {
+    if (isFreshStatus(MEXC_ALL_KEY)) return statusCache[MEXC_ALL_KEY].data
 
     try {
         const apiKey = import.meta.env.VITE_MEXC_API_KEY
@@ -151,23 +152,33 @@ export async function getMEXCStatus(symbol) {
             `/mexc-spot-api/api/v3/capital/config/getall?${query}&signature=${sig}`,
             { headers: { 'X-MEXC-APIKEY': apiKey } }
         )
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        if (!res.ok) {
+            console.warn('MEXC status batch failed:', res.status)
+            return {}
+        }
         const data = await res.json()
         if (!Array.isArray(data)) {
-            console.warn('MEXC error:', data)
-            return { deposit: true, withdraw: true }
+            console.warn('MEXC status batch error:', data)
+            return {}
         }
-        const coin = data.find(c => c.coin === symbol.toUpperCase())
-        const result = {
-            deposit: coin?.networkList?.some(n => n.depositEnable) ?? false,
-            withdraw: coin?.networkList?.some(n => n.withdrawEnable) ?? false
+        const map = {}
+        for (const coin of data) {
+            map[coin.coin] = {
+                deposit:  coin.networkList?.some(n => n.depositEnable)  ?? false,
+                withdraw: coin.networkList?.some(n => n.withdrawEnable) ?? false,
+            }
         }
-        statusCache[key] = { data: result, ts: Date.now() }
-        return result
+        statusCache[MEXC_ALL_KEY] = { data: map, ts: Date.now() }
+        return map
     } catch (e) {
-        console.warn('MEXC status failed:', symbol, e.message)
-        return { deposit: true, withdraw: true }
+        console.warn('MEXC all status failed:', e.message)
+        return {}
     }
+}
+
+export async function getMEXCStatus(symbol) {
+    const map = await fetchAllMEXCStatus()
+    return map[symbol.toUpperCase()] ?? { deposit: true, withdraw: true }
 }
 
 // ─── BingX ──────────────────────────────────────────────────────

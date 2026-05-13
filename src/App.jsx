@@ -9,7 +9,7 @@ import DetailModal from "./components/DetailModal.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
 import ActiveTradesBar from "./components/ActiveTradesBar.jsx";
 import ApiPage from "./components/ApiPage.jsx";
-import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp } from "./api.js";
+import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp, logCollector, setAdminLogging } from "./api.js";
 import { calcVwap } from "./utils.js";
 import HomePage from "./components/HomePage.jsx";
 import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings } from "./auth.js";
@@ -124,20 +124,35 @@ function App() {
 
       // Обновляем сессию актуальными данными и переходим в ready
       const updatedUser = { ...auth.user, ...access }
-      // Применяем userSettings из БД к фильтрам
+      // ════════════════════════════════════════════════════
+      // ШАГ 2 — Применение userSettings к фильтрам
       if (access.userSettings) {
-          setFilters(current => ({
-              ...current,
-              tradeAmount: access.userSettings.tradeAmount ?? current.tradeAmount,
-              minSpread:   access.userSettings.minSpread   ?? current.minSpread,
-              exchanges:   access.userSettings.exchanges   ?? current.exchanges,
-              strategy:    access.userSettings.strategy    ?? current.strategy,
-              funding:     access.userSettings.funding     ?? current.funding,
-              transfer:    access.userSettings.transfer    ?? current.transfer,
-          }))
+          const t2 = performance.now()
+          console.group('%c[ШАГ 2] Применение userSettings к фильтрам', 'color:#f0a500;font-weight:bold')
+          console.log('[ШАГ 2] userSettings из user.json:', access.userSettings)
+          setFilters(current => {
+              const next = {
+                  ...current,
+                  tradeAmount: access.userSettings.tradeAmount ?? current.tradeAmount,
+                  minSpread:   access.userSettings.minSpread   ?? current.minSpread,
+                  exchanges:   access.userSettings.exchanges   ?? current.exchanges,
+                  strategy:    access.userSettings.strategy    ?? current.strategy,
+                  funding:     access.userSettings.funding     ?? current.funding,
+                  transfer:    access.userSettings.transfer    ?? current.transfer,
+              }
+              console.log(`[ШАГ 2] ✅ tradeAmount=${next.tradeAmount} | minSpread=${next.minSpread} | exchanges=[${next.exchanges.join(',')}]`)
+              console.log(`[ШАГ 2] ✅ strategy=ff:${next.strategy?.ff},sf:${next.strategy?.sf} | funding=pos:${next.funding?.positive},neg:${next.funding?.negative}`)
+              console.log(`[ШАГ 2] ⏱ Время: ${(performance.now() - t2).toFixed(0)}мс`)
+              console.groupEnd()
+              return next
+          })
+      } else {
+          console.log('%c[ШАГ 2] userSettings отсутствуют — оставляем текущие фильтры', 'color:#f0a500')
       }
+      // ════════════════════════════════════════════════════
       saveSession(updatedUser)
       sigRef.current = getSignature(updatedUser)
+      setAdminLogging(updatedUser.isAdmin === true)
       setAuth({ status: 'ready', user: updatedUser })
     })
   }, [auth.status]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -166,6 +181,7 @@ function App() {
       // 1. Сохраняем новый статус в sessionStorage ДО перезагрузки
       const updatedUser = { ...auth.user, ...access }
       saveSession(updatedUser)
+      setAdminLogging(updatedUser.isAdmin === true)
       // 2. Перезагружаем — при старте снова пройдёт 'checking' с новыми данными
       window.location.reload()
     }
@@ -195,6 +211,12 @@ function App() {
     setAuth({ status: 'unknown', user: null })
     setLiveData(null)
     setIsLoading(true)
+  }
+
+  const [logReady, setLogReady] = useState(false)
+
+  const handleDownloadLog = () => {
+    logCollector.download()
   }
 
   const toggleFavorite = (id) => {
@@ -325,7 +347,17 @@ function App() {
     let cancelled = false
 
     async function refresh() {
+        const cycleStart = performance.now()
+        console.group('%c[ЦИКЛ] ═══════ Новый цикл сканирования ═══════', 'color:#3d87c0;font-weight:bold;font-size:13px')
+
         try {
+            // ════════════════════════════════════════════════════
+            // ШАГ 3 — Запрос к бэкенду
+            const t3 = performance.now()
+            console.group('%c[ШАГ 3] Запрос к бэкенду', 'color:#3d87c0;font-weight:bold')
+            console.log('[ШАГ 3] GET /backend/api/analysis/order-books-json')
+            // ════════════════════════════════════════════════════
+
             const res = await fetch('/backend/api/analysis/order-books-json', {
                 credentials: 'include',
                 cache: 'no-store',
@@ -334,19 +366,36 @@ function App() {
             const data = await res.json()
             const rawOpps = data.opportunities || []
 
+            // ════════════════════════════════════════════════════
+            console.log(`[ШАГ 3] ✅ Получено: ${rawOpps.length} записей | ⏱ ${(performance.now() - t3).toFixed(0)}мс`)
+            console.groupEnd()
+            // ════════════════════════════════════════════════════
+
             const enriched = await enrichOpportunities(rawOpps, filters.tradeAmount)
 
             if (!cancelled) {
                 setLiveData(enriched)
                 setIsLoading(false)
-                // Сразу запускаем следующий цикл после завершения
+
+                // ════════════════════════════════════════════════════
+                // ШАГ 6 — Показ карточек
+                console.group('%c[ШАГ 6] Карточки показаны пользователю', 'color:#00c97a;font-weight:bold')
+                console.log(`[ШАГ 6] ✅ Карточек на экране: ${enriched.length}`)
+                console.log(`[ШАГ 6] Монеты: ${enriched.map(o => o.symbol).join(', ')}`)
+                console.log(`[ШАГ 6] ⏱ Полный цикл: ${((performance.now() - cycleStart)/1000).toFixed(2)}с`)
+                console.log(`[ШАГ 6] Следующий цикл через 55с`)
+                console.groupEnd()
+                console.groupEnd() // ЦИКЛ
+                // ════════════════════════════════════════════════════
+
+                setLogReady(true)
                 scanIntervalRef.current = setTimeout(refresh, 55000)
             }
         } catch (err) {
-            console.error('[scan] refresh failed:', err)
+            console.error('[ЦИКЛ] ❌ Ошибка:', err.message)
+            console.groupEnd()
             if (!cancelled) {
                 setIsLoading(false)
-                // При ошибке — небольшая пауза 5с перед повтором
                 scanIntervalRef.current = setTimeout(refresh, 5000)
             }
         }
@@ -468,6 +517,29 @@ function App() {
                 tradeAmount={filters.tradeAmount}
                 isLoading={isLoading}
               />
+
+              {logReady && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '4px 16px 0' }}>
+                  <button
+                    onClick={handleDownloadLog}
+                    style={{
+                      background: 'transparent',
+                      border: '1px solid var(--accent)',
+                      color: 'var(--accent-bright)',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '11px',
+                      padding: '4px 12px',
+                      cursor: 'pointer',
+                      letterSpacing: '0.5px',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => { e.target.style.background = 'var(--accent)'; e.target.style.color = '#fff' }}
+                    onMouseLeave={e => { e.target.style.background = 'transparent'; e.target.style.color = 'var(--accent-bright)' }}
+                  >
+                    ↓ СКАЧАТЬ ЛОГ
+                  </button>
+                </div>
+              )}
 
               {isLoading
                 ? <LoadingScreen />

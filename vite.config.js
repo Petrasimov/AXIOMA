@@ -69,6 +69,7 @@ export default defineConfig({
           rewrite: (path) => path.replace(/^\/backend/, ''),
           secure: false,
       },
-    }
+    },
+    allowedHosts: 'all',
   },
 })

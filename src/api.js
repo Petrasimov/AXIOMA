@@ -6,6 +6,70 @@ import {
 import { parseExchange, calcVwap, calcMaxVolume } from './utils.js'
 import { rlFetch } from './rateLimiter.js'
 
+// ─── Сборщик логов для скачивания ────────────────────────────────────────────
+export const logCollector = {
+    entries: [],
+    active: false,
+
+    start() {
+        this.entries = []
+        this.active = true
+        this.entries.push(`═══ AXIOMA SCAN — Лог цикла ═══`)
+        this.entries.push(`Время старта: ${new Date().toLocaleString('ru-RU')}`)
+        this.entries.push('')
+    },
+
+    add(level, ...args) {
+        if (!this.active) return
+        const text = args.map(a =>
+            typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)
+        ).join(' ')
+        // Убираем CSS-стили из %c логов
+        const clean = text.replace(/%c/g, '').trim()
+        if (clean) this.entries.push(`[${level.toUpperCase()}] ${clean}`)
+    },
+
+    finish() {
+        this.active = false
+        this.entries.push('')
+        this.entries.push(`Время завершения: ${new Date().toLocaleString('ru-RU')}`)
+        this.entries.push(`═══ Конец лога ═══`)
+    },
+
+    download() {
+        const content = this.entries.join('\n')
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `axioma-log-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.txt`
+        a.click()
+        URL.revokeObjectURL(url)
+    }
+}
+
+// ─── Флаг логирования (включается только для администраторов) ────────────────
+let _adminLogging = false
+
+export function setAdminLogging(isAdmin) {
+    _adminLogging = !!isAdmin
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Патчим console:
+// - Логи всегда пишутся в logCollector (для скачивания .txt)
+// - В браузер выводятся только если пользователь — администратор
+const _origLog   = console.log.bind(console)
+const _origWarn  = console.warn.bind(console)
+const _origError = console.error.bind(console)
+const _origGroup = console.group.bind(console)
+
+console.log   = (...a) => { if (_adminLogging) _origLog(...a);   logCollector.add('log',   ...a) }
+console.warn  = (...a) => { if (_adminLogging) _origWarn(...a);  logCollector.add('warn',  ...a) }
+console.error = (...a) => { if (_adminLogging) _origError(...a); logCollector.add('error', ...a) }
+console.group = (...a) => { if (_adminLogging) _origGroup(...a); logCollector.add('group', ...a) }
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ─── Rate limit intervals (ms между запросами, -10% от официальных лимитов) ──
 const RL = {
     binance: 560,
@@ -19,6 +83,7 @@ const RL = {
 }
 
 const cache = {}
+const pendingFetches = {}  // key → Promise — дедупликация одновременных запросов
 
 function isFresh(key, ttlMs = 55000) {
     return cache[key] && (Date.now() - cache[key].timestamp < ttlMs)
@@ -26,10 +91,22 @@ function isFresh(key, ttlMs = 55000) {
 
 function setCache(key, data) {
     cache[key] = { data, timestamp: Date.now() }
+    delete pendingFetches[key]  // убираем pending после завершения
 }
 
 function getCache(key) {
     return cache[key]?.data
+}
+
+// Обёртка для дедупликации: если запрос уже выполняется — ждём его
+function withDedup(key, fn) {
+    if (isFresh(key)) return Promise.resolve(getCache(key))
+    if (pendingFetches[key]) return pendingFetches[key]
+    const promise = fn().finally(() => {
+        if (pendingFetches[key] === promise) delete pendingFetches[key]
+    })
+    pendingFetches[key] = promise
+    return promise
 }
 
 // ─── Fetchers ─────────────────────────────────────────────────────────────────
@@ -37,10 +114,9 @@ function getCache(key) {
 // market = 'spot'    → спотовый endpoint, funding = null
 // В обоих случаях deposit/withdraw берётся из coinStatus (реальные данные)
 
-export async function fetchBinance(symbol, market = 'futures') {
+export function fetchBinance(symbol, market = 'futures') {
     const key = `binance_${market}_${symbol}`
-    if (isFresh(key)) return getCache(key)
-
+    return withDedup(key, async () => {
     try {
         let result
 
@@ -86,12 +162,12 @@ export async function fetchBinance(symbol, market = 'futures') {
         console.warn('Binance fetch failed:', symbol, market, e.message)
         return null
     }
+    })
 }
 
-export async function fetchBingX(symbol, market = 'futures') {
+export function fetchBingX(symbol, market = 'futures') {
     const key = `bingx_${market}_${symbol}`
-    if (isFresh(key)) return getCache(key)
-
+    return withDedup(key, async () => {
     try {
         let result
 
@@ -103,7 +179,6 @@ export async function fetchBingX(symbol, market = 'futures') {
             ])
             if (!res.ok) return null
             const data = await res.json()
-            // BingX spot: data.data может быть объектом или массивом
             const ticker = Array.isArray(data.data) ? data.data[0] : data.data
             if (!ticker) return null
             result = {
@@ -124,7 +199,6 @@ export async function fetchBingX(symbol, market = 'futures') {
             if (!tickerRes.ok || !fundRes.ok) return null
             const tickerData = await tickerRes.json()
             const fundData   = await fundRes.json()
-            // BingX futures: data может быть массивом или объектом
             const ticker = Array.isArray(tickerData.data) ? tickerData.data[0] : tickerData.data
             const fund   = Array.isArray(fundData.data)   ? fundData.data[0]   : fundData.data
             if (!ticker || !fund) return null
@@ -143,12 +217,12 @@ export async function fetchBingX(symbol, market = 'futures') {
         console.warn('BingX fetch failed:', symbol, market, e.message)
         return null
     }
+    })
 }
 
-export async function fetchBitget(symbol, market = 'futures') {
+export function fetchBitget(symbol, market = 'futures') {
     const key = `bitget_${market}_${symbol}`
-    if (isFresh(key)) return getCache(key)
-
+    return withDedup(key, async () => {
     try {
         let result
 
@@ -194,12 +268,12 @@ export async function fetchBitget(symbol, market = 'futures') {
         console.warn('Bitget fetch failed:', symbol, market, e.message)
         return null
     }
+    })
 }
 
-export async function fetchBybit(symbol, market = 'futures') {
+export function fetchBybit(symbol, market = 'futures') {
     const key = `bybit_${market}_${symbol}`
-    if (isFresh(key)) return getCache(key)
-
+    return withDedup(key, async () => {
     try {
         let result
 
@@ -245,12 +319,12 @@ export async function fetchBybit(symbol, market = 'futures') {
         console.warn('Bybit fetch failed:', symbol, market, e.message)
         return null
     }
+    })
 }
 
-export async function fetchGate(symbol, market = 'futures') {
+export function fetchGate(symbol, market = 'futures') {
     const key = `gate_${market}_${symbol}`
-    if (isFresh(key)) return getCache(key)
-
+    return withDedup(key, async () => {
     try {
         let result
 
@@ -291,6 +365,7 @@ export async function fetchGate(symbol, market = 'futures') {
                 nextFunding: contract.funding_next_apply
                     ? contract.funding_next_apply * 1000
                     : null,
+                quanto_multiplier: parseFloat(contract.quanto_multiplier) || 1,
             }
         }
 
@@ -300,12 +375,12 @@ export async function fetchGate(symbol, market = 'futures') {
         console.warn('Gate fetch failed:', symbol, market, e.message)
         return null
     }
+    })
 }
 
-export async function fetchKuCoin(symbol, market = 'futures') {
+export function fetchKuCoin(symbol, market = 'futures') {
     const key = `kucoin_${market}_${symbol}`
-    if (isFresh(key)) return getCache(key)
-
+    return withDedup(key, async () => {
     try {
         let result
 
@@ -353,12 +428,12 @@ export async function fetchKuCoin(symbol, market = 'futures') {
         console.warn('KuCoin fetch failed:', symbol, market, e.message)
         return null
     }
+    })
 }
 
-export async function fetchMEXC(symbol, market = 'futures') {
+export function fetchMEXC(symbol, market = 'futures') {
     const key = `mexc_${market}_${symbol}`
-    if (isFresh(key)) return getCache(key)
-
+    return withDedup(key, async () => {
     try {
         let result
 
@@ -393,7 +468,6 @@ export async function fetchMEXC(symbol, market = 'futures') {
             if (!ticker) return null
             result = {
                 funding:     parseFloat(ticker.fundingRate) || 0,
-                // MEXC: amount24 — объём в USDT за 24ч
                 volume:      parseFloat(ticker.amount24) || parseFloat(ticker.volume24) || 0,
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
@@ -407,12 +481,12 @@ export async function fetchMEXC(symbol, market = 'futures') {
         console.warn('MEXC fetch failed:', symbol, market, e.message)
         return null
     }
+    })
 }
 
-export async function fetchOKX(symbol, market = 'futures') {
+export function fetchOKX(symbol, market = 'futures') {
     const key = `okx_${market}_${symbol}`
-    if (isFresh(key)) return getCache(key)
-
+    return withDedup(key, async () => {
     try {
         let result
 
@@ -429,7 +503,6 @@ export async function fetchOKX(symbol, market = 'futures') {
             result = {
                 funding:     null,
                 nextFunding: null,
-                // OKX spot: volCcy24h в базовой валюте, умножаем на last для USDT
                 volume:      (parseFloat(t.volCcy24h) || 0) * (parseFloat(t.last) || 0),
                 deposit:     status.deposit,
                 withdraw:    status.withdraw,
@@ -464,6 +537,7 @@ export async function fetchOKX(symbol, market = 'futures') {
         console.warn('OKX fetch failed:', symbol, market, e.message)
         return null
     }
+    })
 }
 
 // ─── FETCHERS map ─────────────────────────────────────────────────────────────
@@ -481,120 +555,310 @@ const FETCHERS = {
 
 // ─── enrichOpportunities ──────────────────────────────────────────────────────
 
+// Конвертирует Gate futures orderbook из контрактного формата в монеты
+function convertGateBook(book, quantoMultiplier) {
+    // Gate futures order book формат:
+    //   p — цена уже в USDT за 1 монету (не требует конвертации)
+    //   s — количество контрактов (нужно умножить на quanto_multiplier → монеты)
+    // Источник: Gate API docs — "size is specified in contracts, not coins"
+    if (!book || !book.length) return []
+    if (Array.isArray(book[0])) {
+        return book.map(([p, s]) => [
+            p,                                                    // цена: не трогаем
+            String(parseFloat(s) * quantoMultiplier)              // qty: контракты → монеты
+        ])
+    }
+    return book.map(({ p, s }) => [
+        String(p),
+        String(parseFloat(s) * quantoMultiplier)
+    ])
+}
+
+// ─── Кэш Gate quanto_multiplier ──────────────────────────────────────────────
+let gateMultipliersCache = {}
+let gateMultipliersCacheTs = 0
+const GATE_MULT_TTL = 60000  // 60 секунд (один цикл)
+
+async function prefetchGateMultipliers() {
+    if (Date.now() - gateMultipliersCacheTs < GATE_MULT_TTL && Object.keys(gateMultipliersCache).length > 0) {
+        console.log(`[Gate prefetch] Кэш актуален (${Object.keys(gateMultipliersCache).length} контрактов)`)
+        return gateMultipliersCache
+    }
+    const t = performance.now()
+    console.log('[Gate prefetch] Загружаем quanto_multiplier из Gate tickers...')
+    try {
+        const res = await fetch('/gate-api/api/v4/futures/usdt/tickers')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const tickers = await res.json()
+
+        // Кэшируем: "VANRY_USDT" → "VANRYUSDT" → quanto_multiplier
+        // Если multiplier=0 (линейный контракт) → используем 1
+        const map = {}
+        for (const tk of tickers) {
+            if (!tk.contract) continue
+            const sym = tk.contract.replace(/_USDT$/, '') + 'USDT'
+            const mult = parseFloat(tk.quanto_multiplier)
+            map[sym] = (mult > 0) ? mult : 1
+        }
+
+        gateMultipliersCache = map
+        gateMultipliersCacheTs = Date.now()
+
+        const nonOne = Object.values(map).filter(v => v !== 1).length
+        console.log(`[Gate prefetch] ✅ ${Object.keys(map).length} контрактов | multiplier≠1: ${nonOne} | ⏱ ${(performance.now() - t).toFixed(0)}мс`)
+        return map
+    } catch (e) {
+        console.warn(`[Gate prefetch] ❌ Ошибка: ${e.message} — используем старый кэш`)
+        return gateMultipliersCache
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
     const BATCH_SIZE = 10
     const results = []
 
-    for (let i = 0; i < rawRecords.length; i += BATCH_SIZE) {
-        const batch = rawRecords.slice(i, i + BATCH_SIZE)
+    // Запускаем сборщик логов
+    logCollector.start()
 
+    // ════════════════════════════════════════════════════
+    // Предзагрузка Gate multipliers (до фильтрации)
+    const gateMultipliers = await prefetchGateMultipliers()
+    // ════════════════════════════════════════════════════
+
+    // ════════════════════════════════════════════════════
+    // ШАГ 4 — Фильтрация (VWAP + спред + группировка)
+    const t4 = performance.now()
+    console.group('%c[ШАГ 4] Фильтрация арбитражных возможностей', 'color:#f0a500;font-weight:bold')
+    console.log(`[ШАГ 4] Входящих записей: ${rawRecords.length} | tradeAmount=$${tradeAmount}`)
+
+    // Шаг 4.1 — считаем VWAP и спред для каждой записи (без запросов к биржам)
+    console.log('[ШАГ 4.1] Считаем средние цены (VWAP) и спреды...')
+    const t41 = performance.now()
+
+    const vwapResults = rawRecords.map(rec => {
+        try {
+            const bidEx = parseExchange(rec.bid_ex)
+            const askEx = parseExchange(rec.ask_ex)
+
+            // Применяем Gate futures конвертацию если нужно
+            let bidBook = rec.bid
+            let askBook = rec.ask
+
+            if (bidEx.id === 'gate' && bidEx.market === 'futures') {
+                const mult = gateMultipliers[rec.symbol] || 1
+                if (mult !== 1) bidBook = convertGateBook(rec.bid, mult)
+            }
+            if (askEx.id === 'gate' && askEx.market === 'futures') {
+                const mult = gateMultipliers[rec.symbol] || 1
+                if (mult !== 1) askBook = convertGateBook(rec.ask, mult)
+            }
+
+            const sortedBid = [...bidBook].sort((a, b) => parseFloat(b[0]) - parseFloat(a[0]))
+            const sortedAsk = [...askBook].sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]))
+            const bid_price = calcVwap(sortedBid, tradeAmount)
+            const ask_price = calcVwap(sortedAsk, tradeAmount)
+            if (!bid_price || !ask_price) return null
+            const spread = (ask_price - bid_price) / bid_price * 100
+            return { rec, sortedBid, sortedAsk, bid_price, ask_price, spread }
+        } catch { return null }
+    }).filter(Boolean)
+
+    console.log(`[ШАГ 4.1] ✅ VWAP посчитан для ${vwapResults.length}/${rawRecords.length} записей | ⏱ ${(performance.now() - t41).toFixed(0)}мс`)
+
+    // Шаг 4.2 — фильтруем по спреду (только положительный <= 50%)
+    console.log('[ШАГ 4.2] Фильтруем по спреду (>0% и <=50%)...')
+    const t42 = performance.now()
+
+    const spreadFiltered = vwapResults.filter(({ rec, spread }) => {
+        if (spread <= 0 || spread > 50) {
+            console.warn(`[ШАГ 4.2] ❌ spread=${spread.toFixed(4)}% | ${rec.symbol} | ${rec.bid_ex}→${rec.ask_ex}`)
+            return false
+        }
+        return true
+    })
+
+    console.log(`[ШАГ 4.2] ✅ После фильтра спреда: ${spreadFiltered.length}/${vwapResults.length} | ⏱ ${(performance.now() - t42).toFixed(0)}мс`)
+
+    // Шаг 4.3 — группируем по символу
+    console.log('[ШАГ 4.3] Группируем по символу монеты...')
+    const t43 = performance.now()
+
+    const grouped = {}
+    for (const item of spreadFiltered) {
+        const sym = item.rec.symbol
+        if (!grouped[sym]) grouped[sym] = []
+        grouped[sym].push(item)
+    }
+    console.log(`[ШАГ 4.3] ✅ Уникальных символов: ${Object.keys(grouped).length} | ⏱ ${(performance.now() - t43).toFixed(0)}мс`)
+
+    // Шаг 4.4 — выбираем лучший спред из каждой группы
+    console.log('[ШАГ 4.4] Выбираем лучший спред из каждой группы...')
+    const t44 = performance.now()
+
+    const bestPerSymbol = Object.entries(grouped).map(([sym, items]) => {
+        items.sort((a, b) => b.spread - a.spread)
+        return { best: items[0], variants: items.slice(1) }
+    })
+
+    console.log(`[ШАГ 4.4] ✅ Лучших монет: ${bestPerSymbol.length}`)
+    bestPerSymbol.forEach(({ best, variants }) => {
+        console.log(`[ШАГ 4.4]   ${best.rec.symbol}: spread=${best.spread.toFixed(4)}% | ${best.rec.bid_ex}→${best.rec.ask_ex}${variants.length ? ` + ${variants.length} вариантов` : ''}`)
+    })
+    console.log(`[ШАГ 4.4] ⏱ ${(performance.now() - t44).toFixed(0)}мс`)
+
+    console.log(`%c[ШАГ 4] ✅ Итог фильтрации: ${bestPerSymbol.length} монет | ⏱ ${(performance.now() - t4).toFixed(0)}мс`, 'color:#f0a500;font-weight:bold')
+    console.groupEnd()
+    // ════════════════════════════════════════════════════
+
+    // ════════════════════════════════════════════════════
+    // ШАГ 5 — Запросы к биржам (только для лучших монет)
+    const t5 = performance.now()
+    const totalToFetch = bestPerSymbol.length + bestPerSymbol.reduce((acc, { variants }) => acc + variants.length, 0)
+    console.group(`%c[ШАГ 5] Запросы к биржам (funding, volume, transfer)`, 'color:#3d87c0;font-weight:bold')
+    console.log(`[ШАГ 5] Запросов будет: ${totalToFetch} (${bestPerSymbol.length} лучших + варианты)`)
+    // ════════════════════════════════════════════════════
+
+    // Собираем все записи для обогащения (лучшие + варианты)
+    const allToEnrich = []
+    bestPerSymbol.forEach(({ best, variants }) => {
+        allToEnrich.push({ ...best, isBest: true })
+        variants.forEach(v => allToEnrich.push({ ...v, isBest: false }))
+    })
+
+    // Обогащаем батчами
+    const enrichedResults = []
+    for (let i = 0; i < allToEnrich.length; i += BATCH_SIZE) {
+        const batch = allToEnrich.slice(i, i + BATCH_SIZE)
         const batchResults = await Promise.all(
-            batch.map(async (rec, batchIndex) => {
-                const index = i + batchIndex
+            batch.map(async ({ rec, sortedBid, sortedAsk, bid_price, ask_price, spread, isBest }, batchIdx) => {
+                const index = i + batchIdx
                 try {
                     const bidEx = parseExchange(rec.bid_ex)
                     const askEx = parseExchange(rec.ask_ex)
-
-                    // Пропускаем Gate futures — контрактный формат
-                    if (bidEx.id === 'gate' && bidEx.market === 'futures') return null
-                    if (askEx.id === 'gate' && askEx.market === 'futures') return null
-
                     const sym = rec.symbol.replace(/USDT$/, '')
 
-                    // VWAP цены по книге ордеров
-                    const bid_price = calcVwap(rec.bid, tradeAmount)
-                    const ask_price = calcVwap(rec.ask, tradeAmount)
+                    // Логируем каждый запрос отдельно
+                    const bidCached = isFresh(`${bidEx.id}_${bidEx.market}_${sym}`)
+                    const askCached = isFresh(`${askEx.id}_${askEx.market}_${sym}`)
+                    console.log(
+                        `[ШАГ 5] 📡 ${rec.symbol} | ` +
+                        `BID: ${rec.bid_ex} ${bidCached ? '(кэш)' : '(запрос)'} | ` +
+                        `ASK: ${rec.ask_ex} ${askCached ? '(кэш)' : '(запрос)'}`
+                    )
 
-                    if (!bid_price || !ask_price) return null
-
-                    const spread = (ask_price - bid_price) / bid_price * 100
-                    if (spread <= 0 || spread > 50) return null
-
-                    // Max size: сколько $ можно исполнить до уровня цены другой стороны
-                    // bid сторона (LONG): идём по asks, останавливаемся на ask_price
-                    // ask сторона (SHORT): идём по bids, останавливаемся на bid_price
-                    const bidMaxRes = calcMaxVolume(rec.bid, ask_price, 'long')
-                    const askMaxRes = calcMaxVolume(rec.ask, bid_price, 'short')
-
-                    // Запрашиваем данные с правильным market
+                    const fetchStart = performance.now()
                     const [bidData, askData] = await Promise.all([
-                        FETCHERS[bidEx.id] ? FETCHERS[bidEx.id](sym, bidEx.market) : null,
-                        FETCHERS[askEx.id] ? FETCHERS[askEx.id](sym, askEx.market) : null,
+                        FETCHERS[bidEx.id] ? (async () => {
+                            const t = performance.now()
+                            const data = await FETCHERS[bidEx.id](sym, bidEx.market)
+                            const dt = (performance.now() - t).toFixed(0)
+                            console.log(
+                                `[ШАГ 5]   ↳ ${rec.bid_ex} | ` +
+                                `funding=${data?.funding != null ? (data.funding * 100).toFixed(4) + '%' : 'null'} | ` +
+                                `vol=${data?.volume != null ? '$' + Math.round(data.volume).toLocaleString() : 'null'} | ` +
+                                `dep=${data?.deposit} wd=${data?.withdraw} | ` +
+                                `⏱ ${dt}мс${bidCached ? ' [кэш]' : ''}`
+                            )
+                            return data
+                        })() : Promise.resolve(null),
+                        FETCHERS[askEx.id] ? (async () => {
+                            const t = performance.now()
+                            const data = await FETCHERS[askEx.id](sym, askEx.market)
+                            const dt = (performance.now() - t).toFixed(0)
+                            console.log(
+                                `[ШАГ 5]   ↳ ${rec.ask_ex} | ` +
+                                `funding=${data?.funding != null ? (data.funding * 100).toFixed(4) + '%' : 'null'} | ` +
+                                `vol=${data?.volume != null ? '$' + Math.round(data.volume).toLocaleString() : 'null'} | ` +
+                                `dep=${data?.deposit} wd=${data?.withdraw} | ` +
+                                `⏱ ${dt}мс${askCached ? ' [кэш]' : ''}`
+                            )
+                            return data
+                        })() : Promise.resolve(null),
                     ])
+                    const fetchTime = (performance.now() - fetchStart).toFixed(0)
+
+                    // Gate futures — используем кэш multiplier из Шага 3 (тот же источник что и в Шаге 4)
+                    // Конвертация уже была применена в Шаге 4 → sortedBid/sortedAsk уже нормализованы
+                    // Здесь просто используем готовые данные без повторной конвертации
+                    const finalBid = sortedBid
+                    const finalAsk = sortedAsk
+                    const finalBidPrice = bid_price
+                    const finalAskPrice = ask_price
+                    const finalSpread = spread
+
+                    if (!finalBidPrice || !finalAskPrice || finalSpread <= 0 || finalSpread > 50) return null
+
+                    const bidMaxRes = calcMaxVolume(finalBid, finalAskPrice, 'long')
+                    const askMaxRes = calcMaxVolume(finalAsk, finalBidPrice, 'short')
+
+                    console.log(
+                        `%c[ШАГ 5] ✅ ${rec.symbol} | ${rec.bid_ex}→${rec.ask_ex} | spread=${finalSpread.toFixed(4)}% | ⏱ ${fetchTime}мс`,
+                        'color:#00c97a'
+                    )
 
                     return {
-                        id:          index + 1,
-                        symbol:      rec.symbol,
-                        strategy:    rec.strategy,
-                        bid_ex:      bidEx.id,
-                        ask_ex:      askEx.id,
-                        bid_market:  bidEx.market,
-                        ask_market:  askEx.market,
-                        spread,
-                        bid_price,
-                        ask_price,
-                        raw_bid:     rec.bid,
-                        raw_ask:     rec.ask,
-                        first_seen:  rec.time,
-                        // Max size отдельно для каждой стороны
+                        id: index + 1,
+                        symbol: rec.symbol,
+                        strategy: rec.strategy,
+                        bid_ex: bidEx.id,
+                        ask_ex: askEx.id,
+                        bid_market: bidEx.market,
+                        ask_market: askEx.market,
+                        spread: finalSpread,
+                        bid_price: finalBidPrice,
+                        ask_price: finalAskPrice,
+                        raw_bid: finalBid,
+                        raw_ask: finalAsk,
+                        first_seen: rec.time,
                         bid_max_size: bidMaxRes?.usd ?? null,
                         ask_max_size: askMaxRes?.usd ?? null,
                         bid_funding: {
-                            rate: bidData?.funding != null
-                                ? bidData.funding * 100
-                                : null,
-                            next_time: bidData?.nextFunding
-                                ? Math.floor(bidData.nextFunding / 1000)
-                                : null
+                            rate: bidData?.funding != null ? bidData.funding * 100 : null,
+                            next_time: bidData?.nextFunding ? Math.floor(bidData.nextFunding / 1000) : null
                         },
                         ask_funding: {
-                            rate: askData?.funding != null
-                                ? askData.funding * 100
-                                : null,
-                            next_time: askData?.nextFunding
-                                ? Math.floor(askData.nextFunding / 1000)
-                                : null
+                            rate: askData?.funding != null ? askData.funding * 100 : null,
+                            next_time: askData?.nextFunding ? Math.floor(askData.nextFunding / 1000) : null
                         },
-                        bid_volume:   bidData?.volume   ?? null,
-                        ask_volume:   askData?.volume   ?? null,
-                        bid_transfer: {
-                            deposit:  bidData?.deposit  ?? null,
-                            withdraw: bidData?.withdraw ?? null
-                        },
-                        ask_transfer: {
-                            deposit:  askData?.deposit  ?? null,
-                            withdraw: askData?.withdraw ?? null
-                        },
+                        bid_volume: bidData?.volume ?? null,
+                        ask_volume: askData?.volume ?? null,
+                        bid_transfer: { deposit: bidData?.deposit ?? null, withdraw: bidData?.withdraw ?? null },
+                        ask_transfer: { deposit: askData?.deposit ?? null, withdraw: askData?.withdraw ?? null },
                     }
                 } catch (e) {
-                    console.warn('enrichOpportunities failed for', rec.symbol, e.message)
+                    console.warn(`[ШАГ 5] ❌ Ошибка ${rec.symbol}:`, e.message)
                     return null
                 }
             })
         )
-
-        results.push(...batchResults)
+        enrichedResults.push(...batchResults)
     }
 
-    const filtered = results.filter(Boolean)
+    const enrichedFiltered = enrichedResults.filter(Boolean)
 
-    // Группируем по символу — лучшая возможность + variants[]
-    const grouped = {}
-    for (const opp of filtered) {
-        if (!grouped[opp.symbol]) grouped[opp.symbol] = []
-        grouped[opp.symbol].push(opp)
+    console.log(`%c[ШАГ 5] ✅ Обогащено: ${enrichedFiltered.length}/${totalToFetch} записей | ⏱ ${((performance.now() - t5)/1000).toFixed(2)}с`, 'color:#3d87c0;font-weight:bold')
+    console.groupEnd()
+    // ════════════════════════════════════════════════════
+
+    // Финальная группировка для variants
+    const finalGrouped = {}
+    for (const opp of enrichedFiltered) {
+        if (!finalGrouped[opp.symbol]) finalGrouped[opp.symbol] = []
+        finalGrouped[opp.symbol].push(opp)
     }
 
-    return Object.values(grouped)
-        .map((group, idx) => {
-            group.sort((a, b) => b.spread - a.spread)
-            const best = { ...group[0], id: idx + 1 }
-            best.variants = group.slice(1).map((v, i) => ({
-                ...v,
-                id: idx * 1000 + i + 1
-            }))
-            return best
-        })
+    const final = Object.values(finalGrouped).map((group, idx) => {
+        group.sort((a, b) => b.spread - a.spread)
+        const best = { ...group[0], id: idx + 1 }
+        best.variants = group.slice(1).map((v, i) => ({ ...v, id: idx * 1000 + i + 1 }))
+        return best
+    })
+
+    // Завершаем сборщик логов
+    logCollector.finish()
+
+    return final
 }
 
 // ─── enrichSingleOpportunity — для DetailModal (10s polling) ─────────────────
