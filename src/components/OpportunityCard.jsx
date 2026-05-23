@@ -492,9 +492,14 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
   const bidNextTime = opp.bid_funding?.next_time
   const askNextTime = opp.ask_funding?.next_time
 
+  // ── Funding spread ────────────────────────────────────────────────────────
+  // bid_ex = SELL (futures всегда), ask_ex = BUY (spot или futures)
+  // sf: покупаем на споте (ask), продаём на фьючерсе (bid) → funding = bid_rate
+  // ff: продаём дороже (bid), покупаем дешевле (ask) → spread = bid_rate - ask_rate
+  // ⚠️ НЕ МЕНЯТЬ: было перепутано askRate↔bidRate
   const fundingSpread = opp.strategy === 'sf'
-    ? (askRate ?? 0)
-    : (askRate ?? 0) - (bidRate ?? 0)
+    ? (bidRate ?? 0)
+    : (bidRate ?? 0) - (askRate ?? 0)
 
   const profit   = calcProfit(opp.spread, tradeAmount)
   const sym      = opp.symbol.replace(/USDT$/, '')
@@ -588,49 +593,23 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
             className="card-panels"
             style={{ display: expanded ? 'none' : 'flex' }}
           >
-            {/* SELL */}
+            {/*
+              ╔══════════════════════════════════════════════════════════════╗
+              ║  SELL панель (красная) = bid_ex                              ║
+              ║                                                              ║
+              ║  bid_ex — биржа с ВЫСОКОЙ ценой, на ней мы ПРОДАЁМ.         ║
+              ║  bid_ex ВСЕГДА фьючерсная биржа (futures).                  ║
+              ║                                                              ║
+              ║  ⚠️  НЕ МЕНЯТЬ bid↔ask местами!                             ║
+              ║  spot_futures: spot = ask_ex (BUY), futures = bid_ex (SELL) ║
+              ║  futures_futures: обе futures, bid_ex дороже → SELL         ║
+              ╚══════════════════════════════════════════════════════════════╝
+            */}
             <div className="card-side sell-side" onClick={e => {
-              e.stopPropagation()
-              window.open(askUrl, '_blank', 'noopener')
-            }}>
-              <div className="side-label">Sell</div>
-              <div className="side-exchange">
-                <ExLogo info={askInfo} />
-                <span className="side-exchange-name">{askInfo.name}</span>
-                <span className="side-exchange-type">{askType}</span>
-              </div>
-              <div className="side-price">
-                {formatPrice(opp.ask_price)}<span>USDT</span>
-              </div>
-              <div className="side-rows">
-                <div className="side-row">
-                  <span className="side-row-label">Bid vol</span>
-                  <span className="side-row-value">
-                    {opp.ask_volume != null && opp.ask_volume > 0 ? formatVolume(opp.ask_volume) : 'N/A'}
-                  </span>
-                </div>
-                <div className="side-row">
-                  <span className="side-row-label">Max size</span>
-                  <span className="side-row-value" style={{ color: '#5bb8f5' }}>
-                    {opp.ask_max_size != null && opp.ask_max_size > 0
-                      ? '~' + formatVolume(opp.ask_max_size) + ' $'
-                      : 'N/A'}
-                  </span>
-                </div>
-                <FundingRow rate={bidRate} nextTime={bidNextTime} isSpot={opp.bid_market === 'spot'} />
-                <div className="side-row">
-                  <span className="side-row-label">Networks</span>
-                  <TransferDots dep={opp.ask_transfer?.deposit} wdr={opp.ask_transfer?.withdraw} />
-                </div>
-              </div>
-            </div>
-
-            {/* BUY */}
-            <div className="card-side buy-side" onClick={e => {
               e.stopPropagation()
               window.open(bidUrl, '_blank', 'noopener')
             }}>
-              <div className="side-label">Buy</div>
+              <div className="side-label">Sell</div>
               <div className="side-exchange">
                 <ExLogo info={bidInfo} />
                 <span className="side-exchange-name">{bidInfo.name}</span>
@@ -641,7 +620,7 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
               </div>
               <div className="side-rows">
                 <div className="side-row">
-                  <span className="side-row-label">Ask vol</span>
+                  <span className="side-row-label">Bid vol</span>
                   <span className="side-row-value">
                     {opp.bid_volume != null && opp.bid_volume > 0 ? formatVolume(opp.bid_volume) : 'N/A'}
                   </span>
@@ -654,14 +633,64 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
                       : 'N/A'}
                   </span>
                 </div>
-                <FundingRow
-                  rate={bidRate}
-                  nextTime={bidNextTime}
-                  isSpot={opp.strategy === 'sf'}
-                />
+                {/* bid_ex всегда futures — isSpot всегда false, funding всегда показываем */}
+                <FundingRow rate={bidRate} nextTime={bidNextTime} isSpot={false} />
                 <div className="side-row">
                   <span className="side-row-label">Networks</span>
                   <TransferDots dep={opp.bid_transfer?.deposit} wdr={opp.bid_transfer?.withdraw} />
+                </div>
+              </div>
+            </div>
+
+            {/*
+              ╔══════════════════════════════════════════════════════════════╗
+              ║  BUY панель (зелёная) = ask_ex                               ║
+              ║                                                              ║
+              ║  ask_ex — биржа с НИЗКОЙ ценой, на ней мы ПОКУПАЕМ.         ║
+              ║  ask_ex может быть spot или futures.                         ║
+              ║                                                              ║
+              ║  ⚠️  НЕ МЕНЯТЬ bid↔ask местами!                             ║
+              ║  spot_futures: ask_ex = spot → isSpot=true → "— spot"       ║
+              ║  futures_futures: ask_ex = futures → показываем funding rate ║
+              ╚══════════════════════════════════════════════════════════════╝
+            */}
+            <div className="card-side buy-side" onClick={e => {
+              e.stopPropagation()
+              window.open(askUrl, '_blank', 'noopener')
+            }}>
+              <div className="side-label">Buy</div>
+              <div className="side-exchange">
+                <ExLogo info={askInfo} />
+                <span className="side-exchange-name">{askInfo.name}</span>
+                <span className="side-exchange-type">{askType}</span>
+              </div>
+              <div className="side-price">
+                {formatPrice(opp.ask_price)}<span>USDT</span>
+              </div>
+              <div className="side-rows">
+                <div className="side-row">
+                  <span className="side-row-label">Ask vol</span>
+                  <span className="side-row-value">
+                    {opp.ask_volume != null && opp.ask_volume > 0 ? formatVolume(opp.ask_volume) : 'N/A'}
+                  </span>
+                </div>
+                <div className="side-row">
+                  <span className="side-row-label">Max size</span>
+                  <span className="side-row-value" style={{ color: '#5bb8f5' }}>
+                    {opp.ask_max_size != null && opp.ask_max_size > 0
+                      ? '~' + formatVolume(opp.ask_max_size) + ' $'
+                      : 'N/A'}
+                  </span>
+                </div>
+                {/* ask_ex может быть spot (sf) или futures (ff) — проверяем ask_market */}
+                <FundingRow
+                  rate={askRate}
+                  nextTime={askNextTime}
+                  isSpot={opp.ask_market === 'spot'}
+                />
+                <div className="side-row">
+                  <span className="side-row-label">Networks</span>
+                  <TransferDots dep={opp.ask_transfer?.deposit} wdr={opp.ask_transfer?.withdraw} />
                 </div>
               </div>
             </div>

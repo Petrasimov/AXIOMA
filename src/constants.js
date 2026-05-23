@@ -1,3 +1,15 @@
+/**
+ * constants.js — Глобальные константы приложения
+ *
+ * EXCHANGES  — список поддерживаемых бирж с метаданными
+ * SORT_OPTIONS — варианты сортировки карточек
+ * TABS       — навигационные вкладки сайдбара
+ */
+
+// ─── Поддерживаемые биржи ────────────────────────────────────────────────────
+// id биржи используется как ключ и совпадает с суффиксом в bid_ex/ask_ex от бэка
+// (например "binance_futures" → id = "binance")
+
 export const EXCHANGES = {
     binance: {
         name: 'Binance',
@@ -63,19 +75,21 @@ export const EXCHANGES = {
         futuresUrl: (sym) => `https://www.okx.com/trade-swap/${sym.toLowerCase()}-usdt-swap`,
         spotUrl:    (sym) => `https://www.okx.com/trade-spot/${sym.toLowerCase()}-usdt`,
     },
-    
 }
 
+// ─── Варианты сортировки карточек ────────────────────────────────────────────
 export const SORT_OPTIONS = [
-    {value: 'spread', label: 'По спреду'},
-    {value: 'age', label: 'По возрасу'},
-    {value: 'volume', label: 'По объёму'},
+    { value: 'spread', label: 'По спреду'  },
+    { value: 'age',    label: 'По возрасту' },
+    { value: 'volume', label: 'По объёму'  },
 ]
 
+// ─── Навигационные вкладки ───────────────────────────────────────────────────
+// enabled: false — вкладка отображается но недоступна (заглушка)
 export const TABS = [
-    {id: 'main', label: 'Home', enabled: true},
-    {id: 'futures', label: 'Futures', enabled: true},
-    {id: 'funding', label: 'Funding', enabled: false},
-    {id: 'promo', label: 'Training', enabled: false},
-    {id: 'developers', label: 'Developers', enabled: true},
+    { id: 'main',       label: 'Home',       enabled: true  },
+    { id: 'futures',    label: 'Futures',    enabled: true  },
+    { id: 'funding',    label: 'Funding',    enabled: false },
+    { id: 'promo',      label: 'Training',   enabled: false },
+    { id: 'developers', label: 'Developers', enabled: true  },
 ]

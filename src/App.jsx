@@ -9,7 +9,7 @@ import DetailModal from "./components/DetailModal.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
 import ActiveTradesBar from "./components/ActiveTradesBar.jsx";
 import ApiPage from "./components/ApiPage.jsx";
-import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp, logCollector, setAdminLogging } from "./api.js";
+import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp, setAdminLogging } from "./api.js";
 import { calcVwap } from "./utils.js";
 import HomePage from "./components/HomePage.jsx";
 import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings } from "./auth.js";
@@ -87,14 +87,6 @@ function App() {
   //   'ready'    — проверка завершена, user содержит актуальный статус
 
   const [auth, setAuth] = useState(() => {
-    // Localhost → автоматически входим как dev-пользователь, без модалки Telegram
-    if (window.location.hostname === 'localhost') {
-      return {
-        status: 'checking',
-        user: { userId: 5295815261, login: 'dev', photoUrl: null }
-      }
-    }
-    // Ngrok / продакшен → стандартный flow через Telegram
     const session = loadSession()
     if (session) return { status: 'checking', user: session }
     return { status: 'unknown', user: null }
@@ -118,18 +110,27 @@ function App() {
         // Ошибка сети — используем данные из сессии как есть
         const user = auth.user
         sigRef.current = getSignature(user)
+        setAdminLogging(user.isAdmin === true)
         setAuth({ status: 'ready', user })
         return
       }
 
+      if (access.expired) {
+        // Cookie истекла → требуем повторную авторизацию через Telegram
+        clearSession()
+        setAuth({ status: 'unknown', user: null })
+        return
+      }
+
       // Обновляем сессию актуальными данными и переходим в ready
+      // Сохраняем tgData из старой сессии — нужны для следующих checkAccess
       const updatedUser = { ...auth.user, ...access }
       // ════════════════════════════════════════════════════
       // ШАГ 2 — Применение userSettings к фильтрам
       if (access.userSettings) {
           const t2 = performance.now()
           console.group('%c[ШАГ 2] Применение userSettings к фильтрам', 'color:#f0a500;font-weight:bold')
-          console.log('[ШАГ 2] userSettings из user.json:', access.userSettings)
+          console.log('[ШАГ 2] userSettings из backend:', access.userSettings)
           setFilters(current => {
               const next = {
                   ...current,
@@ -174,15 +175,21 @@ function App() {
       const access = await checkAccess(userId)
       if (!access) return // ошибка сети — пропускаем
 
+      if (access.expired) {
+        clearSession()
+        clearInterval(accessIntervalRef.current)
+        accessIntervalRef.current = null
+        setAuth({ status: 'unknown', user: null })
+        return
+      }
+
       const newSig = getSignature(access)
       if (newSig === sigRef.current) return // не изменилось — ничего не делаем
 
-      // Статус изменился:
-      // 1. Сохраняем новый статус в sessionStorage ДО перезагрузки
+      // Статус изменился → сохраняем и перезагружаем
       const updatedUser = { ...auth.user, ...access }
       saveSession(updatedUser)
       setAdminLogging(updatedUser.isAdmin === true)
-      // 2. Перезагружаем — при старте снова пройдёт 'checking' с новыми данными
       window.location.reload()
     }
 
@@ -213,11 +220,7 @@ function App() {
     setIsLoading(true)
   }
 
-  const [logReady, setLogReady] = useState(false)
-
-  const handleDownloadLog = () => {
-    logCollector.download()
-  }
+  const [saveStatus, setSaveStatus] = useState(null) // null | 'saving' | 'saved' | 'error'
 
   const toggleFavorite = (id) => {
     setFavorites(prev => {
@@ -291,6 +294,56 @@ function App() {
       result = result.filter(o => o.spread >= filters.minSpread)
     }
 
+    // Перед применением transfer/exchange фильтров —
+    // если главная карточка не проходит, пробуем промоутить подходящий вариант
+    result = result.map(opp => {
+      // Проверяем проходит ли главная карточка все фильтры
+      const passesExchange = filters.exchanges.length === 0 ||
+        (filters.exchanges.includes(opp.bid_ex) && filters.exchanges.includes(opp.ask_ex))
+
+      const bidDep0 = opp.bid_transfer?.deposit
+      const askDep0 = opp.ask_transfer?.deposit
+      const bidWd0  = opp.bid_transfer?.withdraw
+      const askWd0  = opp.ask_transfer?.withdraw
+      const depOk0  = (bidDep0 === null || askDep0 === null) ? true : !!(bidDep0 && askDep0)
+      const wdOk0   = (bidWd0  === null || askWd0  === null) ? true : !!(bidWd0  && askWd0)
+      const passesTransfer =
+        (!filters.transfer.deposit  || depOk0) &&
+        (!filters.transfer.withdraw || wdOk0)
+
+      if (passesExchange && passesTransfer) return opp // главная проходит — ничего не делаем
+
+      // Главная не проходит — ищем лучший вариант который проходит
+      const allVariants = opp.variants || []
+      const passingVariant = allVariants.find(v => {
+        const exOk = filters.exchanges.length === 0 ||
+          (filters.exchanges.includes(v.bid_ex) && filters.exchanges.includes(v.ask_ex))
+        if (!exOk) return false
+
+        const bDep = v.bid_transfer?.deposit
+        const aDep = v.ask_transfer?.deposit
+        const bWd  = v.bid_transfer?.withdraw
+        const aWd  = v.ask_transfer?.withdraw
+        const dOk  = (bDep === null || aDep === null) ? true : !!(bDep && aDep)
+        const wOk  = (bWd  === null || aWd  === null) ? true : !!(bWd  && aWd)
+        return (!filters.transfer.deposit || dOk) && (!filters.transfer.withdraw || wOk)
+      })
+
+      if (!passingVariant) return null // ни один вариант не подходит → удалить
+
+      // Промоутируем найденный вариант в главную позицию
+      const remainingVariants = allVariants.filter(v => v.id !== passingVariant.id)
+      return {
+        ...passingVariant,
+        id: opp.id,
+        variants: [opp, ...remainingVariants].filter(v => {
+          const exOk = filters.exchanges.length === 0 ||
+            (filters.exchanges.includes(v.bid_ex) && filters.exchanges.includes(v.ask_ex))
+          return exOk
+        })
+      }
+    }).filter(Boolean)
+
     result = result.filter(o => {
       const bidDep = o.bid_transfer?.deposit
       const askDep = o.ask_transfer?.deposit
@@ -298,7 +351,9 @@ function App() {
       const askWd  = o.ask_transfer?.withdraw
       const depOk = (bidDep === null || askDep === null) ? true : !!(bidDep && askDep)
       const wdOk  = (bidWd  === null || askWd  === null) ? true : !!(bidWd  && askWd)
-      return depOk === filters.transfer.deposit && wdOk === filters.transfer.withdraw
+      if (filters.transfer.deposit && !depOk) return false
+      if (filters.transfer.withdraw && !wdOk) return false
+      return true
     })
 
     result.sort((a, b) => {
@@ -362,6 +417,18 @@ function App() {
                 credentials: 'include',
                 cache: 'no-store',
             })
+
+            // 401 — cookie истекла, разлогиниваем прямо здесь
+            if (res.status === 401) {
+                console.warn('[ЦИКЛ] ❌ 401 — сессия истекла, требуется повторная авторизация')
+                console.groupEnd()
+                clearSession()
+                clearTimeout(scanIntervalRef.current)
+                scanIntervalRef.current = null
+                setAuth({ status: 'unknown', user: null })
+                return
+            }
+
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
             const data = await res.json()
             const rawOpps = data.opportunities || []
@@ -380,7 +447,7 @@ function App() {
                 // ════════════════════════════════════════════════════
                 // ШАГ 6 — Показ карточек
                 console.group('%c[ШАГ 6] Карточки показаны пользователю', 'color:#00c97a;font-weight:bold')
-                console.log(`[ШАГ 6] ✅ Карточек на экране: ${enriched.length}`)
+                console.log(`[ШАГ 6] ✅ Получено от enricher: ${enriched.length} (до фильтров UI)`)
                 console.log(`[ШАГ 6] Монеты: ${enriched.map(o => o.symbol).join(', ')}`)
                 console.log(`[ШАГ 6] ⏱ Полный цикл: ${((performance.now() - cycleStart)/1000).toFixed(2)}с`)
                 console.log(`[ШАГ 6] Следующий цикл через 55с`)
@@ -388,7 +455,6 @@ function App() {
                 console.groupEnd() // ЦИКЛ
                 // ════════════════════════════════════════════════════
 
-                setLogReady(true)
                 scanIntervalRef.current = setTimeout(refresh, 55000)
             }
         } catch (err) {
@@ -445,10 +511,30 @@ function App() {
   const handleOpenActiveTrade = (trade) => { setSelected(trade.opp); setSelectedActiveTrade(trade) }
   const handleCloseModal      = ()      => { setSelected(null); setSelectedActiveTrade(null); setLiveOpp(null) }
   const handleSaveSettings = async () => {
-    const success = await saveUserSettings(auth.user?.userId, filters)
-      if (success) {
-          console.log('[App] Settings saved successfully')
-      }
+    if (!auth.user?.userId) return
+
+    setSaveStatus('saving')
+
+    const result = await saveUserSettings(auth.user.userId, filters)
+
+    if (result.ok) {
+        // Обновляем auth.user в state — без перезагрузки
+        setAuth(prev => ({ ...prev, user: result.user }))
+        setSaveStatus('saved')
+        // Через 2.5с сбрасываем статус обратно в null
+        setTimeout(() => setSaveStatus(null), 2500)
+    } else if (result.reason === 'unauthorized') {
+        // Cookie истекла — разлогиниваем
+        clearSession()
+        clearInterval(accessIntervalRef.current)
+        accessIntervalRef.current = null
+        setAuth({ status: 'unknown', user: null })
+        setSaveStatus(null)
+    } else {
+        // Ошибка сервера или сети
+        setSaveStatus('error')
+        setTimeout(() => setSaveStatus(null), 3000)
+    }
   }
   const handleTrade = (opp, avgLong, avgShort) => {
     const trade = { id: `${opp.id}_${Date.now()}`, opp, avgLong, avgShort, openedAt: new Date().toISOString() }
@@ -518,28 +604,7 @@ function App() {
                 isLoading={isLoading}
               />
 
-              {logReady && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '4px 16px 0' }}>
-                  <button
-                    onClick={handleDownloadLog}
-                    style={{
-                      background: 'transparent',
-                      border: '1px solid var(--accent)',
-                      color: 'var(--accent-bright)',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '11px',
-                      padding: '4px 12px',
-                      cursor: 'pointer',
-                      letterSpacing: '0.5px',
-                      transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={e => { e.target.style.background = 'var(--accent)'; e.target.style.color = '#fff' }}
-                    onMouseLeave={e => { e.target.style.background = 'transparent'; e.target.style.color = 'var(--accent-bright)' }}
-                  >
-                    ↓ СКАЧАТЬ ЛОГ
-                  </button>
-                </div>
-              )}
+
 
               {isLoading
                 ? <LoadingScreen />
@@ -560,8 +625,9 @@ function App() {
                   filters={filters}
                   onFilters={setFilters}
                   defaultFilters={DEFAULT_FILTERS}
-                  onSaveSettings={handleSaveSettings}         
-                  canSave={auth.status === 'ready' && !!auth.user} 
+                  onSaveSettings={handleSaveSettings}
+                  canSave={auth.status === 'ready' && !!auth.user}
+                  saveStatus={saveStatus}
               />
             </div>
           </>

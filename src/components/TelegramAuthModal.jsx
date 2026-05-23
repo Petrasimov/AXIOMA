@@ -1,14 +1,16 @@
 /**
  * TelegramAuthModal.jsx
  *
- * После успешной авторизации через Telegram Widget:
- * 1. Получаем tgUser.id
- * 2. Вызываем Telegram Bot API → sendMessage → пользователь получает приветствие
- * 3. Проверяем доступ в нашей системе
+ * Шаги авторизации:
+ * 1. Telegram Widget возвращает данные пользователя (snake_case)
+ * 2. Отправляем на бэкенд POST /api/auth/telegram (конвертируем в camelCase)
+ * 3. При успехе — сохраняем сессию и открываем скринер
+ * 4. При отказе (unauthorized / !isActive) — показываем экран "Нет доступа"
+ *    и отправляем приветственное сообщение через Bot API
  */
 
 import { useState, useEffect, useRef } from 'react'
-import { checkAccess, registerUser, saveSession } from '../auth.js'
+import { authenticateWithTelegram, saveSession } from '../auth.js'
 
 const BOT_TOKEN = import.meta.env.VITE_BOT_TOKEN
 
@@ -270,38 +272,33 @@ function TelegramAuthModal({ onSuccess }) {
             setStep('checking')
 
             try {
-                const access = await checkAccess(tgUser.id)
+                const result = await authenticateWithTelegram(tgUser)
+                console.log('[Auth result]', JSON.stringify(result))
 
-                if (access === null) {
-                    setStep('idle')
+                if (!result.ok) {
+                    if (result.reason === 'unauthorized') {
+                        // Hash не прошёл проверку или аккаунт не найден
+                        sendWelcomeMessage(tgUser.id)
+                        setStep('no_access')
+                    } else {
+                        // Сетевая ошибка или 5xx
+                        setStep('widget_error')
+                    }
                     return
                 }
 
-                // Приветствие отправляем только если доступа нет
-                if (!access.found || !access.isCexCexPaid) {
+                if (!result.user.isActive) {
                     sendWelcomeMessage(tgUser.id)
-                }
-
-                if (!access.found) {
-                    const newUser = await registerUser(tgUser)
-                    const session = { ...newUser, photoUrl: tgUser.photo_url || null }
-                    saveSession(session)
-                    onSuccess(session)
-                    return
-                }
-
-                if (!access.isActive) {
                     setStep('no_access')
                     return
                 }
 
-                const session = { ...access, photoUrl: tgUser.photo_url || null }
-                saveSession(session)
-                onSuccess(session)
+                saveSession(result.user)
+                onSuccess(result.user)
 
             } catch (err) {
                 console.error('[TelegramAuthModal] error:', err)
-                setStep('idle')
+                setStep('widget_error')
             }
         }
 

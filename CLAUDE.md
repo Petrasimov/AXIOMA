@@ -502,3 +502,16 @@ useEffect(() => {
 - Нет Context API — все props передаются явно через цепочку (App → Grid → Card)
 - `activeTrades` валидируется при чтении из localStorage (`Array.isArray`)
 - Header высота: **72px** — все кастомные страницы (ApiPage и др.) должны использовать ту же высоту
+
+
+
+
+
+
+
+
+
+
+
+
+

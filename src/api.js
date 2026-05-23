@@ -797,10 +797,16 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
                         'color:#00c97a'
                     )
 
+                    // Нормализуем стратегию: бэк отдаёт 'spot_futures'/'futures_futures',
+                    // фронт ожидает 'sf'/'ff'
+                    const strategy = rec.strategy === 'spot_futures' ? 'sf'
+                                   : rec.strategy === 'futures_futures' ? 'ff'
+                                   : rec.strategy  // уже нормализован или неизвестный
+
                     return {
                         id: index + 1,
                         symbol: rec.symbol,
-                        strategy: rec.strategy,
+                        strategy,
                         bid_ex: bidEx.id,
                         ask_ex: askEx.id,
                         bid_market: bidEx.market,

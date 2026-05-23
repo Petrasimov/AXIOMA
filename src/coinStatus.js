@@ -1,24 +1,39 @@
+/**
+ * coinStatus.js — Статусы депозита/вывода монет по биржам
+ *
+ * Каждая функция getXxxStatus(symbol) возвращает { deposit: bool, withdraw: bool }.
+ * При ошибке возвращает { deposit: true, withdraw: true } — оптимистичный дефолт,
+ * чтобы не скрывать карточки из-за временной недоступности API.
+ *
+ * Кэш: TTL 5 минут. OKX, MEXC, Bitget — батч-запросы (все монеты за раз).
+ */
+
 import { hmacHex, hmacBase64 } from './sign.js'
 import { rlFetch } from './rateLimiter.js'
 
-const statusCache = {}
-const STATUS_TTL = 5 * 60 * 1000  // 5 минут
+const STATUS_TTL = 5 * 60 * 1000  // 5 минут в мс
+const cache = {}                    // key → { data, ts }
 
-function isFreshStatus(key) {
-    return statusCache[key] && (Date.now() - statusCache[key].ts < STATUS_TTL)
+/** Проверяет актуальность записи в кэше. */
+function isFresh(key) {
+    return cache[key] && (Date.now() - cache[key].ts < STATUS_TTL)
 }
 
-// ─── Binance ────────────────────────────────────────────────────
+/** Оптимистичный ответ при ошибке — не скрываем монету из-за недоступности API. */
+const FALLBACK = { deposit: true, withdraw: true }
+
+// ─── Binance ────────────────────────────────────────────────────────────────
+
 export async function getBinanceStatus(symbol) {
-    const key = `binance_status_${symbol}`
-    if (isFreshStatus(key)) return statusCache[key].data
+    const key = `binance_${symbol}`
+    if (isFresh(key)) return cache[key].data
 
     try {
         const apiKey = import.meta.env.VITE_BINANCE_API_KEY
         const secret = import.meta.env.VITE_BINANCE_API_SECRET
-        const ts = Date.now()
-        const query = `timestamp=${ts}&recvWindow=60000`
-        const sig = await hmacHex(secret, query)
+        const ts     = Date.now()
+        const query  = `timestamp=${ts}&recvWindow=60000`
+        const sig    = await hmacHex(secret, query)
 
         const res = await rlFetch(
             'binance', 200,
@@ -26,101 +41,101 @@ export async function getBinanceStatus(symbol) {
             { headers: { 'X-MBX-APIKEY': apiKey } }
         )
         if (!res.ok) {
-            const text = await res.text()
-            console.warn('Binance raw:', res.status, text.slice(0, 300))
-            return { deposit: true, withdraw: true }
+            console.warn('Binance status error:', res.status, (await res.text()).slice(0, 200))
+            return FALLBACK
         }
         const data = await res.json()
-        if (!Array.isArray(data)) {
-            console.warn('Binance error:', data)
-            return { deposit: true, withdraw: true }
-        }
+        if (!Array.isArray(data)) return FALLBACK
 
-        const coin = data.find(c => c.coin === symbol.toUpperCase())
+        const coin   = data.find(c => c.coin === symbol.toUpperCase())
         const result = {
-            deposit: coin?.networkList?.some(n => n.depositEnable) ?? false,
-            withdraw: coin?.networkList?.some(n => n.withdrawEnable) ?? false
+            deposit:  coin?.networkList?.some(n => n.depositEnable)  ?? false,
+            withdraw: coin?.networkList?.some(n => n.withdrawEnable) ?? false,
         }
-        statusCache[key] = { data: result, ts: Date.now() }
+        cache[key] = { data: result, ts: Date.now() }
         return result
     } catch (e) {
         console.warn('Binance status failed:', symbol, e.message)
-        return { deposit: true, withdraw: true }
+        return FALLBACK
     }
 }
 
-// ─── Bybit ──────────────────────────────────────────────────────
+// ─── Bybit ──────────────────────────────────────────────────────────────────
+
 export async function getBybitStatus(symbol) {
-    const key = `bybit_status_${symbol}`
-    if (isFreshStatus(key)) return statusCache[key].data
+    const key = `bybit_${symbol}`
+    if (isFresh(key)) return cache[key].data
 
     try {
-        const apiKey = import.meta.env.VITE_BYBIT_API_KEY
-        const secret = import.meta.env.VITE_BYBIT_API_SECRET
-        const ts = Date.now().toString()
+        const apiKey     = import.meta.env.VITE_BYBIT_API_KEY
+        const secret     = import.meta.env.VITE_BYBIT_API_SECRET
+        const ts         = Date.now().toString()
         const recvWindow = '5000'
-        const queryString = `coin=${symbol.toUpperCase()}`
-        const sig = await hmacHex(secret, ts + apiKey + recvWindow + queryString)
+        const query      = `coin=${symbol.toUpperCase()}`
+        const sig        = await hmacHex(secret, ts + apiKey + recvWindow + query)
 
         const res = await rlFetch(
             'bybit', 150,
-            `https://api.bybit.com/v5/asset/coin/query-info?${queryString}`,
+            `https://api.bybit.com/v5/asset/coin/query-info?${query}`,
             { headers: {
-                'X-BAPI-API-KEY': apiKey,
-                'X-BAPI-SIGN': sig,
-                'X-BAPI-TIMESTAMP': ts,
-                'X-BAPI-RECV-WINDOW': recvWindow
+                'X-BAPI-API-KEY':      apiKey,
+                'X-BAPI-SIGN':         sig,
+                'X-BAPI-TIMESTAMP':    ts,
+                'X-BAPI-RECV-WINDOW':  recvWindow,
             }}
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
+
+        const data   = await res.json()
         const chains = data.result?.rows?.[0]?.chains ?? []
         const result = {
-            deposit: chains.some(c => c.chainDeposit === '1'),
-            withdraw: chains.some(c => c.chainWithdraw === '1')
+            deposit:  chains.some(c => c.chainDeposit  === '1'),
+            withdraw: chains.some(c => c.chainWithdraw === '1'),
         }
-        statusCache[key] = { data: result, ts: Date.now() }
+        cache[key] = { data: result, ts: Date.now() }
         return result
     } catch (e) {
         console.warn('Bybit status failed:', symbol, e.message)
-        return { deposit: true, withdraw: true }
+        return FALLBACK
     }
 }
 
-// ─── OKX (batch: все монеты за один запрос) ─────────────────────
-const OKX_ALL_KEY = 'okx_status_ALL'
+// ─── OKX (батч: все монеты за один запрос) ──────────────────────────────────
+
+const OKX_BATCH_KEY = 'okx_ALL'
 
 async function fetchAllOKXStatus() {
-    if (isFreshStatus(OKX_ALL_KEY)) return statusCache[OKX_ALL_KEY].data
+    if (isFresh(OKX_BATCH_KEY)) return cache[OKX_BATCH_KEY].data
 
     try {
-        const apiKey = import.meta.env.VITE_OKX_API_KEY
-        const secret = import.meta.env.VITE_OKX_API_SECRET
+        const apiKey     = import.meta.env.VITE_OKX_API_KEY
+        const secret     = import.meta.env.VITE_OKX_API_SECRET
         const passphrase = import.meta.env.VITE_OKX_PASSPHRASE
-        const ts = new Date().toISOString()
-        const path = '/api/v5/asset/currencies'
-        const sig = await hmacBase64(secret, ts + 'GET' + path)
+        const ts         = new Date().toISOString()
+        const path       = '/api/v5/asset/currencies'
+        const sig        = await hmacBase64(secret, ts + 'GET' + path)
 
         const res = await rlFetch(
             'okx', 300,
             `https://www.okx.com${path}`,
             { headers: {
-                'OK-ACCESS-KEY': apiKey,
-                'OK-ACCESS-SIGN': sig,
-                'OK-ACCESS-TIMESTAMP': ts,
-                'OK-ACCESS-PASSPHRASE': passphrase
+                'OK-ACCESS-KEY':        apiKey,
+                'OK-ACCESS-SIGN':       sig,
+                'OK-ACCESS-TIMESTAMP':  ts,
+                'OK-ACCESS-PASSPHRASE': passphrase,
             }}
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
         const data = await res.json()
-        const map = {}
+        const map  = {}
         for (const chain of (data.data ?? [])) {
             const sym = chain.ccy
             if (!map[sym]) map[sym] = { deposit: false, withdraw: false }
-            if (chain.canDep) map[sym].deposit = true
-            if (chain.canWd) map[sym].withdraw = true
+            if (chain.canDep) map[sym].deposit  = true
+            if (chain.canWd)  map[sym].withdraw = true
         }
-        statusCache[OKX_ALL_KEY] = { data: map, ts: Date.now() }
+        cache[OKX_BATCH_KEY] = { data: map, ts: Date.now() }
         return map
     } catch (e) {
         console.warn('OKX all status failed:', e.message)
@@ -130,22 +145,22 @@ async function fetchAllOKXStatus() {
 
 export async function getOKXStatus(symbol) {
     const map = await fetchAllOKXStatus()
-    return map[symbol.toUpperCase()] ?? { deposit: true, withdraw: true }
+    return map[symbol.toUpperCase()] ?? FALLBACK
 }
 
+// ─── MEXC (батч: все монеты за один запрос) ─────────────────────────────────
 
-// ─── MEXC (batch: все монеты за один запрос) ────────────────────
-const MEXC_ALL_KEY = 'mexc_status_ALL'
+const MEXC_BATCH_KEY = 'mexc_ALL'
 
 async function fetchAllMEXCStatus() {
-    if (isFreshStatus(MEXC_ALL_KEY)) return statusCache[MEXC_ALL_KEY].data
+    if (isFresh(MEXC_BATCH_KEY)) return cache[MEXC_BATCH_KEY].data
 
     try {
         const apiKey = import.meta.env.VITE_MEXC_API_KEY
         const secret = import.meta.env.VITE_MEXC_API_SECRET
-        const ts = Date.now()
-        const query = `timestamp=${ts}&recvWindow=60000`
-        const sig = await hmacHex(secret, query)
+        const ts     = Date.now()
+        const query  = `timestamp=${ts}&recvWindow=60000`
+        const sig    = await hmacHex(secret, query)
 
         const res = await rlFetch(
             'mexc', 300,
@@ -157,10 +172,8 @@ async function fetchAllMEXCStatus() {
             return {}
         }
         const data = await res.json()
-        if (!Array.isArray(data)) {
-            console.warn('MEXC status batch error:', data)
-            return {}
-        }
+        if (!Array.isArray(data)) return {}
+
         const map = {}
         for (const coin of data) {
             map[coin.coin] = {
@@ -168,7 +181,7 @@ async function fetchAllMEXCStatus() {
                 withdraw: coin.networkList?.some(n => n.withdrawEnable) ?? false,
             }
         }
-        statusCache[MEXC_ALL_KEY] = { data: map, ts: Date.now() }
+        cache[MEXC_BATCH_KEY] = { data: map, ts: Date.now() }
         return map
     } catch (e) {
         console.warn('MEXC all status failed:', e.message)
@@ -178,20 +191,21 @@ async function fetchAllMEXCStatus() {
 
 export async function getMEXCStatus(symbol) {
     const map = await fetchAllMEXCStatus()
-    return map[symbol.toUpperCase()] ?? { deposit: true, withdraw: true }
+    return map[symbol.toUpperCase()] ?? FALLBACK
 }
 
-// ─── BingX ──────────────────────────────────────────────────────
+// ─── BingX ──────────────────────────────────────────────────────────────────
+
 export async function getBingXStatus(symbol) {
-    const key = `bingx_status_${symbol}`
-    if (isFreshStatus(key)) return statusCache[key].data
+    const key = `bingx_${symbol}`
+    if (isFresh(key)) return cache[key].data
 
     try {
         const apiKey = import.meta.env.VITE_BINGX_API_KEY
         const secret = import.meta.env.VITE_BINGX_API_SECRET
-        const ts = Date.now()
+        const ts     = Date.now()
         const params = `timestamp=${ts}`
-        const sig = await hmacHex(secret, params)
+        const sig    = await hmacHex(secret, params)
 
         const res = await rlFetch(
             'bingx', 250,
@@ -199,38 +213,41 @@ export async function getBingXStatus(symbol) {
             { headers: { 'X-BX-APIKEY': apiKey } }
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        const coin = data.data?.find(c => c.coin === symbol.toUpperCase())
+
+        const data   = await res.json()
+        const coin   = data.data?.find(c => c.coin === symbol.toUpperCase())
         const result = {
-            deposit: coin?.networkList?.some(n => n.depositEnable) ?? false,
-            withdraw: coin?.networkList?.some(n => n.withdrawEnable) ?? false
+            deposit:  coin?.networkList?.some(n => n.depositEnable)  ?? false,
+            withdraw: coin?.networkList?.some(n => n.withdrawEnable) ?? false,
         }
-        statusCache[key] = { data: result, ts: Date.now() }
+        cache[key] = { data: result, ts: Date.now() }
         return result
     } catch (e) {
         console.warn('BingX status failed:', symbol, e.message)
-        return { deposit: true, withdraw: true }
+        return FALLBACK
     }
 }
 
-// ─── Bitget (batch: все монеты за один запрос) ──────────────────
-const BITGET_ALL_KEY = 'bitget_status_ALL'
+// ─── Bitget (батч: все монеты за один запрос, публичный API) ────────────────
+
+const BITGET_BATCH_KEY = 'bitget_ALL'
 
 async function fetchAllBitgetStatus() {
-    if (isFreshStatus(BITGET_ALL_KEY)) return statusCache[BITGET_ALL_KEY].data
+    if (isFresh(BITGET_BATCH_KEY)) return cache[BITGET_BATCH_KEY].data
 
     try {
         const res = await rlFetch('bitget', 200, 'https://api.bitget.com/api/v2/spot/public/coins')
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
         const data = await res.json()
-        const map = {}
+        const map  = {}
         for (const coin of (data.data ?? [])) {
             map[coin.coin] = {
-                deposit: coin.chains?.some(c => c.rechargeable === 'true') ?? false,
-                withdraw: coin.chains?.some(c => c.withdrawable === 'true') ?? false
+                deposit:  coin.chains?.some(c => c.rechargeable === 'true') ?? false,
+                withdraw: coin.chains?.some(c => c.withdrawable === 'true') ?? false,
             }
         }
-        statusCache[BITGET_ALL_KEY] = { data: map, ts: Date.now() }
+        cache[BITGET_BATCH_KEY] = { data: map, ts: Date.now() }
         return map
     } catch (e) {
         console.warn('Bitget all status failed:', e.message)
@@ -240,14 +257,14 @@ async function fetchAllBitgetStatus() {
 
 export async function getBitgetStatus(symbol) {
     const map = await fetchAllBitgetStatus()
-    return map[symbol.toUpperCase()] ?? { deposit: true, withdraw: true }
+    return map[symbol.toUpperCase()] ?? FALLBACK
 }
 
+// ─── KuCoin (публичный API, без авторизации) ─────────────────────────────────
 
-// ─── KuCoin (public, no auth) ────────────────────────────────────
 export async function getKuCoinStatus(symbol) {
-    const key = `kucoin_status_${symbol}`
-    if (isFreshStatus(key)) return statusCache[key].data
+    const key = `kucoin_${symbol}`
+    if (isFresh(key)) return cache[key].data
 
     try {
         const res = await rlFetch(
@@ -255,16 +272,17 @@ export async function getKuCoinStatus(symbol) {
             `/kucoin-spot-api/api/v2/currencies/${symbol.toUpperCase()}`
         )
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
+
+        const data   = await res.json()
         const chains = data.data?.chains ?? []
         const result = {
-            deposit: chains.some(c => c.isDepositEnabled),
-            withdraw: chains.some(c => c.isWithdrawEnabled)
+            deposit:  chains.some(c => c.isDepositEnabled),
+            withdraw: chains.some(c => c.isWithdrawEnabled),
         }
-        statusCache[key] = { data: result, ts: Date.now() }
+        cache[key] = { data: result, ts: Date.now() }
         return result
     } catch (e) {
         console.warn('KuCoin status failed:', symbol, e.message)
-        return { deposit: true, withdraw: true }
+        return FALLBACK
     }
 }

@@ -259,9 +259,26 @@ const style = `
     cursor: not-allowed;
   }
 
+  .filter-save.saving {
+    border-color: var(--accent);
+    color: var(--accent);
+    opacity: 0.7;
+    cursor: wait;
+  }
+
+  .filter-save.saved {
+    border-color: var(--success);
+    color: var(--success);
+  }
+
+  .filter-save.error {
+    border-color: var(--error);
+    color: var(--error);
+  }
+
 `
 
-function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSaveSettings, canSave }) {
+function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSaveSettings, canSave, saveStatus }) {
     const toggleStrategy = (key) => {
         onFilters(f => ({ ...f, strategy: { ...f.strategy, [key]: !f.strategy[key] } }))
     }
@@ -439,11 +456,14 @@ function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSav
 
             <div className="drawer-footer">
               <button
-                  className="filter-save"
+                  className={`filter-save${saveStatus ? ' ' + saveStatus : ''}`}
                   onClick={onSaveSettings}
-                  disabled={!canSave}
+                  disabled={!canSave || saveStatus === 'saving'}
               >
-                  СОХРАНИТЬ НАСТРОЙКИ
+                  {saveStatus === 'saving' && '⏳ СОХРАНЕНИЕ...'}
+                  {saveStatus === 'saved'  && '✓ СОХРАНЕНО'}
+                  {saveStatus === 'error'  && '✕ ОШИБКА СОХРАНЕНИЯ'}
+                  {!saveStatus             && 'СОХРАНИТЬ НАСТРОЙКИ'}
               </button>
 
               <button className="reset-btn" 

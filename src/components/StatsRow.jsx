@@ -67,11 +67,15 @@ const style = `
 
 
 function StatsRow({ opportunities, tradeAmount, isLoading }) {
-    const bestSpread = Math.max(...opportunities.map(o => o.spread))
+    const hasData = opportunities.length > 0
 
-    const avgProfit = opportunities.reduce((sum, o) => {
-        return sum + parseFloat(calcProfit(o.spread, tradeAmount))
-    }, 0) / opportunities.length
+    const bestSpread = hasData
+        ? Math.max(...opportunities.map(o => o.spread))
+        : 0
+
+    const avgProfit = hasData
+        ? opportunities.reduce((sum, o) => sum + parseFloat(calcProfit(o.spread, tradeAmount)), 0) / opportunities.length
+        : 0
 
     const exchangeCount = opportunities.reduce((acc, o) => {
         acc[o.bid_ex] = (acc[o.bid_ex] || 0) + 1
