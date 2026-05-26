@@ -1,7 +1,8 @@
 import { getExchangeInfo, getSpreadColor, calcProfit, formatVolume, formatPrice, formatAge, formatTimeRemaining, getAgeIcon, getTransferIcon } from "../utils"
 import { Star, Trash2, ChevronDown, ChevronUp } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { EXCHANGES } from "../constants"
+import { aLog } from "../api.js"
 
 const style = `
   .opp-card {
@@ -508,6 +509,20 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
   const stratLabel = opp.strategy === 'sf' ? 'SPOT · FUTURES' : 'FUTURES · FUTURES'
   const hasVariants = opp.variants?.length > 0
 
+  // Лог монтирования карточки — все ключевые данные
+  useEffect(() => {
+    aLog('log',
+      `[CARD] mount #${index} ${sym} | strategy=${opp.strategy} | spread=${opp.spread.toFixed(4)}% | ` +
+      `bid=${opp.bid_ex}(${bidType}) ask=${opp.ask_ex}(${askType}) | ` +
+      `bidPrice=${opp.bid_price?.toFixed(4)} askPrice=${opp.ask_price?.toFixed(4)} | ` +
+      `profit=$${profit} | variants=${opp.variants?.length ?? 0}`
+    )
+    // Лог расчёта fundingSpread — стратегия, ставки, результат
+    aLog('log',
+      `[CARD] fundingSpread: strategy=${opp.strategy} | bidRate=${bidRate?.toFixed(4) ?? 'null'} askRate=${askRate?.toFixed(4) ?? 'null'} → fundingSpread=${fundingSpread.toFixed(4)}%`
+    )
+  }, [opp.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const bidUrl = opp.bid_market === 'spot'
     ? (EXCHANGES[opp.bid_ex]?.spotUrl?.(sym) ?? '#')
     : (EXCHANGES[opp.bid_ex]?.futuresUrl?.(sym) ?? '#')
@@ -557,7 +572,11 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
           '--spread-color': spreadColor,
           animationDelay: `${index * 0.08}s`
         }}
-        onClick={() => onSelect(opp)}
+        onClick={() => {
+          // Лог клика на карточку — открываем модалку
+          aLog('log', `[CARD] клик → открываем модалку: ${sym} | spread=${opp.spread.toFixed(4)}% | ${opp.bid_ex}→${opp.ask_ex}`)
+          onSelect(opp)
+        }}
       >
         <div className="card-top-bar" />
 
@@ -571,13 +590,23 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
           <span className="card-age">{getAgeIcon(opp.first_seen)} {formatAge(opp.first_seen)}</span>
           <button
             className={`card-icon-btn ${isFavorite ? 'favorite' : ''}`}
-            onClick={e => { e.stopPropagation(); onFavorite(opp.id) }}
+            onClick={e => {
+              e.stopPropagation()
+              // Лог переключения избранного — символ и новое состояние
+              aLog('log', `[CARD] toggleFavorite: ${sym} → ${isFavorite ? 'убрать из избранного' : 'добавить в избранное'}`)
+              onFavorite(opp.id)
+            }}
           >
             <Star size={13} fill={isFavorite ? 'currentColor' : 'none'} />
           </button>
           <button
             className="card-icon-btn card-icon-trash"
-            onClick={e => { e.stopPropagation(); onHide(opp.id) }}
+            onClick={e => {
+              e.stopPropagation()
+              // Лог скрытия карточки — символ
+              aLog('log', `[CARD] hide: ${sym} скрыт пользователем`)
+              onHide(opp.id)
+            }}
           >
             <Trash2 size={13} />
           </button>
@@ -607,6 +636,8 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
             */}
             <div className="card-side sell-side" onClick={e => {
               e.stopPropagation()
+              // Лог клика на SELL панель — биржа, market, url
+              aLog('log', `[CARD] клик SELL панель: ${opp.bid_ex} (${bidType}) | url=${bidUrl}`)
               window.open(bidUrl, '_blank', 'noopener')
             }}>
               <div className="side-label">Sell</div>
@@ -656,6 +687,8 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
             */}
             <div className="card-side buy-side" onClick={e => {
               e.stopPropagation()
+              // Лог клика на BUY панель — биржа, market, url
+              aLog('log', `[CARD] клик BUY панель: ${opp.ask_ex} (${askType}) | url=${askUrl}`)
               window.open(askUrl, '_blank', 'noopener')
             }}>
               <div className="side-label">Buy</div>
@@ -720,7 +753,12 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
         {hasVariants && (
           <div
             className="card-toggle"
-            onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
+            onClick={e => {
+              e.stopPropagation()
+              // Лог переключения вариантов — символ, кол-во вариантов, новое состояние
+              aLog('log', `[CARD] toggleVariants: ${sym} | вариантов=${variantCount} | expanded=${!expanded}`)
+              setExpanded(v => !v)
+            }}
           >
             {expanded
               ? <><ChevronUp size={12} /> закрыть варианты</>

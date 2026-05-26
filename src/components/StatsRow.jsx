@@ -1,4 +1,5 @@
 import { calcProfit } from '../utils.js'
+import { aLog } from '../api.js'
 
 const style = `
     .stats-row {
@@ -69,13 +70,26 @@ const style = `
 function StatsRow({ opportunities, tradeAmount, isLoading }) {
     const hasData = opportunities.length > 0
 
+    // Лог старта расчётов статистики — входящие данные
+    aLog('group', `[STATS] StatsRow рендер | opportunities=${opportunities.length} tradeAmount=$${tradeAmount} isLoading=${isLoading}`)
+
     const bestSpread = hasData
         ? Math.max(...opportunities.map(o => o.spread))
         : 0
 
+    // Лог лучшего спреда — значение и символ-лидер
+    const bestOpp = hasData ? opportunities.find(o => o.spread === bestSpread) : null
+    aLog('log', `[STATS] bestSpread=${bestSpread.toFixed(4)}%${bestOpp ? ` (${bestOpp.symbol} | ${bestOpp.bid_ex}→${bestOpp.ask_ex})` : ''}`)
+
     const avgProfit = hasData
         ? opportunities.reduce((sum, o) => sum + parseFloat(calcProfit(o.spread, tradeAmount)), 0) / opportunities.length
         : 0
+
+    // Лог средней прибыли — сумма и среднее при текущем tradeAmount
+    const totalProfit = hasData
+        ? opportunities.reduce((sum, o) => sum + parseFloat(calcProfit(o.spread, tradeAmount)), 0)
+        : 0
+    aLog('log', `[STATS] avgProfit=$${avgProfit.toFixed(2)} | totalProfit=$${totalProfit.toFixed(2)} | при tradeAmount=$${tradeAmount}`)
 
     const exchangeCount = opportunities.reduce((acc, o) => {
         acc[o.bid_ex] = (acc[o.bid_ex] || 0) + 1
@@ -85,6 +99,11 @@ function StatsRow({ opportunities, tradeAmount, isLoading }) {
 
     const topExchange = Object.entries(exchangeCount)
         .sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—'
+
+    // Лог топ-биржи — название и количество пар, полный рейтинг бирж
+    const exchangeRanking = Object.entries(exchangeCount).sort((a, b) => b[1] - a[1]).map(([ex, cnt]) => `${ex}:${cnt}`).join(' ')
+    aLog('log', `[STATS] topExchange=${topExchange} | рейтинг бирж: ${exchangeRanking || '—'}`)
+    aLog('groupEnd')
 
     return (
         <>

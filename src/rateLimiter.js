@@ -9,6 +9,8 @@
  * Ответ хранится как ArrayBuffer для безопасного многократного чтения.
  */
 
+import { aLog } from './api.js'
+
 // Состояние очереди per-exchange: { last: timestamp, queue: [], busy: bool }
 const _queues = {}
 
@@ -30,10 +32,18 @@ export function rlFetch(exchange, minMs, url, opts) {
     }
     const state = _queues[exchange]
 
+    // Лог входа в rlFetch — биржа, интервал, URL
+    aLog('log', `[RL] rlFetch → exchange=${exchange} minMs=${minMs} url=${url.length > 80 ? url.slice(0, 80) + '…' : url}`)
+
     // Дедупликация: подписываемся на уже выполняющийся запрос
     if (_inFlight[url]) {
+        // Лог попадания в dedup — запрос уже выполняется, ждём его результата
+        aLog('warn', `[RL] DEDUP HIT — подписываемся на уже выполняющийся запрос: ${url.length > 80 ? url.slice(0, 80) + '…' : url}`)
         return _inFlight[url].then(cached => _reconstruct(cached))
     }
+
+    // Лог постановки в очередь — позиция и текущая длина очереди
+    aLog('log', `[RL] В очередь → exchange=${exchange} | позиция=${state.queue.length + 1} | busy=${state.busy}`)
 
     // Создаём промис с сохранением ответа как ArrayBuffer
     const promise = new Promise((resolve, reject) => {
@@ -79,12 +89,26 @@ async function _drain(state, minMs) {
     state.busy = true
     while (state.queue.length > 0) {
         const gap = minMs - (Date.now() - state.last)
-        if (gap > 0) await new Promise(r => setTimeout(r, gap))
+        if (gap > 0) {
+            // Лог ожидания rate limit — сколько мс ждём перед следующим запросом
+            aLog('warn', `[RL] Rate limit пауза: ждём ${gap}мс (minMs=${minMs}, прошло=${minMs - gap}мс)`)
+            await new Promise(r => setTimeout(r, gap))
+        }
         const item = state.queue.shift()
         state.last = Date.now()
+        // Лог начала выполнения запроса из очереди
+        const reqStart = performance.now()
+        aLog('log', `[RL] Выполняем запрос: ${item.url.length > 80 ? item.url.slice(0, 80) + '…' : item.url}`)
         try {
-            item.resolve(await fetch(item.url, item.opts))
+            const res = await fetch(item.url, item.opts)
+            const reqTime = (performance.now() - reqStart).toFixed(0)
+            // Лог успешного выполнения — статус и время
+            aLog('log', `[RL] ✅ Ответ: HTTP ${res.status} | ⏱ ${reqTime}мс | ${item.url.length > 60 ? item.url.slice(0, 60) + '…' : item.url}`)
+            item.resolve(res)
         } catch (e) {
+            const reqTime = (performance.now() - reqStart).toFixed(0)
+            // Лог ошибки выполнения запроса
+            aLog('error', `[RL] ❌ Ошибка запроса: ${e.message} | ⏱ ${reqTime}мс | ${item.url.length > 60 ? item.url.slice(0, 60) + '…' : item.url}`)
             item.reject(e)
         }
     }

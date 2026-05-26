@@ -260,7 +260,7 @@ function ExLogo({ info }) {
 }
 
 // ─── Chart ────────────────────────────────────────────────────────────────────
-function Chart({ mode, history, avgLong, avgShort, entrySpread }) {
+function Chart({ mode, history, avgLong, avgShort, entrySpread, liveSpread }) {
   const W = 500, H = 210
   const PL = 10, PR = 76, PT = 16, PB = 26
   const cW = W - PL - PR, cH = H - PT - PB
@@ -355,47 +355,44 @@ function Chart({ mode, history, avgLong, avgShort, entrySpread }) {
     const curBid = bids[bids.length - 1]
     const curAsk = asks[asks.length - 1]
     const annotations = [
-      { val: curBid, color: '#00c97a' },
-      { val: curAsk, color: '#e03e3e' },
-      ...(hasAvg ? [
-        { val: parseFloat(avgLong),  color: '#00c97a88' },
-        { val: parseFloat(avgShort), color: '#e03e3e88' },
-      ] : []),
+      { val: curBid, color: '#e03e3e' },
+      { val: curAsk, color: '#00c97a' },
     ]
 
     return (
       <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
         <defs>
           <linearGradient id="g-bid" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#00c97a" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#00c97a" stopOpacity="0" />
+            <stop offset="0%" stopColor="#e03e3e" stopOpacity="0.3" />
+            <stop offset="100%" stopColor="#e03e3e" stopOpacity="0" />
           </linearGradient>
         </defs>
         <YAxis ty={ty} min={min} max={max} fmt={fmt} annotations={annotations} />
         <path d={bidPath + ` L ${lbx},${H - PB} L ${PL},${H - PB} Z`} fill="url(#g-bid)" />
-        <path d={bidPath} fill="none" stroke="#00c97a" strokeWidth="1.8" />
-        <path d={askPath} fill="none" stroke="#e03e3e" strokeWidth="1.8" />
-        <PulseDot x={lbx} y={lby} color="#00c97a" />
-        <PulseDot x={lax} y={lay} color="#e03e3e" />
+        <path d={bidPath} fill="none" stroke="#e03e3e" strokeWidth="1.8" />
+        <path d={askPath} fill="none" stroke="#00c97a" strokeWidth="1.8" />
+        <PulseDot x={lbx} y={lby} color="#e03e3e" />
+        <PulseDot x={lax} y={lay} color="#00c97a" />
       </svg>
     )
   }
 
   // ── entry-spread ──
   if (mode === 'entry-spread') {
-    const spreads = history.map(p => (p.ask - p.bid) / p.bid * 100)
-    const YMAX = Math.max(...spreads, TARGET_EXIT + 0.2)
+    const spreads = history.map(p => (p.bid - p.ask) / p.bid * 100)
+    const YMAX = Math.max(...spreads, 0.1)
     const YMIN = Math.min(0, ...spreads)
     const ty = tyFn(YMIN, YMAX)
     const tx = txFn(spreads.length)
 
     const pts = spreads.map((v, i) => [tx(i), ty(v)])
     const path = smooth(pts)
-    const tY = ty(TARGET_EXIT)
+    const zeroY = ty(0)
     const [lx, ly] = pts[pts.length - 1]
-    const fill = path + ` L ${lx},${tY} L ${PL},${tY} Z`
+    const fill = path + ` L ${lx},${zeroY} L ${PL},${zeroY} Z`
     const fmt = v => v.toFixed(2) + '%'
     const curSpread = spreads[spreads.length - 1]
+    const annotationSpread = liveSpread ?? curSpread
 
     return (
       <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
@@ -406,9 +403,7 @@ function Chart({ mode, history, avgLong, avgShort, entrySpread }) {
           </linearGradient>
           <filter id="glow-s"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
         </defs>
-        <YAxis ty={ty} min={YMIN} max={YMAX} fmt={fmt} annotations={[{ val: curSpread, color: '#00c97a' }]} />
-        <line x1={PL} y1={tY} x2={W - PR} y2={tY} stroke="#3d506a" strokeWidth="1" strokeDasharray="5,4" />
-        <text x={PL + 4} y={tY - 4} fontSize="8" fill="#3d506a" fontFamily="monospace">ЦЕЛЬ {TARGET_EXIT}%</text>
+        <YAxis ty={ty} min={YMIN} max={YMAX} fmt={fmt} annotations={[{ val: annotationSpread, color: '#00c97a' }]} />
         <path d={fill} fill="url(#g-sp)" />
         <path d={path} fill="none" stroke="#00c97a" strokeWidth="3" opacity="0.2" filter="url(#glow-s)" />
         <path d={path} fill="none" stroke="#00c97a" strokeWidth="1.8" />
@@ -419,15 +414,15 @@ function Chart({ mode, history, avgLong, avgShort, entrySpread }) {
 
   // ── exit-prices ──
   if (mode === 'exit-prices') {
-    const bids = history.map(p => p.bid)
-    const asks = history.map(p => p.ask)
-    const allV = [...bids, ...asks, parseFloat(avgLong), parseFloat(avgShort)]
-    const [min, max] = padRange(Math.min(...allV), Math.max(...allV))
+    // Цены ВЫХОДА: закрытие SHORT на bid-бирже (→ asks), закрытие LONG на ask-бирже (→ bids)
+    const bids = history.map(p => p.bidExit ?? p.bid)
+    const asks = history.map(p => p.askExit ?? p.ask)
+    const [min, max] = padRange(Math.min(...bids, ...asks), Math.max(...bids, ...asks))
     const ty = tyFn(min, max)
     const tx = txFn(history.length)
 
-    const bidPts = history.map((p, i) => [tx(i), ty(p.bid)])
-    const askPts = history.map((p, i) => [tx(i), ty(p.ask)])
+    const bidPts = history.map((p, i) => [tx(i), ty(p.bidExit ?? p.bid)])
+    const askPts = history.map((p, i) => [tx(i), ty(p.askExit ?? p.ask)])
     const bidPath = smooth(bidPts)
     const askPath = smooth(askPts)
     const [lbx, lby] = bidPts[bidPts.length - 1]
@@ -438,53 +433,110 @@ function Chart({ mode, history, avgLong, avgShort, entrySpread }) {
     const curBidEx = bids[bids.length - 1]
     const curAskEx = asks[asks.length - 1]
 
+    // Заливка между линиями — индикатор схождения цен
+    // Строим path по bid сверху вниз, затем по ask снизу вверх
+    const fillBetween = bidPath
+      + ' ' + askPts.slice().reverse().map(([x, y], i) => `${i === 0 ? 'L' : 'L'} ${x},${y}`).join(' ')
+      + ' Z'
+
     return (
       <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="g-conv" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#e03e3e" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="#00c97a" stopOpacity="0.18" />
+          </linearGradient>
+          <clipPath id="xp-clip">
+            <rect x={PL} y={PT} width={cW} height={cH} />
+          </clipPath>
+        </defs>
         <YAxis ty={ty} min={min} max={max} fmt={fmt} annotations={[
-          { val: curBidEx, color: '#00c97a' },
-          { val: curAskEx, color: '#e03e3e' },
-          { val: parseFloat(avgLong),  color: '#00c97a88' },
-          { val: parseFloat(avgShort), color: '#e03e3e88' },
+          { val: curBidEx, color: '#e03e3e' },
+          { val: curAskEx, color: '#00c97a' },
         ]} />
-        <path d={bidPath} fill="none" stroke="#00c97a" strokeWidth="1.8" />
-        <path d={askPath} fill="none" stroke="#e03e3e" strokeWidth="1.8" />
-        <PulseDot x={lbx} y={lby} color="#00c97a" />
-        <PulseDot x={lax} y={lay} color="#e03e3e" />
+        {/* Заливка между линиями — визуализирует расстояние до схождения */}
+        <path d={fillBetween} fill="url(#g-conv)" clipPath="url(#xp-clip)" />
+        <path d={bidPath} fill="none" stroke="#e03e3e" strokeWidth="2" />
+        <path d={askPath} fill="none" stroke="#00c97a" strokeWidth="2" />
+        <PulseDot x={lbx} y={lby} color="#e03e3e" />
+        <PulseDot x={lax} y={lay} color="#00c97a" />
       </svg>
     )
   }
 
   // ── exit-spread ──
   if (mode === 'exit-spread') {
-    const ref = (parseFloat(avgShort) - parseFloat(avgLong)) / parseFloat(avgLong) * 100
-    const spreads = history.map(p => (p.ask - p.bid) / p.bid * 100)
-    const captured = spreads.map(s => Math.max(0, ref - s))
-    const YMAX = Math.max(...captured, (ref - TARGET_EXIT) * 0.5, 0.05)
-    const ty = tyFn(0, YMAX)
+    // ref = спред при входе пользователя
+    // captured = ref - текущий_спред:
+    //   > 0 → спред сузился, позиция закрывается в профит
+    //   = 0 → спред на уровне входа
+    //   < 0 → спред ещё шире чем при входе (рано закрывать)
+    const ref = (parseFloat(avgShort) - parseFloat(avgLong)) / parseFloat(avgShort) * 100
+    // Спред выхода считается по ценам выхода (bidExit/askExit)
+    const spreads = history.map(p => {
+      const b = p.bidExit ?? p.bid
+      const a = p.askExit ?? p.ask
+      return (b - a) / b * 100
+    })
+    const captured = spreads.map(s => ref - s)
+
+    const curCaptured = captured[captured.length - 1]
+    const YMAX = Math.max(...captured, ref * 0.3, 0.1)
+    const YMIN = Math.min(...captured, -ref * 0.2, -0.05)
+    const ty = tyFn(YMIN, YMAX)
     const tx = txFn(captured.length)
 
     const pts = captured.map((v, i) => [tx(i), ty(v)])
     const path = smooth(pts)
-    const goalY = ty(Math.max(0, ref - TARGET_EXIT))
+    const zeroY = ty(0)
+    const goalY = ty(Math.max(YMIN, ref - TARGET_EXIT))
     const [lx, ly] = pts[pts.length - 1]
-    const fill = path + ` L ${lx},${ty(0)} L ${PL},${ty(0)} Z`
     const fmt = v => v.toFixed(2) + '%'
-    const cur = captured[captured.length - 1]
+
+    // Заливка: зона выше 0 = профит (синяя), зона ниже 0 = ещё не пора (тёмно-красная)
+    const positiveFill = path + ` L ${lx},${zeroY} L ${PL},${zeroY} Z`
+    const negativeFill = path + ` L ${lx},${zeroY} L ${PL},${zeroY} Z`
+
+    const lineColor = curCaptured >= 0 ? '#3d87c0' : '#e03e3e'
 
     return (
       <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
         <defs>
-          <linearGradient id="g-ex" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3d87c0" stopOpacity="0.35" />
+          <linearGradient id="g-ex-pos" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3d87c0" stopOpacity="0.4" />
             <stop offset="100%" stopColor="#3d87c0" stopOpacity="0.02" />
           </linearGradient>
+          <linearGradient id="g-ex-neg" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0%" stopColor="#e03e3e" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#e03e3e" stopOpacity="0.02" />
+          </linearGradient>
+          <clipPath id="ex-clip-pos">
+            <rect x={PL} y={PT} width={cW} height={Math.max(0, zeroY - PT)} />
+          </clipPath>
+          <clipPath id="ex-clip-neg">
+            <rect x={PL} y={zeroY} width={cW} height={Math.max(0, H - PB - zeroY)} />
+          </clipPath>
+          <filter id="glow-ex"><feGaussianBlur in="SourceGraphic" stdDeviation="2" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
         </defs>
-        <YAxis ty={ty} min={0} max={YMAX} fmt={fmt} annotations={[{ val: cur, color: '#3d87c0' }]} />
-        <line x1={PL} y1={goalY} x2={W - PR} y2={goalY} stroke="#3d506a" strokeWidth="1" strokeDasharray="5,4" />
-        <text x={PL + 4} y={goalY - 4} fontSize="8" fill="#3d506a" fontFamily="monospace">ЦЕЛЬ ЗАХВАТА</text>
-        <path d={fill} fill="url(#g-ex)" />
-        <path d={path} fill="none" stroke="#3d87c0" strokeWidth="1.8" />
-        <PulseDot x={lx} y={ly} color="#3d87c0" />
+        <YAxis ty={ty} min={YMIN} max={YMAX} fmt={fmt} annotations={[{ val: curCaptured, color: lineColor }]} />
+        {/* Нулевая линия — уровень входа */}
+        <line x1={PL} y1={zeroY} x2={W - PR} y2={zeroY} stroke="#3d506a" strokeWidth="1" strokeDasharray="4,3" />
+        <text x={PL + 4} y={zeroY - 4} fontSize="8" fill="#3d506a" fontFamily="monospace">УРОВЕНЬ ВХОДА 0%</text>
+        {/* Цель захвата */}
+        {goalY < zeroY && (
+          <>
+            <line x1={PL} y1={goalY} x2={W - PR} y2={goalY} stroke="#2f6997" strokeWidth="1" strokeDasharray="5,4" />
+            <text x={PL + 4} y={goalY - 4} fontSize="8" fill="#2f6997" fontFamily="monospace">ЦЕЛЬ ЗАХВАТА</text>
+          </>
+        )}
+        {/* Позитивная заливка (выше 0) */}
+        <path d={positiveFill} fill="url(#g-ex-pos)" clipPath="url(#ex-clip-pos)" />
+        {/* Негативная заливка (ниже 0) */}
+        <path d={negativeFill} fill="url(#g-ex-neg)" clipPath="url(#ex-clip-neg)" />
+        {/* Линия с glow */}
+        <path d={path} fill="none" stroke={lineColor} strokeWidth="2.5" opacity="0.2" filter="url(#glow-ex)" />
+        <path d={path} fill="none" stroke={lineColor} strokeWidth="1.8" />
+        <PulseDot x={lx} y={ly} color={lineColor} />
       </svg>
     )
   }
@@ -500,7 +552,7 @@ function ExCard({ side, opp, book, livePrice, refPrice }) {
   const funding = side === 'bid' ? opp.bid_funding : opp.ask_funding
   const volume = side === 'bid' ? opp.bid_volume : opp.ask_volume
   const transfer = side === 'bid' ? opp.bid_transfer : opp.ask_transfer
-  const isBuy = side === 'bid'
+  const isBuy = side === 'ask'
 
   const sym = opp.symbol.replace(/USDT$/, '')
   const url = isBuy
@@ -509,6 +561,8 @@ function ExCard({ side, opp, book, livePrice, refPrice }) {
 
   const displayPrice = livePrice ?? price
 
+  // bid-карточка (SELL): объём доступных покупателей → bids
+  // ask-карточка (BUY):  объём доступных продавцов   → asks
   const maxVol = book && refPrice
     ? calcMaxVolume(isBuy ? book.asks : book.bids, refPrice, isBuy ? 'long' : 'short')
     : null
@@ -527,7 +581,7 @@ function ExCard({ side, opp, book, livePrice, refPrice }) {
             <ExLogo info={info} />
             <div>
               <div className="ex-title">{info.name}</div>
-              <div className="ex-role">{isBuy ? 'BID EXCHANGE' : 'ASK EXCHANGE'}</div>
+              <div className="ex-role">{side === 'bid' ? 'BID EXCHANGE' : 'ASK EXCHANGE'}</div>
             </div>
           </div>
           <span className={`ex-badge ${isBuy ? 'buy' : 'sell'}`}>
@@ -587,17 +641,31 @@ function DetailModal({
 
   const latestBid = useRef(opp.bid_price)
   const latestAsk = useRef(opp.ask_price)
+  const latestBidExit = useRef(opp.bid_price)
+  const latestAskExit = useRef(opp.ask_price)
 
-  const vwapBid = bidBook ? calcVwap(bidBook.asks, tradeAmount) : null
-  const vwapAsk = askBook ? calcVwap(askBook.bids, tradeAmount) : null
+  // ВХОД — открываем позицию:
+  // SELL на bid-бирже → бьём по bids (покупатели готовы купить у нас)
+  // BUY  на ask-бирже → бьём по asks (продавцы готовы продать нам)
+  const vwapBid = bidBook ? calcVwap(bidBook.bids, tradeAmount) : null
+  const vwapAsk = askBook ? calcVwap(askBook.asks, tradeAmount) : null
+
+  // ВЫХОД — закрываем позицию (разворот):
+  // Закрытие SHORT на bid-бирже → покупаем → бьём по asks
+  // Закрытие LONG  на ask-бирже → продаём  → бьём по bids
+  const vwapBidExit = bidBook ? calcVwap(bidBook.asks, tradeAmount) : null
+  const vwapAskExit = askBook ? calcVwap(askBook.bids, tradeAmount) : null
+
   const liveSpread = (vwapBid && vwapAsk)
-    ? (vwapAsk - vwapBid) / vwapBid * 100
+    ? (vwapBid - vwapAsk) / vwapBid * 100
     : opp.spread
 
   useEffect(() => {
-    latestBid.current = vwapBid ?? opp.bid_price
-    latestAsk.current = vwapAsk ?? opp.ask_price
-  }, [vwapBid, vwapAsk, opp.bid_price, opp.ask_price])
+    latestBid.current     = vwapBid     ?? opp.bid_price
+    latestAsk.current     = vwapAsk     ?? opp.ask_price
+    latestBidExit.current = vwapBidExit ?? opp.bid_price
+    latestAskExit.current = vwapAskExit ?? opp.ask_price
+  }, [vwapBid, vwapAsk, vwapBidExit, vwapAskExit, opp.bid_price, opp.ask_price])
 
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onClose() }
@@ -624,7 +692,12 @@ function DetailModal({
   useEffect(() => {
     const tick = () => {
       setLiveHistory(prev =>
-        [...prev, { bid: latestBid.current, ask: latestAsk.current }].slice(-60)
+        [...prev, {
+          bid:     latestBid.current,
+          ask:     latestAsk.current,
+          bidExit: latestBidExit.current,
+          askExit: latestAskExit.current,
+        }].slice(-60)
       )
     }
 
@@ -641,10 +714,12 @@ function DetailModal({
     }
   }, [])
 
-  const curBid = vwapBid ?? opp.bid_price
-  const curAsk = vwapAsk ?? opp.ask_price
+  const curBid     = vwapBid     ?? opp.bid_price
+  const curAsk     = vwapAsk     ?? opp.ask_price
+  const curBidExit = vwapBidExit ?? opp.bid_price
+  const curAskExit = vwapAskExit ?? opp.ask_price
   const chartHistory = liveHistory.length > 0
-    ? [...liveHistory, { bid: curBid, ask: curAsk }]
+    ? [...liveHistory, { bid: curBid, ask: curAsk, bidExit: curBidExit, askExit: curAskExit }]
     : []
 
   const spreadColor = getSpreadColor(liveSpread)
@@ -673,10 +748,10 @@ function DetailModal({
   const tradeBtnLabel = isActiveTrade ? 'ВЫХОД' : 'ТОРГОВАТЬ'
 
   const exitSpread = calcFilled
-    ? (parseFloat(avgShort) - parseFloat(avgLong)) / parseFloat(avgLong) * 100
+    ? (parseFloat(avgShort) - parseFloat(avgLong)) / parseFloat(avgShort) * 100
     : null
   const exitPnl = exitSpread !== null
-    ? ((opp.spread - exitSpread) * tradeAmount / 100).toFixed(2)
+    ? (exitSpread * tradeAmount / 100).toFixed(2)
     : null
 
   const TABS = [
@@ -688,22 +763,20 @@ function DetailModal({
 
   const chartLegends = {
     'entry-prices': [
-      { color: 'var(--success)', label: 'BID (Long)' },
-      { color: 'var(--error)', label: 'ASK (Short)' },
+      { color: 'var(--error)',   label: 'BID (SELL)' },
+      { color: 'var(--success)', label: 'ASK (BUY)' },
     ],
     'entry-spread': [
       { color: 'var(--success)', label: 'Текущий спред' },
       { dash: true, color: '#3d506a', label: 'Цель 0.30%' },
     ],
     'exit-prices': [
-      { color: 'var(--success)', label: 'BID (Long)' },
-      { color: 'var(--error)', label: 'ASK (Short)' },
-      { dash: true, color: 'var(--success)', label: 'Avg Long' },
-      { dash: true, color: 'var(--error)', label: 'Avg Short' },
+      { color: 'var(--error)',   label: 'BID (SELL) — верхняя линия' },
+      { color: 'var(--success)', label: 'ASK (BUY) — нижняя линия' },
     ],
     'exit-spread': [
-      { color: 'var(--accent-bright)', label: 'Захваченный профит' },
-      { dash: true, color: '#3d506a', label: 'Цель захвата' },
+      { color: 'var(--accent-bright)', label: 'Захваченный профит (> 0 = выходить)' },
+      { dash: true, color: '#3d506a',  label: 'Уровень входа (0%)' },
     ],
   }
 
@@ -742,7 +815,7 @@ function DetailModal({
 
             {/* LEFT */}
             <div className="dm-col-l">
-              <ExCard side="ask" opp={opp} book={askBook} livePrice={vwapAsk} refPrice={vwapBid} />
+              <ExCard side="bid" opp={opp} book={bidBook} livePrice={vwapBid} refPrice={vwapAsk} />
 
               <div className="spread-sep">
                 <div className="ss-left">
@@ -761,7 +834,7 @@ function DetailModal({
                 </button>
               </div>
 
-              <ExCard side="bid" opp={opp} book={bidBook} livePrice={vwapBid} refPrice={vwapAsk} />
+              <ExCard side="ask" opp={opp} book={askBook} livePrice={vwapAsk} refPrice={vwapBid} />
             </div>
 
             {/* RIGHT */}
@@ -786,6 +859,7 @@ function DetailModal({
                   avgLong={avgLong}
                   avgShort={avgShort}
                   entrySpread={opp.spread}
+                  liveSpread={liveSpread}
                 />
                 {(chartMode === 'exit-prices' || chartMode === 'exit-spread') && exitLocked && (
                   <div className="chart-locked-overlay">
@@ -812,23 +886,23 @@ function DetailModal({
                 <div className="exit-calc-title">Калькулятор выхода</div>
                 <div className="exit-calc-inputs">
                   <div>
-                    <div className="exit-calc-label">Avg Long — цена входа BID</div>
+                    <div className="exit-calc-label">Avg Short — цена входа BID (SELL)</div>
                     <input
                       className="exit-calc-input"
                       type="number"
                       placeholder={formatPrice(opp.bid_price)}
-                      value={avgLong}
-                      onChange={e => setAvgLong(e.target.value)}
+                      value={avgShort}
+                      onChange={e => setAvgShort(e.target.value)}
                     />
                   </div>
                   <div>
-                    <div className="exit-calc-label">Avg Short — цена входа ASK</div>
+                    <div className="exit-calc-label">Avg Long — цена входа ASK (BUY)</div>
                     <input
                       className="exit-calc-input"
                       type="number"
                       placeholder={formatPrice(opp.ask_price)}
-                      value={avgShort}
-                      onChange={e => setAvgShort(e.target.value)}
+                      value={avgLong}
+                      onChange={e => setAvgLong(e.target.value)}
                     />
                   </div>
                 </div>

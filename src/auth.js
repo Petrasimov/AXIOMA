@@ -15,13 +15,23 @@
 
 const SESSION_KEY = 'axioma_auth_session'
 
+import { aLog } from './api.js'
+
 // ─── Сессия ─────────────────────────────────────────────────────────────────
 
 export function loadSession() {
     try {
         const raw = sessionStorage.getItem(SESSION_KEY)
-        return raw ? JSON.parse(raw) : null
+        const session = raw ? JSON.parse(raw) : null
+        // Лог результата loadSession — найдена или нет, userId и login
+        if (session) {
+            aLog('log', `[AUTH] loadSession → найдена: userId=${session.userId} login=${session.login} isCexCexPaid=${session.isCexCexPaid} isAdmin=${session.isAdmin}`)
+        } else {
+            aLog('log', `[AUTH] loadSession → сессия отсутствует в sessionStorage`)
+        }
+        return session
     } catch {
+        aLog('error', `[AUTH] loadSession → ошибка чтения sessionStorage`)
         return null
     }
 }
@@ -29,13 +39,21 @@ export function loadSession() {
 export function saveSession(userData) {
     try {
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(userData))
-    } catch {}
+        // Лог сохранения сессии — ключевые поля
+        aLog('log', `[AUTH] saveSession → userId=${userData.userId} login=${userData.login} isCexCexPaid=${userData.isCexCexPaid} isAdmin=${userData.isAdmin}`)
+    } catch {
+        aLog('error', `[AUTH] saveSession → ошибка записи в sessionStorage`)
+    }
 }
 
 export function clearSession() {
     try {
         sessionStorage.removeItem(SESSION_KEY)
-    } catch {}
+        // Лог очистки сессии
+        aLog('warn', `[AUTH] clearSession → сессия очищена из sessionStorage`)
+    } catch {
+        aLog('error', `[AUTH] clearSession → ошибка удаления из sessionStorage`)
+    }
 }
 
 // ─── Авторизация через Telegram ──────────────────────────────────────────────
@@ -157,6 +175,9 @@ export async function checkAccess(userId) {
         // Это единственный способ подхватить изменения статуса без повторной авторизации.
         let fresh = null
         try {
+            const tPut = performance.now()
+            // Лог старта запроса актуальных данных пользователя
+            aLog('log', `[ШАГ 1] PUT /user-settings — запрашиваем актуальный AuthResponse`)
             const meRes = await fetch('/backend/api/user-settings', {
                 method: 'PUT',
                 credentials: 'include',
@@ -167,8 +188,16 @@ export async function checkAccess(userId) {
             })
             if (meRes.ok) {
                 fresh = await meRes.json()
+                // Лог успешного получения актуальных данных — источник и время
+                aLog('log', `[ШАГ 1] PUT /user-settings → HTTP ${meRes.status} | данные получены от сервера | ⏱ ${(performance.now() - tPut).toFixed(0)}мс`)
+                aLog('log', `[ШАГ 1] fresh данные: isCexCexPaid=${fresh?.isCexCexPaid} isDexCexPaid=${fresh?.isDexCexPaid} isAdmin=${fresh?.isAdmin} isActive=${fresh?.isActive}`)
+            } else {
+                // Лог неудачного ответа — будем использовать данные из сессии
+                aLog('warn', `[ШАГ 1] PUT /user-settings → HTTP ${meRes.status} — используем данные из sessionStorage`)
             }
-        } catch {}
+        } catch {
+            aLog('warn', `[ШАГ 1] PUT /user-settings → сетевая ошибка — используем данные из sessionStorage`)
+        }
 
         const result = {
             found:        true,
@@ -180,6 +209,9 @@ export async function checkAccess(userId) {
             isActive:     fresh?.isActive     ?? session.isActive     ?? true,
             userSettings: fresh?.userSettings ?? session.userSettings ?? null,
         }
+
+        // Лог источника итоговых данных — fresh с сервера или fallback из сессии
+        aLog('log', `[ШАГ 1] Источник данных: ${fresh ? 'сервер (актуальные)' : 'sessionStorage (кэш)'}`)
 
         const t1 = performance.now()
         console.log(`[ШАГ 1] ✅ Cookie жива | isCexCexPaid=${result.isCexCexPaid} | isAdmin=${result.isAdmin} | login=${result.login}`)
@@ -211,7 +243,13 @@ export async function saveUserSettings(userId, settings) {
         transfer:    settings.transfer,
     }
 
+    // Лог входа — userId и полный payload фильтров
+    aLog('group', `[AUTH] saveUserSettings → userId=${userId}`)
+    aLog('log', `[AUTH] payload: exchanges=[${payload.exchanges?.join(',')}] minSpread=${payload.minSpread} tradeAmount=${payload.tradeAmount}`)
+    aLog('log', `[AUTH] payload: strategy=ff:${payload.strategy?.ff},sf:${payload.strategy?.sf} | funding=pos:${payload.funding?.positive},neg:${payload.funding?.negative} | transfer=dep:${payload.transfer?.deposit},wd:${payload.transfer?.withdraw}`)
+
     try {
+        const tSave = performance.now()
         const res = await fetch('/backend/api/user-settings', {
             method: 'PUT',
             credentials: 'include',
@@ -220,16 +258,26 @@ export async function saveUserSettings(userId, settings) {
         })
 
         if (res.status === 401) {
+            // Лог истечения cookie при сохранении
+            aLog('warn', `[AUTH] saveUserSettings → 401, cookie истекла, разлогиниваем`)
             console.warn('[auth] saveUserSettings → 401, cookie истекла')
+            aLog('groupEnd')
             return { ok: false, reason: 'unauthorized' }
         }
 
         if (!res.ok) {
+            // Лог ошибки сервера
+            aLog('error', `[AUTH] saveUserSettings → HTTP ${res.status}`)
             console.warn(`[auth] saveUserSettings → HTTP ${res.status}`)
+            aLog('groupEnd')
             return { ok: false, reason: 'error' }
         }
 
         const data = await res.json()
+        const saveTime = (performance.now() - tSave).toFixed(0)
+        // Лог успешного сохранения — обновлённые поля и время
+        aLog('success', `[AUTH] saveUserSettings ✅ настройки сохранены | ⏱ ${saveTime}мс`)
+        aLog('log', `[AUTH] обновлённые данные: isCexCexPaid=${data.isCexCexPaid} isAdmin=${data.isAdmin} login=${data.login}`)
         console.log('[auth] saveUserSettings ✅ настройки сохранены')
 
         // Формируем обновлённый объект пользователя из ответа бэкенда
@@ -247,11 +295,15 @@ export async function saveUserSettings(userId, settings) {
 
         // Сохраняем обновлённую сессию
         saveSession(updatedUser)
+        aLog('groupEnd')
 
         return { ok: true, user: updatedUser }
 
     } catch (err) {
+        // Лог сетевой ошибки при сохранении настроек
+        aLog('error', `[AUTH] saveUserSettings ❌ сетевая ошибка: ${err.message}`)
         console.error('[auth] saveUserSettings ❌ сетевая ошибка:', err.message)
+        aLog('groupEnd')
         return { ok: false, reason: 'error' }
     }
 }

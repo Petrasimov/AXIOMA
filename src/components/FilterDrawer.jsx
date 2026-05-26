@@ -1,4 +1,5 @@
 import { EXCHANGES } from "../constants.js"
+import { aLog } from "../api.js"
 
 const style = `
   .drawer-overlay {
@@ -280,10 +281,19 @@ const style = `
 
 function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSaveSettings, canSave, saveStatus }) {
     const toggleStrategy = (key) => {
+        // Лог переключения стратегии — ключ и новое значение
+        const newVal = !filters.strategy[key]
+        aLog('log', `[FILTER] toggleStrategy: ${key} → ${newVal}`)
         onFilters(f => ({ ...f, strategy: { ...f.strategy, [key]: !f.strategy[key] } }))
     }
 
     const toggleExchange = (ex) => {
+        const isRemoving = filters.exchanges.includes(ex)
+        // Лог переключения биржи — вкл/выкл и итоговый список
+        const nextExchanges = isRemoving
+            ? filters.exchanges.filter(e => e !== ex)
+            : [...filters.exchanges, ex]
+        aLog('log', `[FILTER] toggleExchange: ${ex} → ${isRemoving ? 'ВЫКЛ' : 'ВКЛ'} | активных бирж: [${nextExchanges.join(',')}]`)
         onFilters(f => ({
             ...f,
             exchanges: f.exchanges.includes(ex)
@@ -293,13 +303,18 @@ function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSav
     }
 
     const toggleTransfer = (key) => {
-      onFilters(f => ({ ...f, transfer: {...f.transfer, [key]: !f.transfer[key] } }))
+        // Лог переключения трансфера — ключ и новое значение
+        const newVal = !filters.transfer[key]
+        aLog('log', `[FILTER] toggleTransfer: ${key} → ${newVal}`)
+        onFilters(f => ({ ...f, transfer: {...f.transfer, [key]: !f.transfer[key] } }))
     }
 
     const toggleFunding = (key) => {
       onFilters(f => {
         const next = {...f.funding, [key]: !f.funding[key] }
-        if (!next.positive && !next.negative) return f 
+        if (!next.positive && !next.negative) return f
+        // Лог переключения funding — ключ и новое значение
+        aLog('log', `[FILTER] toggleFunding: ${key} → ${next[key]} | positive=${next.positive} negative=${next.negative}`)
         return {...f, funding: next}
       })
     }
@@ -423,7 +438,11 @@ function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSav
                     <input
                       type="checkbox"
                       checked={filters.onlyPositiveFunding}
-                      onChange={e => onFilters(f => ({ ...f, onlyPositiveFunding: e.target.checked }))}
+                      onChange={e => {
+                        // Лог переключения onlyPositiveFunding — новое значение
+                        aLog('log', `[FILTER] onlyPositiveFunding → ${e.target.checked}`)
+                        onFilters(f => ({ ...f, onlyPositiveFunding: e.target.checked }))
+                      }}
                     />
                     Только положительный funding spread
                   </label>
@@ -457,7 +476,12 @@ function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSav
             <div className="drawer-footer">
               <button
                   className={`filter-save${saveStatus ? ' ' + saveStatus : ''}`}
-                  onClick={onSaveSettings}
+                  onClick={() => {
+                    // Лог нажатия кнопки Сохранить — полный snapshot текущих фильтров
+                    aLog('log', `[FILTER] Нажата кнопка СОХРАНИТЬ | exchanges=[${filters.exchanges.join(',')}] minSpread=${filters.minSpread} tradeAmount=${filters.tradeAmount}`)
+                    aLog('log', `[FILTER] strategy=ff:${filters.strategy?.ff},sf:${filters.strategy?.sf} | funding=pos:${filters.funding?.positive},neg:${filters.funding?.negative} | transfer=dep:${filters.transfer?.deposit},wd:${filters.transfer?.withdraw}`)
+                    onSaveSettings()
+                  }}
                   disabled={!canSave || saveStatus === 'saving'}
               >
                   {saveStatus === 'saving' && '⏳ СОХРАНЕНИЕ...'}
@@ -467,7 +491,11 @@ function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSav
               </button>
 
               <button className="reset-btn" 
-                  onClick={() => onFilters(defaultFilters)}
+                  onClick={() => {
+                    // Лог нажатия кнопки Сбросить — сброс к дефолтным фильтрам
+                    aLog('warn', `[FILTER] Нажата кнопка СБРОСИТЬ — возврат к defaultFilters`)
+                    onFilters(defaultFilters)
+                  }}
               >
                 СБРОСИТЬ ФИЛЬТРЫ
               </button>

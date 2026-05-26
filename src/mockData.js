@@ -1,3 +1,10 @@
+// mockData.js — тестовые данные
+//
+// ПРАВИЛО: bid_price > ask_price ВСЕГДА
+//   bid_ex = биржа с ВЫСОКОЙ ценой → SELL (красная панель)
+//   ask_ex = биржа с НИЗКОЙ ценой  → BUY  (зелёная панель)
+//   spread = (bid_price - ask_price) / ask_price * 100
+
 const now = new Date()
 const ago = (minutes) => new Date(now - minutes * 60000).toISOString()
 
@@ -9,8 +16,8 @@ export const mockData = [
         bid_ex: 'binance',
         ask_ex: 'bybit',
         spread: 3.24,
-        bid_price: 67240.50,
-        ask_price: 69420.10,
+        bid_price: 69420.10,   // HIGH — SELL
+        ask_price: 67240.50,   // LOW  — BUY
         bid_funding: { rate: 0.0100, next_time: Math.floor(Date.now() / 1000) + 14400 },
         ask_funding: { rate: -0.0050, next_time: Math.floor(Date.now() / 1000) + 14400 },
         bid_volume: 125000000,
@@ -27,8 +34,8 @@ export const mockData = [
         bid_ex: 'okx',
         ask_ex: 'binance',
         spread: 2.15,
-        bid_price: 3540.20,
-        ask_price: 3616.40,
+        bid_price: 3616.40,   // HIGH — SELL
+        ask_price: 3540.20,   // LOW  — BUY
         bid_funding: { rate: 0.0080, next_time: Math.floor(Date.now() / 1000) + 28800 },
         ask_funding: { rate: 0.0030, next_time: Math.floor(Date.now() / 1000) + 28800 },
         bid_volume: 89000000,
@@ -45,8 +52,8 @@ export const mockData = [
         bid_ex: 'gate',
         ask_ex: 'okx',
         spread: 1.87,
-        bid_price: 182.40,
-        ask_price: 185.81,
+        bid_price: 185.81,   // HIGH — SELL
+        ask_price: 182.40,   // LOW  — BUY
         bid_funding: { rate: -0.0120, next_time: Math.floor(Date.now() / 1000) + 7200 },
         ask_funding: { rate: 0.0060, next_time: Math.floor(Date.now() / 1000) + 7200 },
         bid_volume: 45000000,
@@ -63,8 +70,8 @@ export const mockData = [
         bid_ex: 'mexc',
         ask_ex: 'binance',
         spread: 0.95,
-        bid_price: 598.30,
-        ask_price: 604.00,
+        bid_price: 604.00,   // HIGH — SELL
+        ask_price: 598.30,   // LOW  — BUY
         bid_funding: { rate: 0.0040, next_time: Math.floor(Date.now() / 1000) + 3600 },
         ask_funding: { rate: 0.0010, next_time: Math.floor(Date.now() / 1000) + 3600 },
         bid_volume: 32000000,
@@ -81,8 +88,8 @@ export const mockData = [
         bid_ex: 'kucoin',
         ask_ex: 'bybit',
         spread: 2.73,
-        bid_price: 0.6120,
-        ask_price: 0.6287,
+        bid_price: 0.6287,   // HIGH — SELL
+        ask_price: 0.6120,   // LOW  — BUY
         bid_funding: { rate: 0.0150, next_time: Math.floor(Date.now() / 1000) + 18000 },
         ask_funding: { rate: -0.0080, next_time: Math.floor(Date.now() / 1000) + 18000 },
         bid_volume: 28000000,
@@ -99,8 +106,8 @@ export const mockData = [
         bid_ex: 'bitget',
         ask_ex: 'gate',
         spread: 1.42,
-        bid_price: 0.4580,
-        ask_price: 0.4645,
+        bid_price: 0.4645,   // HIGH — SELL
+        ask_price: 0.4580,   // LOW  — BUY
         bid_funding: { rate: -0.0030, next_time: Math.floor(Date.now() / 1000) + 21600 },
         ask_funding: { rate: 0.0020, next_time: Math.floor(Date.now() / 1000) + 21600 },
         bid_volume: 19000000,
@@ -117,8 +124,8 @@ export const mockData = [
         bid_ex: 'kucoin',
         ask_ex: 'mexc',
         spread: 3.61,
-        bid_price: 0.1720,
-        ask_price: 0.1782,
+        bid_price: 0.1782,   // HIGH — SELL
+        ask_price: 0.1720,   // LOW  — BUY
         bid_funding: { rate: 0.0200, next_time: Math.floor(Date.now() / 1000) + 10800 },
         ask_funding: { rate: -0.0100, next_time: Math.floor(Date.now() / 1000) + 10800 },
         bid_volume: 55000000,
@@ -135,8 +142,8 @@ export const mockData = [
         bid_ex: 'mexc',
         ask_ex: 'okx',
         spread: 0.78,
-        bid_price: 38.40,
-        ask_price: 38.70,
+        bid_price: 38.70,   // HIGH — SELL
+        ask_price: 38.40,   // LOW  — BUY
         bid_funding: { rate: 0.0010, next_time: Math.floor(Date.now() / 1000) + 32400 },
         ask_funding: { rate: 0.0005, next_time: Math.floor(Date.now() / 1000) + 32400 },
         bid_volume: 14000000,
@@ -153,8 +160,8 @@ export const mockData = [
         bid_ex: 'bingx',
         ask_ex: 'binance',
         spread: 2.05,
-        bid_price: 14.82,
-        ask_price: 15.12,
+        bid_price: 15.12,   // HIGH — SELL
+        ask_price: 14.82,   // LOW  — BUY
         bid_funding: { rate: -0.0060, next_time: Math.floor(Date.now() / 1000) + 5400 },
         ask_funding: { rate: 0.0040, next_time: Math.floor(Date.now() / 1000) + 5400 },
         bid_volume: 9000000,
@@ -171,8 +178,8 @@ export const mockData = [
         bid_ex: 'binance',
         ask_ex: 'bybit',
         spread: 1.33,
-        bid_price: 0.8920,
-        ask_price: 0.9039,
+        bid_price: 0.9039,   // HIGH — SELL
+        ask_price: 0.8920,   // LOW  — BUY
         bid_funding: { rate: 0.0070, next_time: Math.floor(Date.now() / 1000) + 16200 },
         ask_funding: { rate: -0.0020, next_time: Math.floor(Date.now() / 1000) + 16200 },
         bid_volume: 7000000,
@@ -189,8 +196,8 @@ export const mockData = [
         bid_ex: 'okx',
         ask_ex: 'kucoin',
         spread: 0.62,
-        bid_price: 84.20,
-        ask_price: 84.72,
+        bid_price: 84.72,   // HIGH — SELL
+        ask_price: 84.20,   // LOW  — BUY
         bid_funding: { rate: 0.0015, next_time: Math.floor(Date.now() / 1000) + 25200 },
         ask_funding: { rate: 0.0008, next_time: Math.floor(Date.now() / 1000) + 25200 },
         bid_volume: 6000000,
@@ -207,8 +214,8 @@ export const mockData = [
         bid_ex: 'mexc',
         ask_ex: 'gate',
         spread: 1.95,
-        bid_price: 9.140,
-        ask_price: 9.318,
+        bid_price: 9.318,   // HIGH — SELL
+        ask_price: 9.140,   // LOW  — BUY
         bid_funding: { rate: -0.0090, next_time: Math.floor(Date.now() / 1000) + 9000 },
         ask_funding: { rate: 0.0050, next_time: Math.floor(Date.now() / 1000) + 9000 },
         bid_volume: 4000000,
@@ -225,8 +232,8 @@ export const mockData = [
         bid_ex: 'bybit',
         ask_ex: 'bitget',
         spread: 4.10,
-        bid_price: 6.820,
-        ask_price: 7.100,
+        bid_price: 7.100,   // HIGH — SELL
+        ask_price: 6.820,   // LOW  — BUY
         bid_funding: { rate: 0.0250, next_time: Math.floor(Date.now() / 1000) + 12600 },
         ask_funding: { rate: -0.0130, next_time: Math.floor(Date.now() / 1000) + 12600 },
         bid_volume: 11000000,
@@ -243,8 +250,8 @@ export const mockData = [
         bid_ex: 'okx',
         ask_ex: 'mexc',
         spread: 1.18,
-        bid_price: 10.24,
-        ask_price: 10.36,
+        bid_price: 10.36,   // HIGH — SELL
+        ask_price: 10.24,   // LOW  — BUY
         bid_funding: { rate: 0.0035, next_time: Math.floor(Date.now() / 1000) + 19800 },
         ask_funding: { rate: -0.0015, next_time: Math.floor(Date.now() / 1000) + 19800 },
         bid_volume: 8000000,
@@ -261,8 +268,8 @@ export const mockData = [
         bid_ex: 'binance',
         ask_ex: 'gate',
         spread: 2.88,
-        bid_price: 1.124,
-        ask_price: 1.156,
+        bid_price: 1.156,   // HIGH — SELL
+        ask_price: 1.124,   // LOW  — BUY
         bid_funding: { rate: 0.0110, next_time: Math.floor(Date.now() / 1000) + 23400 },
         ask_funding: { rate: -0.0070, next_time: Math.floor(Date.now() / 1000) + 23400 },
         bid_volume: 22000000,
@@ -279,8 +286,8 @@ export const mockData = [
         bid_ex: 'gate',
         ask_ex: 'binance',
         spread: 0.54,
-        bid_price: 2.340,
-        ask_price: 2.353,
+        bid_price: 2.353,   // HIGH — SELL
+        ask_price: 2.340,   // LOW  — BUY
         bid_funding: { rate: 0.0005, next_time: Math.floor(Date.now() / 1000) + 36000 },
         ask_funding: { rate: 0.0002, next_time: Math.floor(Date.now() / 1000) + 36000 },
         bid_volume: 3000000,
@@ -297,8 +304,8 @@ export const mockData = [
         bid_ex: 'kucoin',
         ask_ex: 'okx',
         spread: 3.45,
-        bid_price: 28.60,
-        ask_price: 29.59,
+        bid_price: 29.59,   // HIGH — SELL
+        ask_price: 28.60,   // LOW  — BUY
         bid_funding: { rate: -0.0180, next_time: Math.floor(Date.now() / 1000) + 6300 },
         ask_funding: { rate: 0.0090, next_time: Math.floor(Date.now() / 1000) + 6300 },
         bid_volume: 16000000,
@@ -315,8 +322,8 @@ export const mockData = [
         bid_ex: 'bitget',
         ask_ex: 'okx',
         spread: 1.67,
-        bid_price: 1.082,
-        ask_price: 1.100,
+        bid_price: 1.100,   // HIGH — SELL
+        ask_price: 1.082,   // LOW  — BUY
         bid_funding: { rate: 0.0055, next_time: Math.floor(Date.now() / 1000) + 27000 },
         ask_funding: { rate: -0.0025, next_time: Math.floor(Date.now() / 1000) + 27000 },
         bid_volume: 13000000,
@@ -333,8 +340,8 @@ export const mockData = [
         bid_ex: 'bingx',
         ask_ex: 'mexc',
         spread: 2.31,
-        bid_price: 0.7340,
-        ask_price: 0.7509,
+        bid_price: 0.7509,   // HIGH — SELL
+        ask_price: 0.7340,   // LOW  — BUY
         bid_funding: { rate: 0.0130, next_time: Math.floor(Date.now() / 1000) + 4500 },
         ask_funding: { rate: -0.0060, next_time: Math.floor(Date.now() / 1000) + 4500 },
         bid_volume: 5000000,
@@ -351,8 +358,8 @@ export const mockData = [
         bid_ex: 'mexc',
         ask_ex: 'bybit',
         spread: 1.09,
-        bid_price: 10.82,
-        ask_price: 10.94,
+        bid_price: 10.94,   // HIGH — SELL
+        ask_price: 10.82,   // LOW  — BUY
         bid_funding: { rate: -0.0040, next_time: Math.floor(Date.now() / 1000) + 30600 },
         ask_funding: { rate: 0.0018, next_time: Math.floor(Date.now() / 1000) + 30600 },
         bid_volume: 6000000,

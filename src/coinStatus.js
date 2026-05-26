@@ -10,6 +10,7 @@
 
 import { hmacHex, hmacBase64 } from './sign.js'
 import { rlFetch } from './rateLimiter.js'
+import { aLog } from './api.js'
 
 const STATUS_TTL = 5 * 60 * 1000  // 5 минут в мс
 const cache = {}                    // key → { data, ts }
@@ -26,7 +27,16 @@ const FALLBACK = { deposit: true, withdraw: true }
 
 export async function getBinanceStatus(symbol) {
     const key = `binance_${symbol}`
-    if (isFresh(key)) return cache[key].data
+    // Лог входа — биржа и символ
+    aLog('log', `[STATUS] getBinanceStatus(${symbol})`)
+    if (isFresh(key)) {
+        // Лог попадания в кэш — возраст записи
+        const ageMs = Date.now() - cache[key].ts
+        aLog('log', `[STATUS] Binance ${symbol} → кэш HIT (возраст: ${(ageMs / 1000).toFixed(0)}с)`)
+        return cache[key].data
+    }
+    // Лог промаха кэша
+    aLog('log', `[STATUS] Binance ${symbol} → кэш MISS, делаем запрос`)
 
     try {
         const apiKey = import.meta.env.VITE_BINANCE_API_KEY
@@ -34,6 +44,7 @@ export async function getBinanceStatus(symbol) {
         const ts     = Date.now()
         const query  = `timestamp=${ts}&recvWindow=60000`
         const sig    = await hmacHex(secret, query)
+        const t0     = performance.now()
 
         const res = await rlFetch(
             'binance', 200,
@@ -53,8 +64,12 @@ export async function getBinanceStatus(symbol) {
             withdraw: coin?.networkList?.some(n => n.withdrawEnable) ?? false,
         }
         cache[key] = { data: result, ts: Date.now() }
+        // Лог успешного результата — deposit/withdraw и время запроса
+        aLog('success', `[STATUS] Binance ${symbol} ✅ deposit=${result.deposit} withdraw=${result.withdraw} | ⏱ ${(performance.now() - t0).toFixed(0)}мс`)
         return result
     } catch (e) {
+        // Лог ошибки с текстом исключения
+        aLog('error', `[STATUS] Binance ${symbol} ❌ ${e.message}`)
         console.warn('Binance status failed:', symbol, e.message)
         return FALLBACK
     }
@@ -64,7 +79,16 @@ export async function getBinanceStatus(symbol) {
 
 export async function getBybitStatus(symbol) {
     const key = `bybit_${symbol}`
-    if (isFresh(key)) return cache[key].data
+    // Лог входа — биржа и символ
+    aLog('log', `[STATUS] getBybitStatus(${symbol})`)
+    if (isFresh(key)) {
+        // Лог попадания в кэш — возраст записи
+        const ageMs = Date.now() - cache[key].ts
+        aLog('log', `[STATUS] Bybit ${symbol} → кэш HIT (возраст: ${(ageMs / 1000).toFixed(0)}с)`)
+        return cache[key].data
+    }
+    // Лог промаха кэша
+    aLog('log', `[STATUS] Bybit ${symbol} → кэш MISS, делаем запрос`)
 
     try {
         const apiKey     = import.meta.env.VITE_BYBIT_API_KEY
@@ -73,6 +97,7 @@ export async function getBybitStatus(symbol) {
         const recvWindow = '5000'
         const query      = `coin=${symbol.toUpperCase()}`
         const sig        = await hmacHex(secret, ts + apiKey + recvWindow + query)
+        const t0         = performance.now()
 
         const res = await rlFetch(
             'bybit', 150,
@@ -93,8 +118,12 @@ export async function getBybitStatus(symbol) {
             withdraw: chains.some(c => c.chainWithdraw === '1'),
         }
         cache[key] = { data: result, ts: Date.now() }
+        // Лог успешного результата — deposit/withdraw и время
+        aLog('success', `[STATUS] Bybit ${symbol} ✅ deposit=${result.deposit} withdraw=${result.withdraw} | ⏱ ${(performance.now() - t0).toFixed(0)}мс`)
         return result
     } catch (e) {
+        // Лог ошибки с текстом исключения
+        aLog('error', `[STATUS] Bybit ${symbol} ❌ ${e.message}`)
         console.warn('Bybit status failed:', symbol, e.message)
         return FALLBACK
     }
@@ -105,7 +134,15 @@ export async function getBybitStatus(symbol) {
 const OKX_BATCH_KEY = 'okx_ALL'
 
 async function fetchAllOKXStatus() {
-    if (isFresh(OKX_BATCH_KEY)) return cache[OKX_BATCH_KEY].data
+    if (isFresh(OKX_BATCH_KEY)) {
+        // Лог попадания в кэш батча OKX
+        const ageMs = Date.now() - cache[OKX_BATCH_KEY].ts
+        const count = Object.keys(cache[OKX_BATCH_KEY].data).length
+        aLog('log', `[STATUS] OKX батч → кэш HIT (${count} монет, возраст: ${(ageMs / 1000).toFixed(0)}с)`)
+        return cache[OKX_BATCH_KEY].data
+    }
+    // Лог промаха кэша батча
+    aLog('log', `[STATUS] OKX батч → кэш MISS, загружаем все монеты`)
 
     try {
         const apiKey     = import.meta.env.VITE_OKX_API_KEY
@@ -114,6 +151,7 @@ async function fetchAllOKXStatus() {
         const ts         = new Date().toISOString()
         const path       = '/api/v5/asset/currencies'
         const sig        = await hmacBase64(secret, ts + 'GET' + path)
+        const t0         = performance.now()
 
         const res = await rlFetch(
             'okx', 300,
@@ -136,16 +174,25 @@ async function fetchAllOKXStatus() {
             if (chain.canWd)  map[sym].withdraw = true
         }
         cache[OKX_BATCH_KEY] = { data: map, ts: Date.now() }
+        // Лог успешного батч-запроса — кол-во монет и время
+        aLog('success', `[STATUS] OKX батч ✅ ${Object.keys(map).length} монет | ⏱ ${(performance.now() - t0).toFixed(0)}мс`)
         return map
     } catch (e) {
+        // Лог ошибки батч-запроса
+        aLog('error', `[STATUS] OKX батч ❌ ${e.message}`)
         console.warn('OKX all status failed:', e.message)
         return {}
     }
 }
 
 export async function getOKXStatus(symbol) {
+    // Лог входа — биржа и символ
+    aLog('log', `[STATUS] getOKXStatus(${symbol})`)
     const map = await fetchAllOKXStatus()
-    return map[symbol.toUpperCase()] ?? FALLBACK
+    const result = map[symbol.toUpperCase()] ?? FALLBACK
+    // Лог итогового результата для конкретного символа
+    aLog('log', `[STATUS] OKX ${symbol} → deposit=${result.deposit} withdraw=${result.withdraw}`)
+    return result
 }
 
 // ─── MEXC (батч: все монеты за один запрос) ─────────────────────────────────
@@ -153,7 +200,15 @@ export async function getOKXStatus(symbol) {
 const MEXC_BATCH_KEY = 'mexc_ALL'
 
 async function fetchAllMEXCStatus() {
-    if (isFresh(MEXC_BATCH_KEY)) return cache[MEXC_BATCH_KEY].data
+    if (isFresh(MEXC_BATCH_KEY)) {
+        // Лог попадания в кэш батча MEXC
+        const ageMs = Date.now() - cache[MEXC_BATCH_KEY].ts
+        const count = Object.keys(cache[MEXC_BATCH_KEY].data).length
+        aLog('log', `[STATUS] MEXC батч → кэш HIT (${count} монет, возраст: ${(ageMs / 1000).toFixed(0)}с)`)
+        return cache[MEXC_BATCH_KEY].data
+    }
+    // Лог промаха кэша батча
+    aLog('log', `[STATUS] MEXC батч → кэш MISS, загружаем все монеты`)
 
     try {
         const apiKey = import.meta.env.VITE_MEXC_API_KEY
@@ -161,6 +216,7 @@ async function fetchAllMEXCStatus() {
         const ts     = Date.now()
         const query  = `timestamp=${ts}&recvWindow=60000`
         const sig    = await hmacHex(secret, query)
+        const t0     = performance.now()
 
         const res = await rlFetch(
             'mexc', 300,
@@ -182,23 +238,41 @@ async function fetchAllMEXCStatus() {
             }
         }
         cache[MEXC_BATCH_KEY] = { data: map, ts: Date.now() }
+        // Лог успешного батч-запроса — кол-во монет и время
+        aLog('success', `[STATUS] MEXC батч ✅ ${Object.keys(map).length} монет | ⏱ ${(performance.now() - t0).toFixed(0)}мс`)
         return map
     } catch (e) {
+        // Лог ошибки батч-запроса
+        aLog('error', `[STATUS] MEXC батч ❌ ${e.message}`)
         console.warn('MEXC all status failed:', e.message)
         return {}
     }
 }
 
 export async function getMEXCStatus(symbol) {
+    // Лог входа — биржа и символ
+    aLog('log', `[STATUS] getMEXCStatus(${symbol})`)
     const map = await fetchAllMEXCStatus()
-    return map[symbol.toUpperCase()] ?? FALLBACK
+    const result = map[symbol.toUpperCase()] ?? FALLBACK
+    // Лог итогового результата для конкретного символа
+    aLog('log', `[STATUS] MEXC ${symbol} → deposit=${result.deposit} withdraw=${result.withdraw}`)
+    return result
 }
 
 // ─── BingX ──────────────────────────────────────────────────────────────────
 
 export async function getBingXStatus(symbol) {
     const key = `bingx_${symbol}`
-    if (isFresh(key)) return cache[key].data
+    // Лог входа — биржа и символ
+    aLog('log', `[STATUS] getBingXStatus(${symbol})`)
+    if (isFresh(key)) {
+        // Лог попадания в кэш — возраст записи
+        const ageMs = Date.now() - cache[key].ts
+        aLog('log', `[STATUS] BingX ${symbol} → кэш HIT (возраст: ${(ageMs / 1000).toFixed(0)}с)`)
+        return cache[key].data
+    }
+    // Лог промаха кэша
+    aLog('log', `[STATUS] BingX ${symbol} → кэш MISS, делаем запрос`)
 
     try {
         const apiKey = import.meta.env.VITE_BINGX_API_KEY
@@ -206,6 +280,7 @@ export async function getBingXStatus(symbol) {
         const ts     = Date.now()
         const params = `timestamp=${ts}`
         const sig    = await hmacHex(secret, params)
+        const t0     = performance.now()
 
         const res = await rlFetch(
             'bingx', 250,
@@ -221,8 +296,12 @@ export async function getBingXStatus(symbol) {
             withdraw: coin?.networkList?.some(n => n.withdrawEnable) ?? false,
         }
         cache[key] = { data: result, ts: Date.now() }
+        // Лог успешного результата — deposit/withdraw и время
+        aLog('success', `[STATUS] BingX ${symbol} ✅ deposit=${result.deposit} withdraw=${result.withdraw} | ⏱ ${(performance.now() - t0).toFixed(0)}мс`)
         return result
     } catch (e) {
+        // Лог ошибки с текстом исключения
+        aLog('error', `[STATUS] BingX ${symbol} ❌ ${e.message}`)
         console.warn('BingX status failed:', symbol, e.message)
         return FALLBACK
     }
@@ -233,9 +312,18 @@ export async function getBingXStatus(symbol) {
 const BITGET_BATCH_KEY = 'bitget_ALL'
 
 async function fetchAllBitgetStatus() {
-    if (isFresh(BITGET_BATCH_KEY)) return cache[BITGET_BATCH_KEY].data
+    if (isFresh(BITGET_BATCH_KEY)) {
+        // Лог попадания в кэш батча Bitget
+        const ageMs = Date.now() - cache[BITGET_BATCH_KEY].ts
+        const count = Object.keys(cache[BITGET_BATCH_KEY].data).length
+        aLog('log', `[STATUS] Bitget батч → кэш HIT (${count} монет, возраст: ${(ageMs / 1000).toFixed(0)}с)`)
+        return cache[BITGET_BATCH_KEY].data
+    }
+    // Лог промаха кэша батча
+    aLog('log', `[STATUS] Bitget батч → кэш MISS, загружаем все монеты`)
 
     try {
+        const t0  = performance.now()
         const res = await rlFetch('bitget', 200, 'https://api.bitget.com/api/v2/spot/public/coins')
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
@@ -248,25 +336,44 @@ async function fetchAllBitgetStatus() {
             }
         }
         cache[BITGET_BATCH_KEY] = { data: map, ts: Date.now() }
+        // Лог успешного батч-запроса — кол-во монет и время
+        aLog('success', `[STATUS] Bitget батч ✅ ${Object.keys(map).length} монет | ⏱ ${(performance.now() - t0).toFixed(0)}мс`)
         return map
     } catch (e) {
+        // Лог ошибки батч-запроса
+        aLog('error', `[STATUS] Bitget батч ❌ ${e.message}`)
         console.warn('Bitget all status failed:', e.message)
         return {}
     }
 }
 
 export async function getBitgetStatus(symbol) {
+    // Лог входа — биржа и символ
+    aLog('log', `[STATUS] getBitgetStatus(${symbol})`)
     const map = await fetchAllBitgetStatus()
-    return map[symbol.toUpperCase()] ?? FALLBACK
+    const result = map[symbol.toUpperCase()] ?? FALLBACK
+    // Лог итогового результата для конкретного символа
+    aLog('log', `[STATUS] Bitget ${symbol} → deposit=${result.deposit} withdraw=${result.withdraw}`)
+    return result
 }
 
 // ─── KuCoin (публичный API, без авторизации) ─────────────────────────────────
 
 export async function getKuCoinStatus(symbol) {
     const key = `kucoin_${symbol}`
-    if (isFresh(key)) return cache[key].data
+    // Лог входа — биржа и символ
+    aLog('log', `[STATUS] getKuCoinStatus(${symbol})`)
+    if (isFresh(key)) {
+        // Лог попадания в кэш — возраст записи
+        const ageMs = Date.now() - cache[key].ts
+        aLog('log', `[STATUS] KuCoin ${symbol} → кэш HIT (возраст: ${(ageMs / 1000).toFixed(0)}с)`)
+        return cache[key].data
+    }
+    // Лог промаха кэша
+    aLog('log', `[STATUS] KuCoin ${symbol} → кэш MISS, делаем запрос`)
 
     try {
+        const t0  = performance.now()
         const res = await rlFetch(
             'kucoin', 200,
             `/kucoin-spot-api/api/v2/currencies/${symbol.toUpperCase()}`
@@ -280,8 +387,12 @@ export async function getKuCoinStatus(symbol) {
             withdraw: chains.some(c => c.isWithdrawEnabled),
         }
         cache[key] = { data: result, ts: Date.now() }
+        // Лог успешного результата — deposit/withdraw и время
+        aLog('success', `[STATUS] KuCoin ${symbol} ✅ deposit=${result.deposit} withdraw=${result.withdraw} | ⏱ ${(performance.now() - t0).toFixed(0)}мс`)
         return result
     } catch (e) {
+        // Лог ошибки с текстом исключения
+        aLog('error', `[STATUS] KuCoin ${symbol} ❌ ${e.message}`)
         console.warn('KuCoin status failed:', symbol, e.message)
         return FALLBACK
     }

@@ -9,7 +9,7 @@ import DetailModal from "./components/DetailModal.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
 import ActiveTradesBar from "./components/ActiveTradesBar.jsx";
 import ApiPage from "./components/ApiPage.jsx";
-import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp, setAdminLogging } from "./api.js";
+import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp, setAdminLogging, aLog } from "./api.js";
 import { calcVwap } from "./utils.js";
 import HomePage from "./components/HomePage.jsx";
 import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings } from "./auth.js";
@@ -88,7 +88,13 @@ function App() {
 
   const [auth, setAuth] = useState(() => {
     const session = loadSession()
-    if (session) return { status: 'checking', user: session }
+    if (session) {
+      // Лог старта приложения — сессия найдена, запускаем проверку доступа
+      aLog('info', `[APP] Старт: сессия найдена → status='checking' | userId=${session.userId} login=${session.login}`)
+      return { status: 'checking', user: session }
+    }
+    // Лог старта приложения — сессии нет, показываем TelegramAuthModal
+    aLog('info', `[APP] Старт: сессия отсутствует → status='unknown', показываем TelegramAuthModal`)
     return { status: 'unknown', user: null }
   })
 
@@ -171,11 +177,22 @@ function App() {
 
     const userId = auth.user.userId
 
+    let checkCount = 0
+
     async function checkStatus() {
+      checkCount++
+      // Лог старта фоновой проверки — номер проверки
+      aLog('log', `[APP] Фоновая проверка доступа #${checkCount} | userId=${userId}`)
+      const tBg = performance.now()
       const access = await checkAccess(userId)
-      if (!access) return // ошибка сети — пропускаем
+      if (!access) {
+        // Лог пропуска цикла из-за ошибки сети
+        aLog('warn', `[APP] Фоновая проверка #${checkCount} → ошибка сети, пропускаем | ⏱ ${(performance.now() - tBg).toFixed(0)}мс`)
+        return
+      }
 
       if (access.expired) {
+        aLog('warn', `[APP] Фоновая проверка #${checkCount} → cookie истекла, разлогиниваем`)
         clearSession()
         clearInterval(accessIntervalRef.current)
         accessIntervalRef.current = null
@@ -184,7 +201,14 @@ function App() {
       }
 
       const newSig = getSignature(access)
-      if (newSig === sigRef.current) return // не изменилось — ничего не делаем
+      if (newSig === sigRef.current) {
+        // Лог — статус не изменился
+        aLog('log', `[APP] Фоновая проверка #${checkCount} → статус не изменился (${newSig}) | ⏱ ${(performance.now() - tBg).toFixed(0)}мс`)
+        return
+      }
+
+      // Лог изменения статуса пользователя — старая и новая подпись
+      aLog('warn', `[APP] Фоновая проверка #${checkCount} → статус ИЗМЕНИЛСЯ! ${sigRef.current} → ${newSig} | перезагружаем страницу`)
 
       // Статус изменился → сохраняем и перезагружаем
       const updatedUser = { ...auth.user, ...access }
@@ -259,18 +283,26 @@ function App() {
   // ── Фильтрация ─────────────────────────────────────────────────────────────
 
   const opportunities = useMemo(() => {
+    const tMemo = performance.now()
+    // Лог старта цикла фильтрации — сколько записей на входе
+    aLog('group', `[ШАГ 7] Фильтрация UI | входящих от enricher: ${(liveData || []).length}`)
+
     let result = (liveData || []).map(opp => {
       if (!opp.raw_bid || !opp.raw_ask) return opp
       const bid_price = calcVwap(opp.raw_bid, filters.tradeAmount)
       const ask_price = calcVwap(opp.raw_ask, filters.tradeAmount)
       if (!bid_price || !ask_price) return opp
-      const spread = (ask_price - bid_price) / bid_price * 100
+      const spread = (bid_price - ask_price) / bid_price * 100
       return { ...opp, bid_price, ask_price, spread }
     })
 
+    const beforeStrategy = result.length
     if (!filters.strategy.sf) result = result.filter(o => o.strategy !== 'sf')
     if (!filters.strategy.ff) result = result.filter(o => o.strategy !== 'ff')
+    // Лог фильтра стратегии — до/после, параметры
+    aLog('log', `[ШАГ 7] Фильтр strategy (ff:${filters.strategy.ff} sf:${filters.strategy.sf}): ${beforeStrategy} → ${result.length} (отсеяно: ${beforeStrategy - result.length})`)
 
+    const beforeFunding = result.length
     if (!filters.funding.positive || !filters.funding.negative) {
       result = result.filter(o => {
         const bidRate = o.bid_funding?.rate ?? 0
@@ -282,20 +314,30 @@ function App() {
         return filters.funding.negative
       })
     }
+    // Лог фильтра funding — до/после, параметры
+    aLog('log', `[ШАГ 7] Фильтр funding (pos:${filters.funding.positive} neg:${filters.funding.negative}): ${beforeFunding} → ${result.length} (отсеяно: ${beforeFunding - result.length})`)
 
+    const beforeExchanges = result.length
     if (filters.exchanges.length > 0) {
       result = result.filter(o =>
         filters.exchanges.includes(o.bid_ex) &&
         filters.exchanges.includes(o.ask_ex)
       )
     }
+    // Лог фильтра бирж — до/после, список активных бирж
+    aLog('log', `[ШАГ 7] Фильтр exchanges [${filters.exchanges.join(',')}]: ${beforeExchanges} → ${result.length} (отсеяно: ${beforeExchanges - result.length})`)
 
+    const beforeSpread = result.length
     if (filters.minSpread > 0) {
       result = result.filter(o => o.spread >= filters.minSpread)
     }
+    // Лог фильтра минимального спреда — до/после, порог
+    aLog('log', `[ШАГ 7] Фильтр minSpread ≥${filters.minSpread}%: ${beforeSpread} → ${result.length} (отсеяно: ${beforeSpread - result.length})`)
 
     // Перед применением transfer/exchange фильтров —
     // если главная карточка не проходит, пробуем промоутить подходящий вариант
+    const beforeTransfer = result.length
+    let promotedCount = 0
     result = result.map(opp => {
       // Проверяем проходит ли главная карточка все фильтры
       const passesExchange = filters.exchanges.length === 0 ||
@@ -332,6 +374,9 @@ function App() {
       if (!passingVariant) return null // ни один вариант не подходит → удалить
 
       // Промоутируем найденный вариант в главную позицию
+      promotedCount++
+      // Лог промоута варианта — символ и новые биржи
+      aLog('log', `[ШАГ 7] Промоут варианта: ${opp.symbol} | ${opp.bid_ex}→${opp.ask_ex} заменён на ${passingVariant.bid_ex}→${passingVariant.ask_ex}`)
       const remainingVariants = allVariants.filter(v => v.id !== passingVariant.id)
       return {
         ...passingVariant,
@@ -355,6 +400,8 @@ function App() {
       if (filters.transfer.withdraw && !wdOk) return false
       return true
     })
+    // Лог фильтра transfer — до/после, промоутировано вариантов
+    aLog('log', `[ШАГ 7] Фильтр transfer (dep:${filters.transfer.deposit} wd:${filters.transfer.withdraw}): ${beforeTransfer} → ${result.length} (промоутировано вариантов: ${promotedCount})`)
 
     result.sort((a, b) => {
       if (sortMode === 'spread') return b.spread - a.spread
@@ -370,6 +417,14 @@ function App() {
     })
 
     result = result.filter(o => !hidden.includes(o.id))
+
+    // Лог итогов сортировки — режим и первые 5 символов в порядке отображения
+    const top5 = result.slice(0, 5).map(o => `${o.symbol}(${o.spread.toFixed(2)}%)`).join(', ')
+    aLog('log', `[ШАГ 7] Сортировка: режим=${sortMode} | скрытых=${hidden.length} | итого: ${result.length} карточек`)
+    aLog('log', `[ШАГ 7] Топ-5 в порядке отображения: ${top5 || '—'}`)
+    aLog('log', `[ШАГ 7] ⏱ Фильтрация UI: ${(performance.now() - tMemo).toFixed(0)}мс`)
+    aLog('groupEnd')
+
     return result
   }, [filters, sortMode, liveData, hidden, favorites])
 
@@ -390,6 +445,15 @@ function App() {
     auth.user?.isCexCexPaid === true &&
     activePage === 'futures' &&
     selected === null
+  )
+
+  // Лог причины canScan — видно почему сканирование запущено или заблокировано
+  aLog('log',
+    `[APP] canScan=${canScan} | ` +
+    `status=${auth.status} | ` +
+    `isCexCexPaid=${auth.user?.isCexCexPaid} | ` +
+    `page=${activePage} | ` +
+    `modal=${selected !== null ? 'open' : 'closed'}`
   )
 
   useEffect(() => {
@@ -513,17 +577,26 @@ function App() {
   const handleSaveSettings = async () => {
     if (!auth.user?.userId) return
 
+    // Лог старта сохранения настроек — userId и текущие фильтры
+    aLog('group', `[APP] handleSaveSettings → userId=${auth.user.userId}`)
+    aLog('log', `[APP] Текущие фильтры: exchanges=[${filters.exchanges.join(',')}] minSpread=${filters.minSpread} tradeAmount=${filters.tradeAmount}`)
+    aLog('log', `[APP] strategy=ff:${filters.strategy.ff},sf:${filters.strategy.sf} | funding=pos:${filters.funding.positive},neg:${filters.funding.negative}`)
+
     setSaveStatus('saving')
 
     const result = await saveUserSettings(auth.user.userId, filters)
 
     if (result.ok) {
+        // Лог успешного сохранения
+        aLog('success', `[APP] handleSaveSettings ✅ настройки сохранены, обновляем auth.user`)
         // Обновляем auth.user в state — без перезагрузки
         setAuth(prev => ({ ...prev, user: result.user }))
         setSaveStatus('saved')
         // Через 2.5с сбрасываем статус обратно в null
         setTimeout(() => setSaveStatus(null), 2500)
     } else if (result.reason === 'unauthorized') {
+        // Лог разлогина при сохранении
+        aLog('warn', `[APP] handleSaveSettings → 401, cookie истекла — разлогиниваем`)
         // Cookie истекла — разлогиниваем
         clearSession()
         clearInterval(accessIntervalRef.current)
@@ -531,10 +604,13 @@ function App() {
         setAuth({ status: 'unknown', user: null })
         setSaveStatus(null)
     } else {
+        // Лог ошибки сохранения
+        aLog('error', `[APP] handleSaveSettings ❌ ошибка: reason=${result.reason}`)
         // Ошибка сервера или сети
         setSaveStatus('error')
         setTimeout(() => setSaveStatus(null), 3000)
     }
+    aLog('groupEnd')
   }
   const handleTrade = (opp, avgLong, avgShort) => {
     const trade = { id: `${opp.id}_${Date.now()}`, opp, avgLong, avgShort, openedAt: new Date().toISOString() }

@@ -70,6 +70,43 @@ console.error = (...a) => { if (_adminLogging) _origError(...a); logCollector.ad
 console.group = (...a) => { if (_adminLogging) _origGroup(...a); logCollector.add('group', ...a) }
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─── Утилита логирования для компонентов (импортируется явно) ─────────────────
+// Используется в: rateLimiter.js, coinStatus.js, auth.js, App.jsx,
+//                 StatsRow.jsx, FilterDrawer.jsx, OpportunityCard.jsx
+// Выводит в браузер только для администраторов (_adminLogging === true)
+// Всегда пишет в logCollector для скачивания .txt
+
+const _CSS = {
+    log:      'color:#8bb8d0',
+    info:     'color:#3d87c0;font-weight:bold',
+    warn:     'color:#f0a500;font-weight:bold',
+    error:    'color:#e03e3e;font-weight:bold',
+    success:  'color:#00c97a;font-weight:bold',
+    group:    'color:#3d87c0;font-weight:bold',
+    groupEnd: '',
+}
+
+export function aLog(level, ...args) {
+    // Всегда пишем в сборщик логов (для скачивания)
+    logCollector.add(level, ...args)
+    // В браузер — только для администраторов
+    if (!_adminLogging) return
+    const css = _CSS[level] ?? _CSS.log
+    if (level === 'group') {
+        _origGroup('%c' + (args[0] ?? ''), css, ...args.slice(1))
+    } else if (level === 'groupEnd') {
+        console.groupEnd()
+    } else if (level === 'warn') {
+        _origWarn('%c' + (args[0] ?? ''), css, ...args.slice(1))
+    } else if (level === 'error') {
+        _origError('%c' + (args[0] ?? ''), css, ...args.slice(1))
+    } else {
+        // log / info / success — все через _origLog с цветом
+        _origLog('%c' + (args[0] ?? ''), css, ...args.slice(1))
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ─── Rate limit intervals (ms между запросами, -10% от официальных лимитов) ──
 const RL = {
     binance: 560,
@@ -659,7 +696,7 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
             const bid_price = calcVwap(sortedBid, tradeAmount)
             const ask_price = calcVwap(sortedAsk, tradeAmount)
             if (!bid_price || !ask_price) return null
-            const spread = (ask_price - bid_price) / bid_price * 100
+            const spread = (bid_price - ask_price) / bid_price * 100
             return { rec, sortedBid, sortedAsk, bid_price, ask_price, spread }
         } catch { return null }
     }).filter(Boolean)
