@@ -42,6 +42,7 @@ src/
   rateLimiter.js  — rate limiter + ArrayBuffer dedup
   sign.js         — hmacHex(), hmacBase64() для авторизованных API
   utils.js        — форматирование, calcVwap, calcProfit, parseExchange
+  ws.js           — WebSocket коннекторы для 8 бирж (стаканы ордеров)
 
 vite.config.js    — port 5173, proxy для 12 эндпоинтов бирж + /backend
 ```
@@ -54,7 +55,7 @@ vite.config.js    — port 5173, proxy для 12 эндпоинтов бирж +
 bid_ex = SELL сторона (красная панель) — биржа с ВЫСОКОЙ ценой
 ask_ex = BUY  сторона (зелёная панель) — биржа с НИЗКОЙ ценой
 
-BID > ASK → спред положительный → арбитраж возможен
+bid_price > ask_price → спред положительный → арбитраж возможен
 
 Стратегия sf (spot_futures):
   bid_ex = FUTURES (SELL) — всегда фьючерс
@@ -77,6 +78,105 @@ SPOT НИКОГДА не бывает на стороне SELL (bid_ex)!
 
 ---
 
+## ⚠️ КРИТИЧЕСКИ ВАЖНО — ФОРМУЛЫ СПРЕДА
+
+### Везде в проекте используется единая формула:
+```javascript
+spread = (bid_price - ask_price) / bid_price * 100
+```
+
+- `bid_price` — VWAP по **bids** стакана bid_ex (SELL-сторона, высокая цена)
+- `ask_price` — VWAP по **asks** стакана ask_ex (BUY-сторона, низкая цена)
+- Результат всегда **положительный** при реальном арбитраже
+
+### Файлы где применяется:
+| Файл | Место | Формула |
+|------|-------|---------|
+| `api.js` | `enrichOpportunities` шаг 4.1 | `(bid_price - ask_price) / bid_price * 100` |
+| `App.jsx` | `useMemo` пересчёт VWAP | `(bid_price - ask_price) / bid_price * 100` |
+| `DetailModal.jsx` | `liveSpread` | `(vwapBid - vwapAsk) / vwapBid * 100` |
+| `DetailModal.jsx` | `entry-spread` график | `(p.bid - p.ask) / p.bid * 100` |
+| `DetailModal.jsx` | `exit-spread` график | `(p.bidExit - p.askExit) / p.bidExit * 100` |
+| `DetailModal.jsx` | `exitSpread` калькулятор | `(avgShort - avgLong) / avgShort * 100` |
+| `DetailModal.jsx` | `exit-spread ref` | `(avgShort - avgLong) / avgShort * 100` |
+
+> ⛔ ЗАПРЕЩЕНО использовать `(ask - bid) / bid` — это даёт отрицательный спред!
+
+---
+
+## ⚠️ КРИТИЧЕСКИ ВАЖНО — VWAP В DETAILMODAL
+
+```javascript
+// ВХОД — открываем позицию:
+// SELL на bid-бирже → бьём по bids (покупатели готовы купить у нас)
+vwapBid = calcVwap(bidBook.bids, tradeAmount)
+
+// BUY на ask-бирже → бьём по asks (продавцы готовы продать нам)
+vwapAsk = calcVwap(askBook.asks, tradeAmount)
+
+// ВЫХОД — закрываем позицию (разворот):
+// Закрытие SHORT на bid-бирже → покупаем → бьём по asks
+vwapBidExit = calcVwap(bidBook.asks, tradeAmount)
+
+// Закрытие LONG на ask-бирже → продаём → бьём по bids
+vwapAskExit = calcVwap(askBook.bids, tradeAmount)
+```
+
+> ⛔ ЗАПРЕЩЕНО: `calcVwap(bidBook.asks, ...)` для входа — это неверная сторона!
+
+---
+
+## ⚠️ КРИТИЧЕСКИ ВАЖНО — КАЛЬКУЛЯТОР ВЫХОДА
+
+```
+avgShort = цена входа на bid-бирже (SELL/SHORT) — высокая цена
+avgLong  = цена входа на ask-бирже (BUY/LONG)   — низкая цена
+
+avgShort > avgLong (всегда при реальном арбитраже)
+
+exitSpread = (avgShort - avgLong) / avgShort * 100   ← положительный
+exitPnl    = exitSpread * tradeAmount / 100
+```
+
+Левый инпут калькулятора → пишет в `avgShort` (BID/SELL)
+Правый инпут калькулятора → пишет в `avgLong` (ASK/BUY)
+
+---
+
+## ⚠️ КРИТИЧЕСКИ ВАЖНО — ЦВЕТА ГРАФИКОВ
+
+```
+bid-линия (SELL) = КРАСНАЯ  (#e03e3e)  — сверху (высокая цена)
+ask-линия (BUY)  = ЗЕЛЁНАЯ  (#00c97a)  — снизу  (низкая цена)
+```
+
+Графики:
+- `entry-prices` — bid=красный сверху, ask=зелёный снизу, заливка красная под bid
+- `exit-prices`  — bid=красный сверху, ask=зелёный снизу, заливка между линиями
+- `entry-spread` — одна зелёная линия, нет цели
+- `exit-spread`  — синяя/красная линия, нулевая линия = уровень входа
+
+---
+
+## ⚠️ КРИТИЧЕСКИ ВАЖНО — ДАННЫЕ ГРАФИКОВ
+
+```
+liveHistory пишет 4 поля каждые 5 секунд:
+{
+  bid:     vwapBid     (цена входа SELL)
+  ask:     vwapAsk     (цена входа BUY)
+  bidExit: vwapBidExit (цена выхода SHORT → покупаем)
+  askExit: vwapAskExit (цена выхода LONG  → продаём)
+}
+
+entry-prices  использует: p.bid, p.ask
+exit-prices   использует: p.bidExit, p.askExit
+entry-spread  использует: (p.bid - p.ask) / p.bid
+exit-spread   использует: (p.bidExit - p.askExit) / p.bidExit
+```
+
+---
+
 ## АВТОРИЗАЦИЯ
 
 **Схема:**
@@ -85,8 +185,8 @@ SPOT НИКОГДА не бывает на стороне SELL (bid_ex)!
    → cookie AxionScan.Auth + сессия в sessionStorage
 
 2. Каждые 60с checkAccess():
-   → PUT /backend/api/user-settings {} → актуальный AuthResponse (isAdmin etc.)
    → GET /backend/api/analysis/order-books-json → 200=жива / 401=разлогин
+   → PUT /backend/api/user-settings {} → актуальный AuthResponse (isAdmin etc.)
 
 3. Сохранение настроек:
    → PUT /backend/api/user-settings {exchanges, minSpread, ...}
@@ -96,6 +196,24 @@ SPOT НИКОГДА не бывает на стороне SELL (bid_ex)!
 **Auth статусы:** `unknown` → `checking` → `ready`
 
 **canScan** = `ready` + `isCexCexPaid` + страница `futures` + модалка закрыта
+
+---
+
+## СИСТЕМА ЛОГИРОВАНИЯ (aLog)
+
+```javascript
+import { aLog } from './api.js'
+
+// Уровни: log, info, warn, error, success, group, groupEnd
+aLog('info',    '[WS] Binance → подключение...')
+aLog('success', '[WS] Binance ✅ подключён')
+aLog('warn',    '[WS] Binance ⚠️ снэпшот не загружен')
+aLog('error',   '[WS] Binance ❌ ошибка: ...')
+```
+
+- В браузер выводит **только если `isAdmin=true`** (через `setAdminLogging`)
+- Всегда пишет в `logCollector` (для скачивания .txt)
+- `console.log/warn/error/group` — тоже патчены, работают аналогично
 
 ---
 
@@ -142,8 +260,10 @@ SPOT НИКОГДА не бывает на стороне SELL (bid_ex)!
 6. **Новые URL** — только через `api.js` / `coinStatus.js`
 7. **Высота шапки** — 72px везде
 8. **calcProfit()** возвращает **строку**, не число
-9. Логи в браузер только при `isAdmin === true`
+9. Логи в браузер только при `isAdmin === true` (через `aLog` из `api.js`)
 10. Props явно через цепочку, без Context API
+11. **Перед любым изменением файла — читать актуальную версию из репозитория**
+12. **Сначала план → одобрение → только потом код**
 
 ---
 
@@ -160,4 +280,10 @@ SPOT НИКОГДА не бывает на стороне SELL (bid_ex)!
 | 16.3 checkAccess получает актуальный AuthResponse с бэкенда | ✅ |
 | 16.4 Промоут вариантов при фильтрации | ✅ |
 | 16.5 Нормализация strategy spot_futures→sf | ✅ |
-| **17 Следующий этап** | ⬜ |
+| 16.6 Исправлена формула спреда: `(bid-ask)/bid` вместо `(ask-bid)/bid` | ✅ |
+| 16.7 DetailModal: vwapBid/vwapAsk — правильные стороны стакана | ✅ |
+| 16.8 DetailModal: цвета графиков bid=красный, ask=зелёный | ✅ |
+| 16.9 DetailModal: калькулятор выхода — avgShort=BID, avgLong=ASK | ✅ |
+| 16.10 DetailModal: exit-prices/exit-spread используют bidExit/askExit | ✅ |
+| 16.11 DetailModal: entry-spread убрана цель 0.30% | ✅ |
+| **17 WS логирование (aLog) + тесты** | ⬜ |

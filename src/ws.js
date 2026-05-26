@@ -1,12 +1,46 @@
 // ─── WebSocket Order Book Manager ────────────────────────────────────────────
-// connectOrderBook(exchange, symbol, onUpdate) → { close() }
+// connectOrderBook(exchange, symbol, marketType, onUpdate) → { close() }
 // onUpdate получает: { bids: [[price, qty], ...], asks: [[price, qty], ...] }
 // bids отсортированы по убыванию цены (лучшая цена — первая)
 // asks отсортированы по возрастанию цены (лучшая цена — первая)
 
+import { aLog } from './api.js'
+
+// ─── Утилита WS-логирования ───────────────────────────────────────────────────
+// Throttle для emit-логов: первый emit + не чаще 1 раза в 5 секунд
+function makeWsLogger(exchange, symbol, marketType) {
+    const tag = `[WS ${exchange.toUpperCase()} ${symbol} ${marketType}]`
+    let lastEmitLog = 0
+    let firstEmitDone = false
+    return {
+        info:    (...a) => aLog('info',    `${tag}`, ...a),
+        success: (...a) => aLog('success', `${tag}`, ...a),
+        warn:    (...a) => aLog('warn',    `${tag}`, ...a),
+        error:   (...a) => aLog('error',   `${tag}`, ...a),
+        log:     (...a) => aLog('log',     `${tag}`, ...a),
+        // Первый emit логируется всегда, далее не чаще раза в 5с
+        emit(bids, asks) {
+            const now = Date.now()
+            const bestBid = bids[0]?.[0]?.toFixed(6) ?? 'n/a'
+            const bestAsk = asks[0]?.[0]?.toFixed(6) ?? 'n/a'
+            if (!firstEmitDone) {
+                firstEmitDone = true
+                lastEmitLog = now
+                aLog('success', `${tag} ✅ первые данные: bids=${bids.length} asks=${asks.length} | bid=${bestBid} ask=${bestAsk}`)
+                return
+            }
+            if (now - lastEmitLog < 5000) return
+            lastEmitLog = now
+            aLog('log', `${tag} обновление: bids=${bids.length} asks=${asks.length} | bid=${bestBid} ask=${bestAsk}`)
+        },
+    }
+}
+
+// ─── Binance ──────────────────────────────────────────────────────────────────
 function connectBinance(symbol, marketType, onUpdate) {
     const sym = symbol.toLowerCase() + 'usdt'
     const SYM = symbol.toUpperCase() + 'USDT'
+    const log = makeWsLogger('binance', symbol, marketType)
 
     const wsUrl = marketType === 'spot'
         ? `wss://stream.binance.com/ws/${sym}@depth@100ms`
@@ -16,11 +50,14 @@ function connectBinance(symbol, marketType, onUpdate) {
         ? `https://api.binance.com/api/v3/depth?symbol=${SYM}&limit=1000`
         : `https://fapi.binance.com/fapi/v1/depth?symbol=${SYM}&limit=1000`
 
+    log.info(`подключение → ${wsUrl}`)
+
     let localBids = new Map()
     let localAsks = new Map()
     let lastUpdateId = 0
     let snapshotLoaded = false
     let buffer = []
+    let closed = false
 
     const applyLevels = (map, levels) => {
         for (const [p, q] of levels) {
@@ -36,10 +73,15 @@ function connectBinance(symbol, marketType, onUpdate) {
         const asks = [...localAsks.entries()]
             .map(([p, q]) => [parseFloat(p), q])
             .sort((a, b) => a[0] - b[0])
+        log.emit(bids, asks)
         onUpdate({ bids, asks })
     }
 
     const ws = new WebSocket(wsUrl)
+
+    ws.onopen = () => {
+        log.success(`WS открыт`)
+    }
 
     ws.onmessage = (event) => {
         const msg = JSON.parse(event.data)
@@ -54,31 +96,51 @@ function connectBinance(symbol, marketType, onUpdate) {
         emit()
     }
 
+    const t0 = Date.now()
     setTimeout(async () => {
+        if (closed) return
         try {
+            log.log(`загружаем снэпшот → ${restUrl}`)
             const res = await fetch(restUrl)
             const snapshot = await res.json()
+            if (closed) return
             lastUpdateId = snapshot.lastUpdateId
             localBids = new Map(snapshot.bids.map(([p, q]) => [p, parseFloat(q)]))
             localAsks = new Map(snapshot.asks.map(([p, q]) => [p, parseFloat(q)]))
+            log.success(`снэпшот загружен: bids=${snapshot.bids.length} asks=${snapshot.asks.length} lastUpdateId=${snapshot.lastUpdateId} ⏱ ${Date.now() - t0}мс`)
+            let applied = 0
             for (const msg of buffer) {
                 if (msg.u <= lastUpdateId) continue
                 applyLevels(localBids, msg.b)
                 applyLevels(localAsks, msg.a)
                 lastUpdateId = msg.u
+                applied++
             }
+            if (applied > 0) log.log(`буфер применён: ${applied} сообщений`)
             buffer = []
             snapshotLoaded = true
             emit()
         } catch (e) {
+            log.warn(`снэпшот не загружен: ${e.message}`)
             console.warn('Binance snapshot failed:', e)
         }
     }, 500)
 
-    ws.onerror = (e) => console.warn('Binance WS error:', e)
-    return { close: () => ws.close() }
+    ws.onerror = (e) => {
+        log.error(`ошибка WS: ${e.message ?? e.type}`)
+        console.warn('Binance WS error:', e)
+    }
+
+    return {
+        close: () => {
+            closed = true
+            log.warn(`close() вызван`)
+            ws.close()
+        }
+    }
 }
 
+// ─── BingX ────────────────────────────────────────────────────────────────────
 async function decompressBingX(blob) {
     const ds = new DecompressionStream('gzip')
     const stream = blob.stream().pipeThrough(ds)
@@ -98,6 +160,10 @@ async function decompressBingX(blob) {
 
 function connectBingX(symbol, marketType, onUpdate) {
     const sym = `${symbol}-USDT`
+    const log = makeWsLogger('bingx', symbol, marketType)
+
+    log.info(`подключение → wss://open-api-ws.bingx.com/market`)
+
     const ws = new WebSocket('wss://open-api-ws.bingx.com/market')
 
     let localBids = new Map()
@@ -110,11 +176,13 @@ function connectBingX(symbol, marketType, onUpdate) {
         const asks = [...localAsks.entries()]
             .map(([p, q]) => [parseFloat(p), q])
             .sort((a, b) => a[0] - b[0])
+        log.emit(bids, asks)
         onUpdate({ bids, asks })
     }
 
     const handleMessage = (text) => {
         if (text === 'Ping') {
+            log.log(`← Ping | отвечаем Pong`)
             ws.send('Pong')
             return
         }
@@ -124,46 +192,57 @@ function connectBingX(symbol, marketType, onUpdate) {
 
         const book = msg.data
         if (book.bids) {
-            localBids = new Map(
-                book.bids.map(([p, q]) => [p, parseFloat(q)])
-            )
+            localBids = new Map(book.bids.map(([p, q]) => [p, parseFloat(q)]))
         }
         if (book.asks) {
-            localAsks = new Map(
-                book.asks.map(([p, q]) => [p, parseFloat(q)])
-            )
+            localAsks = new Map(book.asks.map(([p, q]) => [p, parseFloat(q)]))
         }
         emit()
     }
 
     ws.onopen = () => {
-        ws.send(JSON.stringify({
-            id: crypto.randomUUID(),
-            reqType: 'sub',
-            dataType: `${sym}@depth`
-        }))
+        log.success(`WS открыт`)
+        const sub = { id: crypto.randomUUID(), reqType: 'sub', dataType: `${sym}@depth` }
+        log.log(`подписка → ${sub.dataType}`)
+        ws.send(JSON.stringify(sub))
     }
 
     ws.onmessage = async (event) => {
         try {
             if (event.data instanceof Blob) {
+                const before = event.data.size
                 const text = await decompressBingX(event.data)
+                log.log(`декомпрессия: ${before}B → ${text.length}B`)
                 handleMessage(text)
             } else {
                 handleMessage(event.data)
             }
         } catch (e) {
+            log.error(`ошибка обработки сообщения: ${e.message}`)
             console.warn('BingX message error:', e)
         }
     }
 
-    ws.onerror = (e) => console.warn('BingX WS error:', e)
-    return { close: () => ws.close() }
+    ws.onerror = (e) => {
+        log.error(`ошибка WS: ${e.message ?? e.type}`)
+        console.warn('BingX WS error:', e)
+    }
+
+    return {
+        close: () => {
+            log.warn(`close() вызван`)
+            ws.close()
+        }
+    }
 }
 
+// ─── Bitget ───────────────────────────────────────────────────────────────────
 function connectBitget(symbol, marketType, onUpdate) {
     const instType = marketType === 'spot' ? 'SPOT' : 'USDT-FUTURES'
     const instId = `${symbol}USDT`
+    const log = makeWsLogger('bitget', symbol, marketType)
+
+    log.info(`подключение → wss://ws.bitget.com/v2/ws/public`)
 
     const ws = new WebSocket('wss://ws.bitget.com/v2/ws/public')
     let localBids = new Map()
@@ -183,14 +262,15 @@ function connectBitget(symbol, marketType, onUpdate) {
         const asks = [...localAsks.entries()]
             .map(([p, q]) => [parseFloat(p), q])
             .sort((a, b) => a[0] - b[0])
+        log.emit(bids, asks)
         onUpdate({ bids, asks })
     }
 
     ws.onopen = () => {
-        ws.send(JSON.stringify({
-            op: 'subscribe',
-            args: [{ instType, channel: 'books', instId }]
-        }))
+        log.success(`WS открыт`)
+        const sub = { op: 'subscribe', args: [{ instType, channel: 'books', instId }] }
+        log.log(`подписка → instType=${instType} instId=${instId}`)
+        ws.send(JSON.stringify(sub))
     }
 
     ws.onmessage = (event) => {
@@ -200,6 +280,7 @@ function connectBitget(symbol, marketType, onUpdate) {
         const book = msg.data[0]
 
         if (msg.action === 'snapshot') {
+            log.log(`snapshot: bids=${book.bids.length} asks=${book.asks.length}`)
             localBids = new Map(book.bids.map(([p, q]) => [p, parseFloat(q)]))
             localAsks = new Map(book.asks.map(([p, q]) => [p, parseFloat(q)]))
         } else if (msg.action === 'update') {
@@ -210,15 +291,28 @@ function connectBitget(symbol, marketType, onUpdate) {
         emit()
     }
 
-    ws.onerror = (e) => console.warn('Bitget WS error:', e)
-    return { close: () => ws.close() }
+    ws.onerror = (e) => {
+        log.error(`ошибка WS: ${e.message ?? e.type}`)
+        console.warn('Bitget WS error:', e)
+    }
+
+    return {
+        close: () => {
+            log.warn(`close() вызван`)
+            ws.close()
+        }
+    }
 }
 
+// ─── Bybit ────────────────────────────────────────────────────────────────────
 function connectBybit(symbol, marketType, onUpdate) {
     const sym = symbol.toUpperCase() + 'USDT'
     const url = marketType === 'spot'
         ? `wss://stream.bybit.com/v5/public/spot`
         : `wss://stream.bybit.com/v5/public/linear`
+    const log = makeWsLogger('bybit', symbol, marketType)
+
+    log.info(`подключение → ${url}`)
 
     const ws = new WebSocket(url)
     let localBids = new Map()
@@ -238,14 +332,15 @@ function connectBybit(symbol, marketType, onUpdate) {
         const asks = [...localAsks.entries()]
             .map(([p, q]) => [parseFloat(p), q])
             .sort((a, b) => a[0] - b[0])
+        log.emit(bids, asks)
         onUpdate({ bids, asks })
     }
 
     ws.onopen = () => {
-        ws.send(JSON.stringify({
-            op: 'subscribe',
-            args: [`orderbook.200.${sym}`]
-        }))
+        log.success(`WS открыт`)
+        const sub = { op: 'subscribe', args: [`orderbook.200.${sym}`] }
+        log.log(`подписка → orderbook.200.${sym}`)
+        ws.send(JSON.stringify(sub))
     }
 
     ws.onmessage = (event) => {
@@ -253,6 +348,7 @@ function connectBybit(symbol, marketType, onUpdate) {
         if (!msg.data || !msg.data.b || !msg.data.a) return
 
         if (msg.type === 'snapshot') {
+            log.log(`snapshot: bids=${msg.data.b.length} asks=${msg.data.a.length}`)
             localBids = new Map(msg.data.b.map(([p, q]) => [p, parseFloat(q)]))
             localAsks = new Map(msg.data.a.map(([p, q]) => [p, parseFloat(q)]))
         } else if (msg.type === 'delta') {
@@ -263,14 +359,22 @@ function connectBybit(symbol, marketType, onUpdate) {
         emit()
     }
 
-    ws.onerror = (e) => console.warn('Bybit WS error:', e)
-    return { close: () => ws.close() }
+    ws.onerror = (e) => {
+        log.error(`ошибка WS: ${e.message ?? e.type}`)
+        console.warn('Bybit WS error:', e)
+    }
+
+    return {
+        close: () => {
+            log.warn(`close() вызван`)
+            ws.close()
+        }
+    }
 }
 
+// ─── Gate ─────────────────────────────────────────────────────────────────────
 function connectGate(symbol, marketType, onUpdate) {
-    const sym = marketType === 'spot'
-        ? `${symbol}_USDT`
-        : `${symbol}_USDT`
+    const sym = `${symbol}_USDT`
 
     const url = marketType === 'spot'
         ? `wss://api.gateio.ws/ws/v4/`
@@ -279,6 +383,9 @@ function connectGate(symbol, marketType, onUpdate) {
     const channel = marketType === 'spot'
         ? 'spot.order_book_update'
         : 'futures.order_book_update'
+
+    const log = makeWsLogger('gate', symbol, marketType)
+    log.info(`подключение → ${url}`)
 
     const ws = new WebSocket(url)
     let localBids = new Map()
@@ -298,16 +405,20 @@ function connectGate(symbol, marketType, onUpdate) {
         const asks = [...localAsks.entries()]
             .map(([p, q]) => [parseFloat(p), q])
             .sort((a, b) => a[0] - b[0])
+        log.emit(bids, asks)
         onUpdate({ bids, asks })
     }
 
     ws.onopen = () => {
-        ws.send(JSON.stringify({
+        log.success(`WS открыт`)
+        const sub = {
             time: Math.floor(Date.now() / 1000),
-            channel, 
+            channel,
             event: 'subscribe',
             payload: [sym, '100ms']
-        }))
+        }
+        log.log(`подписка → channel=${channel} sym=${sym}`)
+        ws.send(JSON.stringify(sub))
     }
 
     ws.onmessage = (event) => {
@@ -317,6 +428,7 @@ function connectGate(symbol, marketType, onUpdate) {
         const book = msg.result
 
         if (book.full === 1) {
+            log.log(`full snapshot — сброс Map`)
             localBids = new Map()
             localAsks = new Map()
         }
@@ -331,15 +443,28 @@ function connectGate(symbol, marketType, onUpdate) {
         emit()
     }
 
-    ws.onerror = (e) => console.warn('Gate WS error:', e)
-    return { close: () => ws.close() }
+    ws.onerror = (e) => {
+        log.error(`ошибка WS: ${e.message ?? e.type}`)
+        console.warn('Gate WS error:', e)
+    }
+
+    return {
+        close: () => {
+            log.warn(`close() вызван`)
+            ws.close()
+        }
+    }
 }
 
+// ─── MEXC ─────────────────────────────────────────────────────────────────────
 function connectMEXC(symbol, marketType, onUpdate) {
     const sym = `${symbol}_USDT`
     const url = marketType === 'spot'
         ? `wss://wbs.mexc.com/ws`
         : `wss://contract.mexc.com/edge`
+    const log = makeWsLogger('mexc', symbol, marketType)
+
+    log.info(`подключение → ${url}`)
 
     const ws = new WebSocket(url)
     let localBids = new Map()
@@ -360,17 +485,22 @@ function connectMEXC(symbol, marketType, onUpdate) {
         const asks = [...localAsks.entries()]
             .map(([p, q]) => [parseFloat(p), q])
             .sort((a, b) => a[0] - b[0])
+        log.emit(bids, asks)
         onUpdate({ bids, asks })
     }
 
     const handleMessage = (text) => {
         const msg = JSON.parse(text)
-        if (msg.channel === 'rs.sub.depth') return
+        if (msg.channel === 'rs.sub.depth') {
+            log.log(`подписка подтверждена (rs.sub.depth)`)
+            return
+        }
         if (!msg.data) return
 
         const book = msg.data
 
         if (!initialized) {
+            log.log(`инициализация стакана: bids=${book.bids?.length ?? 0} asks=${book.asks?.length ?? 0}`)
             localBids = new Map(book.bids?.map(([p, q]) => [String(p), parseFloat(q)]) ?? [])
             localAsks = new Map(book.asks?.map(([p, q]) => [String(p), parseFloat(q)]) ?? [])
             initialized = true
@@ -383,33 +513,49 @@ function connectMEXC(symbol, marketType, onUpdate) {
     }
 
     ws.onopen = () => {
-        ws.send(JSON.stringify({
-            method: 'sub.depth',
-            param: { symbol: sym }
-        }))
+        log.success(`WS открыт`)
+        const sub = { method: 'sub.depth', param: { symbol: sym } }
+        log.log(`подписка → sub.depth symbol=${sym}`)
+        ws.send(JSON.stringify(sub))
     }
 
     ws.onmessage = async (event) => {
         try {
             if (event.data instanceof Blob) {
+                const before = event.data.size
                 const text = await decompressBingX(event.data)
+                log.log(`декомпрессия: ${before}B → ${text.length}B`)
                 handleMessage(text)
             } else {
                 handleMessage(event.data)
             }
         } catch (e) {
+            log.error(`ошибка обработки сообщения: ${e.message}`)
             console.warn('MEXC message error:', e)
         }
     }
 
-    ws.onerror = (e) => console.warn('MEXC WS error:', e)
-    return { close: () => ws.close() }
+    ws.onerror = (e) => {
+        log.error(`ошибка WS: ${e.message ?? e.type}`)
+        console.warn('MEXC WS error:', e)
+    }
+
+    return {
+        close: () => {
+            log.warn(`close() вызван`)
+            ws.close()
+        }
+    }
 }
 
+// ─── OKX ──────────────────────────────────────────────────────────────────────
 function connectOKX(symbol, marketType, onUpdate) {
     const instId = marketType === 'spot'
         ? `${symbol}-USDT`
         : `${symbol}-USDT-SWAP`
+    const log = makeWsLogger('okx', symbol, marketType)
+
+    log.info(`подключение → wss://ws.okx.com:8443/ws/v5/public`)
 
     const ws = new WebSocket('wss://ws.okx.com:8443/ws/v5/public')
 
@@ -430,14 +576,15 @@ function connectOKX(symbol, marketType, onUpdate) {
         const asks = [...localAsks.entries()]
             .map(([p, q]) => [parseFloat(p), q])
             .sort((a, b) => a[0] - b[0])
+        log.emit(bids, asks)
         onUpdate({ bids, asks })
     }
 
     ws.onopen = () => {
-        ws.send(JSON.stringify({
-            op: 'subscribe',
-            args: [{ channel: 'books', instId }]
-        }))
+        log.success(`WS открыт`)
+        const sub = { op: 'subscribe', args: [{ channel: 'books', instId }] }
+        log.log(`подписка → channel=books instId=${instId}`)
+        ws.send(JSON.stringify(sub))
     }
 
     ws.onmessage = (event) => {
@@ -446,6 +593,7 @@ function connectOKX(symbol, marketType, onUpdate) {
         const book = msg.data[0]
 
         if (msg.action === 'snapshot') {
+            log.log(`snapshot: bids=${book.bids.length} asks=${book.asks.length}`)
             localBids = new Map(book.bids.map(([p, q]) => [p, parseFloat(q)]))
             localAsks = new Map(book.asks.map(([p, q]) => [p, parseFloat(q)]))
         } else if (msg.action === 'update') {
@@ -456,17 +604,32 @@ function connectOKX(symbol, marketType, onUpdate) {
         emit()
     }
 
-    ws.onerror = (e) => console.warn('OKX WS error:', e)
-    return { close: () => ws.close() }
+    ws.onerror = (e) => {
+        log.error(`ошибка WS: ${e.message ?? e.type}`)
+        console.warn('OKX WS error:', e)
+    }
+
+    return {
+        close: () => {
+            log.warn(`close() вызван`)
+            ws.close()
+        }
+    }
 }
 
-
+// ─── KuCoin ───────────────────────────────────────────────────────────────────
 function connectKuCoin(symbol, marketType, onUpdate) {
     let ws = null
     let pingInterval = null
+    const log = makeWsLogger('kucoin', symbol, marketType)
+
+    log.info(`подключение → запрашиваем токен /kucoin-api/api/v1/bullet-public`)
 
     const handle = {
+        closed: false,
         close: () => {
+            handle.closed = true
+            log.warn(`close() вызван`)
             clearInterval(pingInterval)
             if (ws) ws.close()
         }
@@ -474,12 +637,13 @@ function connectKuCoin(symbol, marketType, onUpdate) {
 
     ;(async () => {
         try {
-            const res = await fetch('/kucoin-api/api/v1/bullet-public', {
-                method: 'POST'
-            })
+            const t0 = Date.now()
+            const res = await fetch('/kucoin-api/api/v1/bullet-public', { method: 'POST' })
+            if (handle.closed) return
             const data = await res.json()
             const token = data.data.token
             const endpoint = data.data.instanceServers[0].endpoint
+            log.success(`токен получен ⏱ ${Date.now() - t0}мс | endpoint=${endpoint}`)
 
             let localBids = new Map()
             let localAsks = new Map()
@@ -499,36 +663,49 @@ function connectKuCoin(symbol, marketType, onUpdate) {
                 const asks = [...localAsks.entries()]
                     .map(([p, q]) => [parseFloat(p), q])
                     .sort((a, b) => a[0] - b[0])
+                log.emit(bids, asks)
                 onUpdate({ bids, asks })
             }
 
             ws = new WebSocket(`${endpoint}?token=${token}`)
 
             ws.onopen = () => {
-                ws.send(JSON.stringify({
+                log.success(`WS открыт`)
+                const topic = `/contractMarket/level2:${symbol}USDTM`
+                const sub = {
                     id: Date.now().toString(),
                     type: 'subscribe',
-                    topic: `/contractMarket/level2:${symbol}USDTM`,
+                    topic,
                     privateChannel: false,
                     response: true
-                }))
+                }
+                log.log(`подписка → ${topic}`)
+                ws.send(JSON.stringify(sub))
 
                 pingInterval = setInterval(() => {
-                    ws.send(JSON.stringify({
-                        id: Date.now().toString(),
-                        type: 'ping'
-                    }))
+                    if (handle.closed) return
+                    const ping = { id: Date.now().toString(), type: 'ping' }
+                    log.log(`→ ping`)
+                    ws.send(JSON.stringify(ping))
                 }, 20000)
             }
 
             ws.onmessage = (event) => {
                 const msg = JSON.parse(event.data)
-                if (msg.type === 'pong' || msg.type === 'ack') return
+                if (msg.type === 'pong') {
+                    log.log(`← pong`)
+                    return
+                }
+                if (msg.type === 'ack') {
+                    log.log(`← ack (подписка подтверждена)`)
+                    return
+                }
                 if (!msg.data) return
 
                 const book = msg.data
 
                 if (!initialized) {
+                    log.log(`инициализация стакана: bids=${book.bids?.length ?? 0} asks=${book.asks?.length ?? 0}`)
                     localBids = new Map(
                         book.bids?.map(({ price, qty }) => [String(price), parseFloat(qty)]) ?? []
                     )
@@ -538,6 +715,7 @@ function connectKuCoin(symbol, marketType, onUpdate) {
                     initialized = true
                 } else if (book.change) {
                     const [price, side, qty] = book.change.split(',')
+                    log.log(`change: price=${price} side=${side} qty=${qty}`)
                     const map = side === 'buy' ? localBids : localAsks
                     if (parseFloat(qty) === 0) map.delete(price)
                     else map.set(price, parseFloat(qty))
@@ -546,9 +724,13 @@ function connectKuCoin(symbol, marketType, onUpdate) {
                 emit()
             }
 
-            ws.onerror = (e) => console.warn('KuCoin WS error:', e)
+            ws.onerror = (e) => {
+                log.error(`ошибка WS: ${e.message ?? e.type}`)
+                console.warn('KuCoin WS error:', e)
+            }
 
         } catch (e) {
+            log.error(`ошибка получения токена: ${e.message}`)
             console.warn('KuCoin WS token failed:', e)
         }
     })()
@@ -556,24 +738,25 @@ function connectKuCoin(symbol, marketType, onUpdate) {
     return handle
 }
 
-
-
+// ─── Router ───────────────────────────────────────────────────────────────────
 const CONNECTORS = {
     binance: connectBinance,
-    bingx: connectBingX,
-    bitget: connectBitget,
-    bybit: connectBybit,
-    gate: connectGate,
-    mexc: connectMEXC,
-    okx: connectOKX,
-    kucoin: connectKuCoin
+    bingx:   connectBingX,
+    bitget:  connectBitget,
+    bybit:   connectBybit,
+    gate:    connectGate,
+    mexc:    connectMEXC,
+    okx:     connectOKX,
+    kucoin:  connectKuCoin,
 }
 
 export function connectOrderBook(exchange, symbol, marketType, onUpdate) {
     const connector = CONNECTORS[exchange]
     if (!connector) {
+        aLog('error', `[WS] ❌ неизвестная биржа: "${exchange}" — коннектор не найден`)
         console.warn(`No WS connector for exchange: ${exchange}`)
         return { close: () => {} }
     }
-    return connector(symbol,marketType, onUpdate)
+    aLog('info', `[WS] connectOrderBook → exchange=${exchange} symbol=${symbol} marketType=${marketType}`)
+    return connector(symbol, marketType, onUpdate)
 }
