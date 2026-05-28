@@ -241,12 +241,15 @@ export async function saveUserSettings(userId, settings) {
         strategy:    settings.strategy,
         funding:     settings.funding,
         transfer:    settings.transfer,
+        // activeCoins — синхронизация activeTrades с БД (до 5 монет на пользователя)
+        activeCoins: settings.activeCoins ?? [],
     }
 
     // Лог входа — userId и полный payload фильтров
     aLog('group', `[AUTH] saveUserSettings → userId=${userId}`)
     aLog('log', `[AUTH] payload: exchanges=[${payload.exchanges?.join(',')}] minSpread=${payload.minSpread} tradeAmount=${payload.tradeAmount}`)
     aLog('log', `[AUTH] payload: strategy=ff:${payload.strategy?.ff},sf:${payload.strategy?.sf} | funding=pos:${payload.funding?.positive},neg:${payload.funding?.negative} | transfer=dep:${payload.transfer?.deposit},wd:${payload.transfer?.withdraw}`)
+    aLog('log', `[AUTH] payload: activeCoins=[${payload.activeCoins?.map(c => c.symbol).join(',') || 'пусто'}]`)
 
     try {
         const tSave = performance.now()

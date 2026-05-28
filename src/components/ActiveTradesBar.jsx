@@ -97,6 +97,30 @@ const style = `
     background: var(--border);
     flex-shrink: 0;
   }
+
+  /* ─── Скелетон загрузки ─── */
+  .atb-loading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    align-self: center;
+    padding: 0 4px;
+  }
+
+  .atb-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--accent-bright);
+    animation: atb-bounce 1.4s ease-in-out infinite;
+  }
+
+  .atb-dot:nth-child(2) { animation-delay: 0.2s; }
+  .atb-dot:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes atb-bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+    40%           { transform: translateY(-5px); opacity: 1; }
+  }
 `
 
 function ExLogo({ info }) {
@@ -125,8 +149,29 @@ function ExLogo({ info }) {
 }
 
 
-function ActiveTradesBar({ trades, liveData, onSelect, onRemove }) {
+function ActiveTradesBar({ trades, liveData, onSelect, onRemove, isLoading }) {
     const list = Array.isArray(trades) ? trades : []
+
+    // Показываем скелетон только если:
+    // - идёт первая загрузка (isLoading=true)
+    // - И есть монеты в позициях (восстановлены из БД через activeCoins)
+    // Если монет нет — не показываем панель вообще
+    if (isLoading && list.length > 0) {
+        return (
+            <>
+                <style>{style}</style>
+                <div className="atb">
+                    <span className="atb-label">Позиции</span>
+                    <div className="atb-loading">
+                        <div className="atb-dot" />
+                        <div className="atb-dot" />
+                        <div className="atb-dot" />
+                    </div>
+                </div>
+            </>
+        )
+    }
+
     if (list.length === 0) return null
 
 

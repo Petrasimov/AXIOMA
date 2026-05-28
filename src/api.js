@@ -3,7 +3,7 @@ import {
     getBybitStatus, getKuCoinStatus, getMEXCStatus,
     getOKXStatus
 } from './coinStatus.js'
-import { parseExchange, calcVwap, calcMaxVolume } from './utils.js'
+import { parseExchange, calcVwap, calcMaxVolume, calcDepthSpread } from './utils.js'
 import { rlFetch } from './rateLimiter.js'
 
 // ─── Сборщик логов для скачивания ────────────────────────────────────────────
@@ -697,7 +697,17 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
             const ask_price = calcVwap(sortedAsk, tradeAmount)
             if (!bid_price || !ask_price) return null
             const spread = (bid_price - ask_price) / bid_price * 100
-            return { rec, sortedBid, sortedAsk, bid_price, ask_price, spread }
+
+            // Depth Spread — объективный спред по всему объёму стаканов.
+            // Не зависит от tradeAmount, считается один раз за цикл.
+            // sortedBid/sortedAsk уже отсортированы корректно — передаём напрямую.
+            const depth = calcDepthSpread(sortedBid, sortedAsk)
+
+            return {
+                rec, sortedBid, sortedAsk, bid_price, ask_price, spread,
+                depth_spread:   depth?.spread      ?? null,
+                depth_overlap:  depth?.overlap_usd ?? null,
+            }
         } catch { return null }
     }).filter(Boolean)
 
@@ -707,9 +717,15 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
     console.log('[ШАГ 4.2] Фильтруем по спреду (>0% и <=50%)...')
     const t42 = performance.now()
 
-    const spreadFiltered = vwapResults.filter(({ rec, spread }) => {
+    const spreadFiltered = vwapResults.filter(({ rec, spread, bid_price, ask_price }) => {
         if (spread <= 0 || spread > 50) {
-            console.warn(`[ШАГ 4.2] ❌ spread=${spread.toFixed(4)}% | ${rec.symbol} | ${rec.bid_ex}→${rec.ask_ex}`)
+            if (spread > 50) {
+                // Аномалия — цены в БД битые (неверный масштаб или нет торгов)
+                aLog('warn', `[ШАГ 4.2] ⚠️ АНОМАЛИЯ spread=${spread.toFixed(2)}% | ${rec.symbol} | ${rec.bid_ex}→${rec.ask_ex} | bid=${bid_price?.toFixed(8)} ask=${ask_price?.toFixed(8)}`)
+            } else {
+                // Нормальный отрицательный — нет арбитража, ask > bid, рабочее поведение
+                aLog('log', `[ШАГ 4.2] ↩ нет арбитража spread=${spread.toFixed(2)}% | ${rec.symbol} | ${rec.bid_ex}→${rec.ask_ex}`)
+            }
             return false
         }
         return true
@@ -750,25 +766,24 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
 
     // ════════════════════════════════════════════════════
     // ШАГ 5 — Запросы к биржам (только для лучших монет)
+    // Варианты НЕ обогащаются здесь — они хранятся как "сырые" (_raw: true)
+    // и обогащаются лениво через enrichSingleOpportunity при клике пользователя.
+    // Это сокращает количество запросов с N_all до N_symbols (14 вместо 56).
     const t5 = performance.now()
-    const totalToFetch = bestPerSymbol.length + bestPerSymbol.reduce((acc, { variants }) => acc + variants.length, 0)
+    const totalToFetch = bestPerSymbol.length
     console.group(`%c[ШАГ 5] Запросы к биржам (funding, volume, transfer)`, 'color:#3d87c0;font-weight:bold')
-    console.log(`[ШАГ 5] Запросов будет: ${totalToFetch} (${bestPerSymbol.length} лучших + варианты)`)
+    console.log(`[ШАГ 5] Запросов будет: ${totalToFetch} (только лучшие монеты, варианты — лениво по клику)`)
     // ════════════════════════════════════════════════════
 
-    // Собираем все записи для обогащения (лучшие + варианты)
-    const allToEnrich = []
-    bestPerSymbol.forEach(({ best, variants }) => {
-        allToEnrich.push({ ...best, isBest: true })
-        variants.forEach(v => allToEnrich.push({ ...v, isBest: false }))
-    })
+    // Собираем только лучшие записи для обогащения (без вариантов)
+    const allToEnrich = bestPerSymbol.map(({ best }) => ({ ...best, isBest: true }))
 
     // Обогащаем батчами
     const enrichedResults = []
     for (let i = 0; i < allToEnrich.length; i += BATCH_SIZE) {
         const batch = allToEnrich.slice(i, i + BATCH_SIZE)
         const batchResults = await Promise.all(
-            batch.map(async ({ rec, sortedBid, sortedAsk, bid_price, ask_price, spread, isBest }, batchIdx) => {
+            batch.map(async ({ rec, sortedBid, sortedAsk, bid_price, ask_price, spread, depth_spread, depth_overlap, isBest }, batchIdx) => {
                 const index = i + batchIdx
                 try {
                     const bidEx = parseExchange(rec.bid_ex)
@@ -826,8 +841,12 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
 
                     if (!finalBidPrice || !finalAskPrice || finalSpread <= 0 || finalSpread > 50) return null
 
-                    const bidMaxRes = calcMaxVolume(finalBid, finalAskPrice, 'long')
-                    const askMaxRes = calcMaxVolume(finalAsk, finalBidPrice, 'short')
+                    // Max size — полный доступный объём каждого стакана в USD.
+                    // Старый calcMaxVolume(finalBid, finalAskPrice, 'long') всегда возвращал null:
+                    // bid отсортирован по убыванию, первый уровень bid >= askPrice → break сразу.
+                    // Правильно: суммируем весь стакан — это и есть максимум что можно продать/купить.
+                    const bidMaxUsd = finalBid.reduce((s, [p, q]) => s + parseFloat(p) * parseFloat(q), 0)
+                    const askMaxUsd = finalAsk.reduce((s, [p, q]) => s + parseFloat(p) * parseFloat(q), 0)
 
                     console.log(
                         `%c[ШАГ 5] ✅ ${rec.symbol} | ${rec.bid_ex}→${rec.ask_ex} | spread=${finalSpread.toFixed(4)}% | ⏱ ${fetchTime}мс`,
@@ -854,8 +873,16 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
                         raw_bid: finalBid,
                         raw_ask: finalAsk,
                         first_seen: rec.time,
-                        bid_max_size: bidMaxRes?.usd ?? null,
-                        ask_max_size: askMaxRes?.usd ?? null,
+                        bid_max_size: bidMaxUsd > 0 ? bidMaxUsd : null,
+                        ask_max_size: askMaxUsd > 0 ? askMaxUsd : null,
+                        // max_volume_entry — ограничен слабейшей стороной (минимум двух стаканов)
+                        max_volume_entry: (bidMaxUsd > 0 && askMaxUsd > 0)
+                            ? Math.min(bidMaxUsd, askMaxUsd)
+                            : (bidMaxUsd || askMaxUsd || null),
+                        // ─── Depth Spread — объективный спред по всему рынку ───
+                        // Рассчитан в ШАГ 4.1, не зависит от tradeAmount пользователя
+                        depth_spread,
+                        depth_overlap,
                         bid_funding: {
                             rate: bidData?.funding != null ? bidData.funding * 100 : null,
                             next_time: bidData?.nextFunding ? Math.floor(bidData.nextFunding / 1000) : null
@@ -884,19 +911,58 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
     console.groupEnd()
     // ════════════════════════════════════════════════════
 
-    // Финальная группировка для variants
-    const finalGrouped = {}
+    // Финальная группировка — присоединяем сырые варианты к каждой лучшей монете.
+    // Варианты содержат только данные из ШАГ 4 (спред, цены, depth).
+    // Funding/volume/transfer = null — загрузятся лениво при клике через enrichSingleOpportunity.
+    const bestMap = {}
     for (const opp of enrichedFiltered) {
-        if (!finalGrouped[opp.symbol]) finalGrouped[opp.symbol] = []
-        finalGrouped[opp.symbol].push(opp)
+        bestMap[opp.symbol] = opp
     }
 
-    const final = Object.values(finalGrouped).map((group, idx) => {
-        group.sort((a, b) => b.spread - a.spread)
-        const best = { ...group[0], id: idx + 1 }
-        best.variants = group.slice(1).map((v, i) => ({ ...v, id: idx * 1000 + i + 1 }))
-        return best
+    // Для каждой лучшей монеты находим её сырые варианты из bestPerSymbol
+    const final = Object.values(bestMap).map((opp, idx) => {
+        const group = bestPerSymbol.find(g => g.best.rec.symbol === opp.symbol)
+        const rawVariants = group?.variants ?? []
+
+        // Сырые варианты — только данные спреда, без API данных
+        const variants = rawVariants.map((v, i) => {
+            const bidEx = parseExchange(v.rec.bid_ex)
+            const askEx = parseExchange(v.rec.ask_ex)
+            // Нормализация strategy как в основном обогащении
+            const rawStrategy = v.rec.strategy?.toLowerCase?.() ?? ''
+            const strategy = rawStrategy.includes('spot') ? 'sf' : 'ff'
+            return {
+                id:          idx * 1000 + i + 1,
+                symbol:      v.rec.symbol,
+                strategy,
+                bid_ex:      bidEx.id,
+                ask_ex:      askEx.id,
+                bid_market:  bidEx.market,
+                ask_market:  askEx.market,
+                spread:      v.spread,
+                bid_price:   v.bid_price,
+                ask_price:   v.ask_price,
+                depth_spread:  v.depth_spread  ?? null,
+                depth_overlap: v.depth_overlap ?? null,
+                first_seen:  v.rec.time,
+                // Данные от API — пустые, загрузятся лениво при клике
+                bid_funding:  null,
+                ask_funding:  null,
+                bid_volume:   null,
+                ask_volume:   null,
+                bid_transfer: null,
+                ask_transfer: null,
+                bid_max_size: null,
+                ask_max_size: null,
+                _raw: true, // флаг: этот вариант не обогащён через API
+            }
+        })
+
+        return { ...opp, id: idx + 1, variants }
     })
+
+    // Сортируем по спреду (лучшие карточки — первые)
+    final.sort((a, b) => b.spread - a.spread)
 
     // Завершаем сборщик логов
     logCollector.finish()

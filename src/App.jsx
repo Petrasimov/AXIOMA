@@ -32,6 +32,58 @@ function getSignature(user) {
   return `${user.isCexCexPaid}|${user.isDexCexPaid}|${user.isAdmin}`
 }
 
+// ─── Кэш liveData ────────────────────────────────────────────────────────────
+// Карточки сохраняются в localStorage между сессиями.
+// TTL = 3 минуты: если пользователь вернулся быстрее — видит кэш сразу,
+// цикл обновляет данные в фоне. Если позже — показывается LoadingScreen.
+const LIVE_DATA_CACHE_KEY = 'axioma_live_data_cache'
+const LIVE_DATA_TTL       = 3 * 60 * 1000 // 3 минуты в мс
+
+function readLiveDataCache() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(LIVE_DATA_CACHE_KEY))
+    if (!raw || !Array.isArray(raw.data) || raw.data.length === 0) return null
+    const age = Date.now() - raw.ts
+    if (age > LIVE_DATA_TTL) {
+      // Кэш устарел — удаляем и показываем LoadingScreen
+      localStorage.removeItem(LIVE_DATA_CACHE_KEY)
+      aLog('log', `[CACHE] кэш устарел (возраст ${(age / 60000).toFixed(1)}мин > 3мин) — удалён`)
+      return null
+    }
+    aLog('log', `[CACHE] кэш найден: ${raw.data.length} монет | возраст ${(age / 60000).toFixed(1)}мин`)
+    return raw.data
+  } catch {
+    return null
+  }
+}
+
+function writeLiveDataCache(enriched) {
+  try {
+    // Облегчённая версия — стаканы обрезаем до топ-20 уровней (~200KB вместо ~5MB).
+    // Для отображения карточек полные стаканы не нужны.
+    // При пересчёте VWAP с новым tradeAmount точность чуть снизится —
+    // но данные обновятся за следующий цикл (~55с).
+    const cacheData = enriched.map(opp => ({
+      ...opp,
+      raw_bid: opp.raw_bid?.slice(0, 20) ?? null,
+      raw_ask: opp.raw_ask?.slice(0, 20) ?? null,
+      variants: opp.variants?.map(v => ({
+        ...v,
+        raw_bid: undefined,
+        raw_ask: undefined,
+      })) ?? [],
+    }))
+    localStorage.setItem(LIVE_DATA_CACHE_KEY, JSON.stringify({
+      ts:   Date.now(),
+      data: cacheData,
+    }))
+    aLog('log', `[CACHE] кэш записан: ${enriched.length} монет | TTL 3мин`)
+  } catch (e) {
+    aLog('warn', `[CACHE] ошибка записи кэша: ${e.message}`)
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function App() {
   const [activeTab, setActiveTab] = useState(() => {
     try { return localStorage.getItem('activeTab') || 'main' }
@@ -58,11 +110,24 @@ function App() {
   })
 
   const [filterOpen, setFilterOpen] = useState(false)
+  // showAllTransfer — локальная настройка, не сохраняется в БД.
+  // При true: фильтр transfer отключается, показываются все монеты независимо от переводов.
+  const [showAllTransfer, setShowAllTransfer] = useState(false)
   const [selected, setSelected] = useState(null)
   const [liveOpp, setLiveOpp] = useState(null)
   const [selectedActiveTrade, setSelectedActiveTrade] = useState(null)
-  const [liveData, setLiveData] = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
+  // liveData инициализируется из кэша если он свежий (< 3 мин).
+  // При устаревшем или отсутствующем кэше — null → показывается LoadingScreen.
+  const [liveData, setLiveData] = useState(() => readLiveDataCache())
+  // isLoading=false если кэш есть (карточки показываем сразу, цикл работает в фоне)
+  // isLoading=true  если кэша нет (показываем LoadingScreen до первого цикла)
+  // Читаем кэш второй раз в том же render — localStorage синхронный, это безопасно
+  const [isLoading, setIsLoading] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(LIVE_DATA_CACHE_KEY))
+      return !(raw && Array.isArray(raw.data) && raw.data.length > 0 && (Date.now() - raw.ts) <= LIVE_DATA_TTL)
+    } catch { return true }
+  })
 
   const [favorites, setFavorites] = useState(() => {
     try { return JSON.parse(localStorage.getItem('favorites')) || [] }
@@ -79,6 +144,10 @@ function App() {
     }
     catch { return [] }
   })
+
+  // activeCoins — зеркало activeTrades в БД (до 5 монет, синхронизируется через saveUserSettings)
+  // Инициализируется из userSettings при checkAccess (ШАГ 2)
+  const [activeCoins, setActiveCoins] = useState([])
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   // Три возможных статуса:
@@ -153,6 +222,47 @@ function App() {
               console.groupEnd()
               return next
           })
+
+          // ── activeCoins → восстанавливаем activeTrades из БД ──────────────────
+          // Если в БД есть activeCoins — загружаем в state.
+          // Если localStorage пустой (перезагрузка) — восстанавливаем activeTrades из activeCoins.
+          if (access.userSettings.activeCoins?.length > 0) {
+              const coins = access.userSettings.activeCoins
+              setActiveCoins(coins)
+              aLog('log', `[ШАГ 2] activeCoins из БД: ${coins.length} монет → [${coins.map(c => c.symbol).join(',')}]`)
+
+              setActiveTrades(prev => {
+                  if (prev.length > 0) return prev // localStorage уже есть — не трогаем
+
+                  // Восстанавливаем synthetic trades из activeCoins
+                  const restored = coins.map((coin, i) => ({
+                      id:       `restored_${coin.symbol}_${i}`,
+                      opp: {
+                          symbol:     coin.symbol,
+                          bid_ex:     coin.bid_exchange,
+                          ask_ex:     coin.ask_exchange,
+                          strategy:   coin.strategy,
+                          bid_market: 'futures',
+                          ask_market: coin.strategy === 'sf' ? 'spot' : 'futures',
+                          spread:     null,
+                          bid_price:  coin.priceShort,
+                          ask_price:  coin.priceLong,
+                      },
+                      avgShort:  coin.priceShort != null ? String(coin.priceShort) : '',
+                      avgLong:   coin.priceLong  != null ? String(coin.priceLong)  : '',
+                      openedAt:  null,
+                      _restored: true, // флаг: восстановлено из БД, не из localStorage
+                  }))
+
+                  localStorage.setItem('activeTrades', JSON.stringify(restored))
+                  aLog('log', `[ШАГ 2] activeTrades восстановлено из activeCoins: ${restored.length} позиций`)
+                  return restored
+              })
+          } else {
+              setActiveCoins([])
+          }
+          // ─────────────────────────────────────────────────────────────────────
+
       } else {
           console.log('%c[ШАГ 2] userSettings отсутствуют — оставляем текущие фильтры', 'color:#f0a500')
       }
@@ -242,6 +352,9 @@ function App() {
     setAuth({ status: 'unknown', user: null })
     setLiveData(null)
     setIsLoading(true)
+    // Очищаем кэш карточек — при следующем входе другой пользователь
+    // не увидит данные предыдущей сессии
+    try { localStorage.removeItem(LIVE_DATA_CACHE_KEY) } catch {}
   }
 
   const [saveStatus, setSaveStatus] = useState(null) // null | 'saving' | 'saved' | 'error'
@@ -254,8 +367,39 @@ function App() {
     })
   }
   const toggleHidden = (id) => {
+    // Определяем заранее — скрываем или восстанавливаем
+    // (не внутри setState чтобы избежать вызова state-изменений внутри updater)
+    const isHiding = !hidden.includes(id)
+
+    if (isHiding) {
+      // Ищем opp в liveData — если монеты нет в текущем цикле (вышла из топа),
+      // берём из activeTrades чтобы корректно удалить из activeCoins
+      let opp = liveData?.find(o => o.id === id)
+      if (!opp) {
+        const trade = activeTrades.find(t => t.opp.id === id)
+        opp = trade?.opp
+      }
+      if (opp) {
+        const bidEx = opp.bid_ex.replace(/_futures$|_spot$/, '')
+        const askEx = opp.ask_ex.replace(/_futures$|_spot$/, '')
+        const isActive = activeCoins.some(c =>
+          c.symbol       === opp.symbol  &&
+          c.bid_exchange === bidEx       &&
+          c.ask_exchange === askEx       &&
+          c.strategy     === opp.strategy
+        )
+        if (isActive) {
+          aLog('warn', `[APP] toggleHidden → ${opp.symbol} в activeCoins, удаляем`)
+          removeActiveCoin(opp.symbol, bidEx, askEx, opp.strategy)
+          const trade = activeTrades.find(t => t.opp.id === id)
+          if (trade) removeActiveTrade(trade.id)
+        }
+      }
+    }
+
+    // Обновляем hidden отдельно — чистый state updater без побочных эффектов
     setHidden(prev => {
-      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      const next = isHiding ? [...prev, id] : prev.filter(x => x !== id)
       localStorage.setItem('hidden', JSON.stringify(next))
       return next
     })
@@ -270,6 +414,13 @@ function App() {
   }
   const removeActiveTrade = (id) => {
     setActiveTrades(prev => {
+      const trade = prev.find(t => t.id === id)
+      if (trade) {
+        // Синхронизируем удаление с БД через activeCoins
+        const bidEx = trade.opp.bid_ex.replace(/_futures$|_spot$/, '')
+        const askEx = trade.opp.ask_ex.replace(/_futures$|_spot$/, '')
+        removeActiveCoin(trade.opp.symbol, bidEx, askEx, trade.opp.strategy)
+      }
       const next = prev.filter(t => t.id !== id)
       localStorage.setItem('activeTrades', JSON.stringify(next))
       return next
@@ -278,6 +429,51 @@ function App() {
       setSelected(null)
       setSelectedActiveTrade(null)
     }
+  }
+  // addActiveCoin: добавляет монету в state + sessionStorage + БД
+  const addActiveCoin = async (coin) => {
+    if (activeCoins.length >= 5) {
+      aLog('warn', `[APP] addActiveCoin → лимит 5 монет достигнут, ${coin.symbol} не добавлена`)
+      return
+    }
+    // Проверка дубля по symbol + bid_exchange + ask_exchange + strategy
+    const isDuplicate = activeCoins.some(c =>
+      c.symbol       === coin.symbol       &&
+      c.bid_exchange === coin.bid_exchange &&
+      c.ask_exchange === coin.ask_exchange &&
+      c.strategy     === coin.strategy
+    )
+    if (isDuplicate) {
+      aLog('warn', `[APP] addActiveCoin → дубль: ${coin.symbol} уже в activeCoins, пропускаем`)
+      return
+    }
+    const next = [...activeCoins, coin]
+    setActiveCoins(next)
+    // Обновляем sessionStorage
+    const session = loadSession()
+    if (session) {
+      saveSession({ ...session, userSettings: { ...session.userSettings, activeCoins: next } })
+    }
+    aLog('log', `[APP] addActiveCoin → ${coin.symbol} | всего: ${next.length}`)
+    await saveUserSettings(auth.user.userId, { ...filters, activeCoins: next })
+  }
+
+  // removeActiveCoin: удаляет монету из state + sessionStorage + БД
+  const removeActiveCoin = async (symbol, bid_exchange, ask_exchange, strategy) => {
+    const next = activeCoins.filter(c => !(
+      c.symbol       === symbol       &&
+      c.bid_exchange === bid_exchange &&
+      c.ask_exchange === ask_exchange &&
+      c.strategy     === strategy
+    ))
+    setActiveCoins(next)
+    // Обновляем sessionStorage
+    const session = loadSession()
+    if (session) {
+      saveSession({ ...session, userSettings: { ...session.userSettings, activeCoins: next } })
+    }
+    aLog('log', `[APP] removeActiveCoin → ${symbol} | осталось: ${next.length}`)
+    await saveUserSettings(auth.user.userId, { ...filters, activeCoins: next })
   }
 
   // ── Фильтрация ─────────────────────────────────────────────────────────────
@@ -343,15 +539,18 @@ function App() {
       const passesExchange = filters.exchanges.length === 0 ||
         (filters.exchanges.includes(opp.bid_ex) && filters.exchanges.includes(opp.ask_ex))
 
-      const bidDep0 = opp.bid_transfer?.deposit
-      const askDep0 = opp.ask_transfer?.deposit
-      const bidWd0  = opp.bid_transfer?.withdraw
-      const askWd0  = opp.ask_transfer?.withdraw
-      const depOk0  = (bidDep0 === null || askDep0 === null) ? true : !!(bidDep0 && askDep0)
-      const wdOk0   = (bidWd0  === null || askWd0  === null) ? true : !!(bidWd0  && askWd0)
-      const passesTransfer =
-        (!filters.transfer.deposit  || depOk0) &&
-        (!filters.transfer.withdraw || wdOk0)
+      // showAllTransfer=true — фильтр переводов полностью отключён,
+      // показываем все монеты независимо от статуса депозита/вывода
+      const passesTransfer = showAllTransfer || (() => {
+        const bidDep0 = opp.bid_transfer?.deposit
+        const askDep0 = opp.ask_transfer?.deposit
+        const bidWd0  = opp.bid_transfer?.withdraw
+        const askWd0  = opp.ask_transfer?.withdraw
+        const depOk0  = (bidDep0 === null || askDep0 === null) ? true : !!(bidDep0 && askDep0)
+        const wdOk0   = (bidWd0  === null || askWd0  === null) ? true : !!(bidWd0  && askWd0)
+        return (!filters.transfer.deposit  || depOk0) &&
+               (!filters.transfer.withdraw || wdOk0)
+      })()
 
       if (passesExchange && passesTransfer) return opp // главная проходит — ничего не делаем
 
@@ -361,6 +560,10 @@ function App() {
         const exOk = filters.exchanges.length === 0 ||
           (filters.exchanges.includes(v.bid_ex) && filters.exchanges.includes(v.ask_ex))
         if (!exOk) return false
+
+        // Сырой вариант (_raw) не имеет данных трансфера — пропускаем его через фильтр,
+        // данные загрузятся лениво при клике пользователя через enrichSingleOpportunity
+        if (v._raw) return true
 
         const bDep = v.bid_transfer?.deposit
         const aDep = v.ask_transfer?.deposit
@@ -426,7 +629,7 @@ function App() {
     aLog('groupEnd')
 
     return result
-  }, [filters, sortMode, liveData, hidden, favorites])
+  }, [filters, sortMode, liveData, hidden, favorites, showAllTransfer])
 
   const hiddenOpportunities = useMemo(() => {
     return (liveData || []).filter(o => hidden.includes(o.id))
@@ -508,6 +711,9 @@ function App() {
                 setLiveData(enriched)
                 setIsLoading(false)
 
+                // Обновляем кэш после каждого цикла — TTL сбрасывается
+                writeLiveDataCache(enriched)
+
                 // ════════════════════════════════════════════════════
                 // ШАГ 6 — Показ карточек
                 console.group('%c[ШАГ 6] Карточки показаны пользователю', 'color:#00c97a;font-weight:bold')
@@ -571,7 +777,36 @@ function App() {
   useEffect(() => { try { localStorage.setItem('activeTab', activeTab) } catch {} }, [activeTab])
   useEffect(() => { try { localStorage.setItem('activePage', activePage) } catch {} }, [activePage])
 
-  const handleOpenModal       = (opp)   => { setSelected(opp); setSelectedActiveTrade(null) }
+  const handleOpenModal = (opp) => {
+    // Проверяем activeTrades — монета уже в позиции?
+    const existingTrade = activeTrades.find(t => t.opp.id === opp.id)
+    if (existingTrade) {
+      setSelected(opp)
+      setSelectedActiveTrade(existingTrade)
+      return
+    }
+
+    // Проверяем activeCoins — есть в БД но нет в activeTrades?
+    // Такое возможно в edge-case когда state рассинхронизировался.
+    const bidEx = opp.bid_ex.replace(/_futures$|_spot$/, '')
+    const askEx = opp.ask_ex.replace(/_futures$|_spot$/, '')
+    const activeCoin = activeCoins.find(c =>
+      c.symbol       === opp.symbol    &&
+      c.bid_exchange === bidEx         &&
+      c.ask_exchange === askEx         &&
+      c.strategy     === opp.strategy
+    )
+
+    setSelected(opp)
+    setSelectedActiveTrade(activeCoin ? {
+      // Synthetic trade из activeCoins для передачи цен в DetailModal
+      id:       `${opp.id}_restored`,
+      opp,
+      avgLong:  activeCoin.priceLong  != null ? String(activeCoin.priceLong)  : '',
+      avgShort: activeCoin.priceShort != null ? String(activeCoin.priceShort) : '',
+      openedAt: null,
+    } : null)
+  }
   const handleOpenActiveTrade = (trade) => { setSelected(trade.opp); setSelectedActiveTrade(trade) }
   const handleCloseModal      = ()      => { setSelected(null); setSelectedActiveTrade(null); setLiveOpp(null) }
   const handleSaveSettings = async () => {
@@ -612,10 +847,33 @@ function App() {
     }
     aLog('groupEnd')
   }
+  // tradeError — уведомление при превышении лимита активных позиций (исчезает через 4с)
+  const [tradeError, setTradeError] = useState(null)
+
   const handleTrade = (opp, avgLong, avgShort) => {
+    // Проверка лимита — максимум 5 активных монет
+    if (activeCoins.length >= 5) {
+      setTradeError('Достигнут лимит активных позиций (5 монет). Закройте одну из текущих позиций.')
+      setTimeout(() => setTradeError(null), 4000)
+      // Не добавляем — кнопка "ТОРГОВАТЬ" не меняется на "ВЫХОД"
+      return
+    }
     const trade = { id: `${opp.id}_${Date.now()}`, opp, avgLong, avgShort, openedAt: new Date().toISOString() }
     addActiveTrade(trade)
     setSelectedActiveTrade(trade)
+
+    // Синхронизируем с БД через activeCoins
+    // Убираем суффикс _futures/_spot из bid_ex/ask_ex для хранения
+    const bidEx = opp.bid_ex.replace(/_futures$|_spot$/, '')
+    const askEx = opp.ask_ex.replace(/_futures$|_spot$/, '')
+    addActiveCoin({
+      symbol:       opp.symbol,
+      bid_exchange: bidEx,
+      ask_exchange: askEx,
+      strategy:     opp.strategy,
+      priceShort:   parseFloat(avgShort) || null,
+      priceLong:    parseFloat(avgLong)  || null,
+    })
   }
 
   // ── Что показывать на странице futures ────────────────────────────────────
@@ -672,6 +930,7 @@ function App() {
                 liveData={liveData}
                 onSelect={handleOpenActiveTrade}
                 onRemove={removeActiveTrade}
+                isLoading={isLoading}
               />
 
               <StatsRow
@@ -704,6 +963,8 @@ function App() {
                   onSaveSettings={handleSaveSettings}
                   canSave={auth.status === 'ready' && !!auth.user}
                   saveStatus={saveStatus}
+                  showAllTransfer={showAllTransfer}
+                  onShowAllTransfer={setShowAllTransfer}
               />
             </div>
           </>
@@ -716,8 +977,9 @@ function App() {
             onClose={handleCloseModal}
             isFavorite={favorites.includes(selected.id)}
             onFavorite={() => toggleFavorite(selected.id)}
-            onHide={() => { toggleHidden(selected.id); handleCloseModal() }}
+            onHide={() => { toggleHidden((liveOpp || selected).id); handleCloseModal() }}
             onTrade={handleTrade}
+            tradeError={tradeError}
             initialAvgLong={selectedActiveTrade?.avgLong || ''}
             initialAvgShort={selectedActiveTrade?.avgShort || ''}
             isActiveTrade={!!selectedActiveTrade}

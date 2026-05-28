@@ -199,6 +199,9 @@ export async function getOKXStatus(symbol) {
 
 const MEXC_BATCH_KEY = 'mexc_ALL'
 
+// Promise-dedup: если батч уже выполняется — все параллельные вызовы ждут одного результата
+let _mexcBatchPromise = null
+
 async function fetchAllMEXCStatus() {
     if (isFresh(MEXC_BATCH_KEY)) {
         // Лог попадания в кэш батча MEXC
@@ -207,46 +210,60 @@ async function fetchAllMEXCStatus() {
         aLog('log', `[STATUS] MEXC батч → кэш HIT (${count} монет, возраст: ${(ageMs / 1000).toFixed(0)}с)`)
         return cache[MEXC_BATCH_KEY].data
     }
+
+    // Dedup: если запрос уже в процессе — возвращаем тот же Promise
+    if (_mexcBatchPromise) {
+        aLog('log', `[STATUS] MEXC батч → параллельный вызов, ждём текущий запрос`)
+        return _mexcBatchPromise
+    }
+
     // Лог промаха кэша батча
     aLog('log', `[STATUS] MEXC батч → кэш MISS, загружаем все монеты`)
 
-    try {
-        const apiKey = import.meta.env.VITE_MEXC_API_KEY
-        const secret = import.meta.env.VITE_MEXC_API_SECRET
-        const ts     = Date.now()
-        const query  = `timestamp=${ts}&recvWindow=60000`
-        const sig    = await hmacHex(secret, query)
-        const t0     = performance.now()
+    _mexcBatchPromise = (async () => {
+        try {
+            const apiKey = import.meta.env.VITE_MEXC_API_KEY
+            const secret = import.meta.env.VITE_MEXC_API_SECRET
+            const ts     = Date.now()
+            const query  = `timestamp=${ts}&recvWindow=60000`
+            const sig    = await hmacHex(secret, query)
+            const t0     = performance.now()
 
-        const res = await rlFetch(
-            'mexc', 300,
-            `/mexc-spot-api/api/v3/capital/config/getall?${query}&signature=${sig}`,
-            { headers: { 'X-MEXC-APIKEY': apiKey } }
-        )
-        if (!res.ok) {
-            console.warn('MEXC status batch failed:', res.status)
-            return {}
-        }
-        const data = await res.json()
-        if (!Array.isArray(data)) return {}
-
-        const map = {}
-        for (const coin of data) {
-            map[coin.coin] = {
-                deposit:  coin.networkList?.some(n => n.depositEnable)  ?? false,
-                withdraw: coin.networkList?.some(n => n.withdrawEnable) ?? false,
+            const res = await rlFetch(
+                'mexc', 300,
+                `/mexc-spot-api/api/v3/capital/config/getall?${query}&signature=${sig}`,
+                { headers: { 'X-MEXC-APIKEY': apiKey } }
+            )
+            if (!res.ok) {
+                console.warn('MEXC status batch failed:', res.status)
+                return {}
             }
+            const data = await res.json()
+            if (!Array.isArray(data)) return {}
+
+            const map = {}
+            for (const coin of data) {
+                map[coin.coin] = {
+                    deposit:  coin.networkList?.some(n => n.depositEnable)  ?? false,
+                    withdraw: coin.networkList?.some(n => n.withdrawEnable) ?? false,
+                }
+            }
+            cache[MEXC_BATCH_KEY] = { data: map, ts: Date.now() }
+            // Лог успешного батч-запроса — кол-во монет и время
+            aLog('success', `[STATUS] MEXC батч ✅ ${Object.keys(map).length} монет | ⏱ ${(performance.now() - t0).toFixed(0)}мс`)
+            return map
+        } catch (e) {
+            // Лог ошибки батч-запроса
+            aLog('error', `[STATUS] MEXC батч ❌ ${e.message}`)
+            console.warn('MEXC all status failed:', e.message)
+            return {}
+        } finally {
+            // Сбрасываем dedup-промис после завершения (успех или ошибка)
+            _mexcBatchPromise = null
         }
-        cache[MEXC_BATCH_KEY] = { data: map, ts: Date.now() }
-        // Лог успешного батч-запроса — кол-во монет и время
-        aLog('success', `[STATUS] MEXC батч ✅ ${Object.keys(map).length} монет | ⏱ ${(performance.now() - t0).toFixed(0)}мс`)
-        return map
-    } catch (e) {
-        // Лог ошибки батч-запроса
-        aLog('error', `[STATUS] MEXC батч ❌ ${e.message}`)
-        console.warn('MEXC all status failed:', e.message)
-        return {}
-    }
+    })()
+
+    return _mexcBatchPromise
 }
 
 export async function getMEXCStatus(symbol) {

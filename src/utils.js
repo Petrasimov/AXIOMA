@@ -152,3 +152,63 @@ export function parseExchange(str) {
     const idx = str.lastIndexOf('_')
     return { id: str.slice(0, idx), market: str.slice(idx + 1) }
 }
+
+/**
+ * Расчёт спреда по пересечению стаканов (Market Depth Spread).
+ * Объективная рыночная метрика — не зависит от tradeAmount пользователя.
+ *
+ * Алгоритм:
+ *   1. overlap = min(Σ bid объём в USD, Σ ask объём в USD)
+ *   2. bid_vwap — VWAP при закрытии overlap объёма, идём сверху вниз по bid
+ *   3. ask_vwap — VWAP при закрытии overlap объёма, идём снизу вверх по ask
+ *   4. spread = (bid_vwap - ask_vwap) / bid_vwap * 100
+ *
+ * @param {Array} bidBook — [[price, qty], ...] отсортирован по убыванию цены
+ * @param {Array} askBook — [[price, qty], ...] отсортирован по возрастанию цены
+ * @returns {{ spread: number, bid_vwap: number, ask_vwap: number, overlap_usd: number } | null}
+ */
+export function calcDepthSpread(bidBook, askBook) {
+    if (!bidBook?.length || !askBook?.length) return null
+
+    // Шаг 1 — объём пересечения стаканов
+    const totalBid = bidBook.reduce((s, [p, q]) => s + parseFloat(p) * parseFloat(q), 0)
+    const totalAsk = askBook.reduce((s, [p, q]) => s + parseFloat(p) * parseFloat(q), 0)
+    const overlap  = Math.min(totalBid, totalAsk)
+    if (overlap <= 0) return null
+
+    // Шаг 2 — bid VWAP (стакан уже отсортирован по убыванию — сверху вниз)
+    let rem = overlap, bidW = 0, bidQ = 0
+    for (const [p, q] of bidBook) {
+        const price = parseFloat(p)
+        const usd   = price * parseFloat(q)
+        const take  = Math.min(usd, rem)
+        const qty   = take / price
+        bidW += price * qty
+        bidQ += qty
+        rem  -= take
+        if (rem <= 0) break
+    }
+    if (bidQ <= 0) return null
+    const bid_vwap = bidW / bidQ
+
+    // Шаг 3 — ask VWAP (стакан уже отсортирован по возрастанию — снизу вверх)
+    rem = overlap
+    let askW = 0, askQ = 0
+    for (const [p, q] of askBook) {
+        const price = parseFloat(p)
+        const usd   = price * parseFloat(q)
+        const take  = Math.min(usd, rem)
+        const qty   = take / price
+        askW += price * qty
+        askQ += qty
+        rem  -= take
+        if (rem <= 0) break
+    }
+    if (askQ <= 0 || bid_vwap <= 0) return null
+    const ask_vwap = askW / askQ
+
+    // Шаг 4 — спред (bid > ask → положительный при реальном арбитраже)
+    const spread = (bid_vwap - ask_vwap) / bid_vwap * 100
+
+    return { spread, bid_vwap, ask_vwap, overlap_usd: overlap }
+}

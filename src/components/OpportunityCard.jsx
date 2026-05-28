@@ -1,8 +1,8 @@
 import { getExchangeInfo, getSpreadColor, calcProfit, formatVolume, formatPrice, formatAge, formatTimeRemaining, getAgeIcon, getTransferIcon } from "../utils"
-import { Star, Trash2, ChevronDown, ChevronUp } from "lucide-react"
+import { Star, Trash2, ChevronDown, ChevronUp, Loader } from "lucide-react"
 import { useState, useEffect } from "react"
 import { EXCHANGES } from "../constants"
-import { aLog } from "../api.js"
+import { aLog, enrichSingleOpportunity } from "../api.js"
 
 const style = `
   .opp-card {
@@ -409,6 +409,11 @@ const style = `
     to   { opacity: 1; transform: translateY(0); }
   }
 
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
   .opp-card { animation: card-appear 0.3s ease forwards; }
 `
 
@@ -455,15 +460,45 @@ function VariantBtn({ variant, tradeAmount, onSelect }) {
   const spreadColor = getSpreadColor(variant.spread)
   const stratLabel = variant.strategy === 'sf' ? 'SPOT · FUTURES' : 'FUTURES · FUTURES'
 
+  // Состояние загрузки для сырых вариантов (_raw: true)
+  const [loading, setLoading] = useState(false)
+
+  const handleClick = async (e) => {
+    e.stopPropagation()
+    if (variant._raw && !loading) {
+      // Вариант не обогащён — загружаем данные перед открытием DetailModal
+      aLog('log', `[VARIANT] Ленивое обогащение: ${variant.symbol} | ${variant.bid_ex}→${variant.ask_ex}`)
+      setLoading(true)
+      try {
+        const enriched = await enrichSingleOpportunity(variant)
+        onSelect({ ...enriched, _raw: false })
+      } catch (err) {
+        aLog('warn', `[VARIANT] Ошибка обогащения: ${variant.symbol} | ${err.message}`)
+        onSelect(variant)
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      onSelect(variant)
+    }
+  }
+
   return (
     <button
       className="variant-btn"
-      onClick={e => { e.stopPropagation(); onSelect(variant) }}
+      onClick={handleClick}
+      disabled={loading}
+      style={{ opacity: loading ? 0.7 : 1, cursor: loading ? 'wait' : 'pointer' }}
     >
       {/* Биржа продажи (ASK) — только лого */}
       <ExLogo info={askInfo} />
 
-      <span className="vb-arrow">→</span>
+      <span className="vb-arrow">
+        {loading
+          ? <Loader size={10} style={{ animation: 'spin 1s linear infinite' }} />
+          : '→'
+        }
+      </span>
 
       {/* Биржа покупки (BID) — только лого */}
       <ExLogo info={bidInfo} />
@@ -771,8 +806,22 @@ function OpportunityCard({ opp, tradeAmount, onSelect, isFavorite, onFavorite, o
         <div className="card-footer">
           <div className="footer-stat">
             <span className="footer-stat-label">Price Spread</span>
-            <span className="footer-stat-value" style={{ color: spreadColor }}>
-              {opp.spread.toFixed(2)}%
+            {/* userSpread — цветной, основная метрика */}
+            {/* depthSpread — серый, маленький, справа — объективная рыночная метрика */}
+            <span style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+              <span className="footer-stat-value" style={{ color: spreadColor }}>
+                {opp.spread.toFixed(2)}%
+              </span>
+              {opp.depth_spread != null && (
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 9,
+                  color: 'var(--text-muted)',
+                  fontWeight: 500,
+                }}>
+                  {opp.depth_spread.toFixed(2)}%
+                </span>
+              )}
             </span>
           </div>
           <div className="footer-divider" />

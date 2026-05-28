@@ -631,6 +631,7 @@ function DetailModal({
   opp, tradeAmount, onClose,
   isFavorite, onFavorite, onHide,
   onTrade, initialAvgLong, initialAvgShort, isActiveTrade, onRemoveTrade,
+  tradeError,
 }) {
   const [chartMode, setChartMode] = useState('entry-prices')
   const [liveHistory, setLiveHistory] = useState([])
@@ -833,6 +834,21 @@ function DetailModal({
                   {tradeBtnLabel}
                 </button>
               </div>
+
+              {/* Уведомление при превышении лимита активных позиций */}
+              {tradeError && (
+                <div style={{
+                  fontSize: 10,
+                  color: 'var(--error)',
+                  background: 'rgba(224,62,62,0.08)',
+                  border: '1px solid rgba(224,62,62,0.25)',
+                  padding: '5px 10px',
+                  marginTop: 6,
+                  lineHeight: 1.4,
+                }}>
+                  {tradeError}
+                </div>
+              )}
 
               <ExCard side="ask" opp={opp} book={askBook} livePrice={vwapAsk} refPrice={vwapBid} />
             </div>
