@@ -67,9 +67,11 @@ export function rlFetch(exchange, minMs, url, opts) {
         if (!state.busy) _drain(state, minMs)
     })
 
-    // Регистрируем активный запрос, удаляем после завершения
+    // Регистрируем активный запрос, удаляем после завершения.
+    // .catch() здесь обязателен — без него rejected promise вызывает unhandled rejection,
+    // так как реальный обработчик ошибки находится на внешнем .then()/.catch() вызывающего кода.
     _inFlight[url] = promise
-    promise.finally(() => delete _inFlight[url])
+    promise.catch(() => {}).finally(() => delete _inFlight[url])
 
     return promise.then(cached => _reconstruct(cached))
 }

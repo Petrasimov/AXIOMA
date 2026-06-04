@@ -26,12 +26,13 @@ function makeWsLogger(exchange, symbol, marketType) {
             if (!firstEmitDone) {
                 firstEmitDone = true
                 lastEmitLog = now
-                aLog('success', `${tag} ✅ первые данные: bids=${bids.length} asks=${asks.length} | bid=${bestBid} ask=${bestAsk}`)
+                // tag и msg — раздельные аргументы, консистентно с info/success/warn/log
+                aLog('success', tag, `✅ первые данные: bids=${bids.length} asks=${asks.length} | bid=${bestBid} ask=${bestAsk}`)
                 return
             }
             if (now - lastEmitLog < 5000) return
             lastEmitLog = now
-            aLog('log', `${tag} обновление: bids=${bids.length} asks=${asks.length} | bid=${bestBid} ask=${bestAsk}`)
+            aLog('log', tag, `обновление: bids=${bids.length} asks=${asks.length} | bid=${bestBid} ask=${bestAsk}`)
         },
     }
 }
@@ -131,6 +132,10 @@ function connectBinance(symbol, marketType, onUpdate) {
         console.warn('Binance WS error:', e)
     }
 
+    ws.onclose = (e) => {
+        log.warn(`WS закрыт: code=${e.code} reason=${e.reason || '—'}`)
+    }
+
     return {
         close: () => {
             closed = true
@@ -202,8 +207,14 @@ function connectBingX(symbol, marketType, onUpdate) {
 
     ws.onopen = () => {
         log.success(`WS открыт`)
-        const sub = { id: crypto.randomUUID(), reqType: 'sub', dataType: `${sym}@depth` }
-        log.log(`подписка → ${sub.dataType}`)
+        // Документация BingX: один WS endpoint для spot и futures
+        // Futures: dataType = 'ETH-USDT@depth'  → /market
+        // Spot:    dataType = 'ETH-USDT@depth'  → /market (тот же формат)
+        // Различие только в контексте: futures подписка работает для perpetual
+        // Spot depth также поддерживается через тот же endpoint и dataType
+        const dataType = `${sym}@depth`
+        const sub = { id: crypto.randomUUID(), reqType: 'sub', dataType }
+        log.log(`подписка → ${dataType} (${marketType})`)
         ws.send(JSON.stringify(sub))
     }
 
@@ -226,6 +237,10 @@ function connectBingX(symbol, marketType, onUpdate) {
     ws.onerror = (e) => {
         log.error(`ошибка WS: ${e.message ?? e.type}`)
         console.warn('BingX WS error:', e)
+    }
+
+    ws.onclose = (e) => {
+        log.warn(`WS закрыт: code=${e.code} reason=${e.reason || '—'}`)
     }
 
     return {
@@ -284,6 +299,7 @@ function connectBitget(symbol, marketType, onUpdate) {
             localBids = new Map(book.bids.map(([p, q]) => [p, parseFloat(q)]))
             localAsks = new Map(book.asks.map(([p, q]) => [p, parseFloat(q)]))
         } else if (msg.action === 'update') {
+            log.log(`update: bids=${book.bids.length} asks=${book.asks.length}`)
             applyLevels(localBids, book.bids)
             applyLevels(localAsks, book.asks)
         }
@@ -294,6 +310,10 @@ function connectBitget(symbol, marketType, onUpdate) {
     ws.onerror = (e) => {
         log.error(`ошибка WS: ${e.message ?? e.type}`)
         console.warn('Bitget WS error:', e)
+    }
+
+    ws.onclose = (e) => {
+        log.warn(`WS закрыт: code=${e.code} reason=${e.reason || '—'}`)
     }
 
     return {
@@ -352,6 +372,7 @@ function connectBybit(symbol, marketType, onUpdate) {
             localBids = new Map(msg.data.b.map(([p, q]) => [p, parseFloat(q)]))
             localAsks = new Map(msg.data.a.map(([p, q]) => [p, parseFloat(q)]))
         } else if (msg.type === 'delta') {
+            log.log(`delta: bids=${msg.data.b.length} asks=${msg.data.a.length}`)
             applyLevels(localBids, msg.data.b)
             applyLevels(localAsks, msg.data.a)
         }
@@ -362,6 +383,10 @@ function connectBybit(symbol, marketType, onUpdate) {
     ws.onerror = (e) => {
         log.error(`ошибка WS: ${e.message ?? e.type}`)
         console.warn('Bybit WS error:', e)
+    }
+
+    ws.onclose = (e) => {
+        log.warn(`WS закрыт: code=${e.code} reason=${e.reason || '—'}`)
     }
 
     return {
@@ -428,7 +453,7 @@ function connectGate(symbol, marketType, onUpdate) {
         const book = msg.result
 
         if (book.full === 1) {
-            log.log(`full snapshot — сброс Map`)
+            log.log(`full snapshot — сброс Map (bids=${book.b?.length ?? 0} asks=${book.a?.length ?? 0})`)
             localBids = new Map()
             localAsks = new Map()
         }
@@ -448,6 +473,10 @@ function connectGate(symbol, marketType, onUpdate) {
         console.warn('Gate WS error:', e)
     }
 
+    ws.onclose = (e) => {
+        log.warn(`WS закрыт: code=${e.code} reason=${e.reason || '—'}`)
+    }
+
     return {
         close: () => {
             log.warn(`close() вызван`)
@@ -458,9 +487,13 @@ function connectGate(symbol, marketType, onUpdate) {
 
 // ─── MEXC ─────────────────────────────────────────────────────────────────────
 function connectMEXC(symbol, marketType, onUpdate) {
-    const sym = `${symbol}_USDT`
+    const sym    = `${symbol}_USDT`    // futures формат: ETH_USDT
+    const symCap = `${symbol.toUpperCase()}USDT` // spot формат: ETHUSDT
+
+    // Futures: wss://contract.mexc.com/edge (не изменился)
+    // Spot:    wss://wbs-api.mexc.com/ws   (wbs.mexc.com отключён Aug 4 2025)
     const url = marketType === 'spot'
-        ? `wss://wbs.mexc.com/ws`
+        ? `wss://wbs-api.mexc.com/ws`
         : `wss://contract.mexc.com/edge`
     const log = makeWsLogger('mexc', symbol, marketType)
 
@@ -491,32 +524,75 @@ function connectMEXC(symbol, marketType, onUpdate) {
 
     const handleMessage = (text) => {
         const msg = JSON.parse(text)
-        if (msg.channel === 'rs.sub.depth') {
-            log.log(`подписка подтверждена (rs.sub.depth)`)
-            return
-        }
-        if (!msg.data) return
 
-        const book = msg.data
+        if (marketType === 'spot') {
+            // ─── MEXC Spot WS v3 (wbs-api.mexc.com) ─────────────────────────
+            // Подписка: spot@public.limit.depth.v3.api@ETHUSDT@20
+            // Ответ: { c: "spot@...", d: { asks: [[p,q],...], bids: [[p,q],...] } }
+            const d = msg.d
+            if (!d) return
 
-        if (!initialized) {
-            log.log(`инициализация стакана: bids=${book.bids?.length ?? 0} asks=${book.asks?.length ?? 0}`)
-            localBids = new Map(book.bids?.map(([p, q]) => [String(p), parseFloat(q)]) ?? [])
-            localAsks = new Map(book.asks?.map(([p, q]) => [String(p), parseFloat(q)]) ?? [])
-            initialized = true
+            const bids = d.bids ?? []
+            const asks = d.asks ?? []
+
+            if (!initialized && (bids.length > 0 || asks.length > 0)) {
+                log.log(`инициализация стакана: bids=${bids.length} asks=${asks.length}`)
+                localBids = new Map(bids.map(([p, q]) => [String(p), parseFloat(q)]))
+                localAsks = new Map(asks.map(([p, q]) => [String(p), parseFloat(q)]))
+                initialized = true
+            } else if (initialized) {
+                if (bids.length || asks.length) {
+                    log.log(`update: bids=${bids.length} asks=${asks.length}`)
+                }
+                if (bids.length) applyLevels(localBids, bids)
+                if (asks.length) applyLevels(localAsks, asks)
+            }
+            emit()
+
         } else {
-            if (book.bids) applyLevels(localBids, book.bids)
-            if (book.asks) applyLevels(localAsks, book.asks)
-        }
+            // ─── MEXC Futures WS (contract.mexc.com/edge) ────────────────────
+            // Подписка: sub.depth symbol=ETH_USDT
+            // Ответ: { channel: "push.depth", data: { bids: [[p,q]], asks: [[p,q]] } }
+            if (msg.channel === 'rs.sub.depth') {
+                log.log(`подписка подтверждена (rs.sub.depth)`)
+                return
+            }
+            if (!msg.data) return
+            const book = msg.data
 
-        emit()
+            if (!initialized) {
+                log.log(`инициализация стакана: bids=${book.bids?.length ?? 0} asks=${book.asks?.length ?? 0}`)
+                localBids = new Map(book.bids?.map(([p, q]) => [String(p), parseFloat(q)]) ?? [])
+                localAsks = new Map(book.asks?.map(([p, q]) => [String(p), parseFloat(q)]) ?? [])
+                initialized = true
+            } else {
+                if (book.bids || book.asks) {
+                    log.log(`update: bids=${book.bids?.length ?? 0} asks=${book.asks?.length ?? 0}`)
+                }
+                if (book.bids) applyLevels(localBids, book.bids)
+                if (book.asks) applyLevels(localAsks, book.asks)
+            }
+            emit()
+        }
     }
 
     ws.onopen = () => {
         log.success(`WS открыт`)
-        const sub = { method: 'sub.depth', param: { symbol: sym } }
-        log.log(`подписка → sub.depth symbol=${sym}`)
-        ws.send(JSON.stringify(sub))
+        if (marketType === 'spot') {
+            // Spot v3 API: JSON формат без суффикса .pb (protobuf)
+            // Канал: spot@public.limit.depth.v3.api@ETHUSDT@20
+            const sub = {
+                method: 'SUBSCRIPTION',
+                params: [`spot@public.limit.depth.v3.api@${symCap}@20`]
+            }
+            log.log(`подписка → spot@public.limit.depth.v3.api@${symCap}@20`)
+            ws.send(JSON.stringify(sub))
+        } else {
+            // Futures: старый протокол sub.depth
+            const sub = { method: 'sub.depth', param: { symbol: sym } }
+            log.log(`подписка → sub.depth symbol=${sym}`)
+            ws.send(JSON.stringify(sub))
+        }
     }
 
     ws.onmessage = async (event) => {
@@ -538,6 +614,10 @@ function connectMEXC(symbol, marketType, onUpdate) {
     ws.onerror = (e) => {
         log.error(`ошибка WS: ${e.message ?? e.type}`)
         console.warn('MEXC WS error:', e)
+    }
+
+    ws.onclose = (e) => {
+        log.warn(`WS закрыт: code=${e.code} reason=${e.reason || '—'}`)
     }
 
     return {
@@ -597,6 +677,7 @@ function connectOKX(symbol, marketType, onUpdate) {
             localBids = new Map(book.bids.map(([p, q]) => [p, parseFloat(q)]))
             localAsks = new Map(book.asks.map(([p, q]) => [p, parseFloat(q)]))
         } else if (msg.action === 'update') {
+            log.log(`update: bids=${book.bids.length} asks=${book.asks.length}`)
             applyLevels(localBids, book.bids)
             applyLevels(localAsks, book.asks)
         }
@@ -607,6 +688,10 @@ function connectOKX(symbol, marketType, onUpdate) {
     ws.onerror = (e) => {
         log.error(`ошибка WS: ${e.message ?? e.type}`)
         console.warn('OKX WS error:', e)
+    }
+
+    ws.onclose = (e) => {
+        log.warn(`WS закрыт: code=${e.code} reason=${e.reason || '—'}`)
     }
 
     return {
@@ -623,7 +708,17 @@ function connectKuCoin(symbol, marketType, onUpdate) {
     let pingInterval = null
     const log = makeWsLogger('kucoin', symbol, marketType)
 
-    log.info(`подключение → запрашиваем токен /kucoin-api/api/v1/bullet-public`)
+    // Документация KuCoin (kucoin.com/docs-new):
+    // Futures: POST /api/v1/bullet-public → api-futures.kucoin.com → wss://ws-api-futures.kucoin.com
+    // Spot:    POST /api/v1/bullet-public → api.kucoin.com         → wss://ws-api-spot.kucoin.com
+    // Прокси в vite.config.js:
+    //   /kucoin-api      → api-futures.kucoin.com
+    //   /kucoin-spot-api → api.kucoin.com
+    const tokenEndpoint = marketType === 'spot'
+        ? '/kucoin-spot-api/api/v1/bullet-public'
+        : '/kucoin-api/api/v1/bullet-public'
+
+    log.info(`подключение → запрашиваем токен ${tokenEndpoint}`)
 
     const handle = {
         closed: false,
@@ -638,7 +733,7 @@ function connectKuCoin(symbol, marketType, onUpdate) {
     ;(async () => {
         try {
             const t0 = Date.now()
-            const res = await fetch('/kucoin-api/api/v1/bullet-public', { method: 'POST' })
+            const res = await fetch(tokenEndpoint, { method: 'POST' })
             if (handle.closed) return
             const data = await res.json()
             const token = data.data.token
@@ -649,8 +744,12 @@ function connectKuCoin(symbol, marketType, onUpdate) {
             let localAsks = new Map()
             let initialized = false
 
+            // Futures: { price, qty }  — формат contractMarket/level2
+            // Spot:    { price, size } — формат spotMarket/level2Depth50
             const applyLevels = (map, levels) => {
-                for (const { price, qty } of levels) {
+                for (const item of levels) {
+                    const price = item.price
+                    const qty   = item.qty ?? item.size ?? '0'
                     if (parseFloat(qty) === 0) map.delete(String(price))
                     else map.set(String(price), parseFloat(qty))
                 }
@@ -671,7 +770,13 @@ function connectKuCoin(symbol, marketType, onUpdate) {
 
             ws.onopen = () => {
                 log.success(`WS открыт`)
-                const topic = `/contractMarket/level2:${symbol}USDTM`
+
+                // Futures: /contractMarket/level2:ETHUSDTM  — инкрементальные изменения
+                // Spot:    /spotMarket/level2Depth50:ETH-USDT — топ-50 с полным снэпшотом
+                const topic = marketType === 'spot'
+                    ? `/spotMarket/level2Depth50:${symbol}-USDT`
+                    : `/contractMarket/level2:${symbol}USDTM`
+
                 const sub = {
                     id: Date.now().toString(),
                     type: 'subscribe',
@@ -704,21 +809,35 @@ function connectKuCoin(symbol, marketType, onUpdate) {
 
                 const book = msg.data
 
-                if (!initialized) {
-                    log.log(`инициализация стакана: bids=${book.bids?.length ?? 0} asks=${book.asks?.length ?? 0}`)
-                    localBids = new Map(
-                        book.bids?.map(({ price, qty }) => [String(price), parseFloat(qty)]) ?? []
-                    )
-                    localAsks = new Map(
-                        book.asks?.map(({ price, qty }) => [String(price), parseFloat(qty)]) ?? []
-                    )
-                    initialized = true
-                } else if (book.change) {
-                    const [price, side, qty] = book.change.split(',')
-                    log.log(`change: price=${price} side=${side} qty=${qty}`)
-                    const map = side === 'buy' ? localBids : localAsks
-                    if (parseFloat(qty) === 0) map.delete(price)
-                    else map.set(price, parseFloat(qty))
+                if (marketType === 'spot') {
+                    // Spot level2Depth50: присылает полный снэпшот при каждом обновлении
+                    // { data: { bids: [[price, size]], asks: [[price, size]] } }
+                    const rawBids = book.bids ?? []
+                    const rawAsks = book.asks ?? []
+                    if (!rawBids.length && !rawAsks.length) return
+                    log.log(`spot snapshot: bids=${rawBids.length} asks=${rawAsks.length}`)
+                    localBids = new Map(rawBids.map(([p, q]) => [String(p), parseFloat(q)]))
+                    localAsks = new Map(rawAsks.map(([p, q]) => [String(p), parseFloat(q)]))
+
+                } else {
+                    // Futures level2: инкрементальные изменения
+                    // { data: { bids: [{price, qty}], asks: [{price, qty}], change: "price,side,qty" } }
+                    if (!initialized) {
+                        log.log(`инициализация стакана: bids=${book.bids?.length ?? 0} asks=${book.asks?.length ?? 0}`)
+                        localBids = new Map(
+                            book.bids?.map(({ price, qty }) => [String(price), parseFloat(qty)]) ?? []
+                        )
+                        localAsks = new Map(
+                            book.asks?.map(({ price, qty }) => [String(price), parseFloat(qty)]) ?? []
+                        )
+                        initialized = true
+                    } else if (book.change) {
+                        const [price, side, qty] = book.change.split(',')
+                        log.log(`change: price=${price} side=${side} qty=${qty}`)
+                        const map = side === 'buy' ? localBids : localAsks
+                        if (parseFloat(qty) === 0) map.delete(price)
+                        else map.set(price, parseFloat(qty))
+                    }
                 }
 
                 emit()
@@ -727,6 +846,11 @@ function connectKuCoin(symbol, marketType, onUpdate) {
             ws.onerror = (e) => {
                 log.error(`ошибка WS: ${e.message ?? e.type}`)
                 console.warn('KuCoin WS error:', e)
+            }
+
+            ws.onclose = (e) => {
+                log.warn(`WS закрыт: code=${e.code} reason=${e.reason || '—'}`)
+                clearInterval(pingInterval)
             }
 
         } catch (e) {

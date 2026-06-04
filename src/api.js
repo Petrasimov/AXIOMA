@@ -928,9 +928,13 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
         const variants = rawVariants.map((v, i) => {
             const bidEx = parseExchange(v.rec.bid_ex)
             const askEx = parseExchange(v.rec.ask_ex)
-            // Нормализация strategy как в основном обогащении
-            const rawStrategy = v.rec.strategy?.toLowerCase?.() ?? ''
-            const strategy = rawStrategy.includes('spot') ? 'sf' : 'ff'
+            // Нормализация strategy — идентична строкам 858-860 для основного opp.
+            // Поддерживает оба формата: бэкенд может отдавать 'spot_futures'/'futures_futures'
+            // ИЛИ уже нормализованные 'sf'/'ff' — оба случая корректно обрабатываются.
+            const rawStrategy = v.rec.strategy ?? ''
+            const strategy = (rawStrategy === 'spot_futures' || rawStrategy === 'sf') ? 'sf'
+                           : (rawStrategy === 'futures_futures' || rawStrategy === 'ff') ? 'ff'
+                           : rawStrategy.toLowerCase().includes('spot') ? 'sf' : 'ff'
             return {
                 id:          idx * 1000 + i + 1,
                 symbol:      v.rec.symbol,

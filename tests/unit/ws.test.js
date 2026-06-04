@@ -326,22 +326,27 @@ describe('[4] connectBinance', () => {
     })
 
     it('загружает снэпшот и применяет буфер', async () => {
-        // Буферизуем сообщение
-        ws.receive({ u: 1005, b: [['100', '5.0']], a: [] })
-        // Даём setTimeout(500) сработать
+        // setTimeout(500мс) регистрируется при создании соединения.
+        // Fake timers должны быть АКТИВНЫ уже в момент создания соединения,
+        // иначе vi.advanceTimersByTimeAsync не видит реальный setTimeout.
         vi.useFakeTimers()
-        vi.runAllTimers()
+        MockWebSocket.reset()
+        const freshUpdates = []
+        connectOrderBook('binance', 'BTC', 'futures', d => freshUpdates.push(d))
+        await vi.advanceTimersByTimeAsync(50)  // WS открывается (Promise.resolve)
+        const freshWs = MockWebSocket.latest()
+        freshWs.receive({ u: 1005, b: [['100', '5.0']], a: [] }) // буферизуем до снэпшота
+        await vi.advanceTimersByTimeAsync(700)  // setTimeout(500мс) + async fetch
         vi.useRealTimers()
-        await ticks(5)
-        // После снэпшота должны получить emit
-        expect(updates.length).toBeGreaterThan(0)
+        // После снэпшота должны получить emit с буферизованным обновлением
+        expect(freshUpdates.length).toBeGreaterThan(0)
     })
 
     it('игнорирует сообщения с u <= lastUpdateId', async () => {
         vi.useFakeTimers()
-        vi.runAllTimers()
+        await vi.advanceTimersByTimeAsync(600)
         vi.useRealTimers()
-        await ticks(5)
+        await ticks(3)
         const countBefore = updates.length
         // u=999 < lastUpdateId=1000 → должно быть проигнорировано
         ws.receive({ u: 999, b: [['100', '9.0']], a: [] })
@@ -349,13 +354,18 @@ describe('[4] connectBinance', () => {
     })
 
     it('применяет инкрементальные обновления после снэпшота', async () => {
+        // Создаём соединение под fake timers чтобы setTimeout был виден advanceTimersByTimeAsync
         vi.useFakeTimers()
-        vi.runAllTimers()
+        MockWebSocket.reset()
+        const freshUpdates = []
+        connectOrderBook('binance', 'BTC', 'futures', d => freshUpdates.push(d))
+        await vi.advanceTimersByTimeAsync(750)  // WS открытие + setTimeout(500мс) + fetch
         vi.useRealTimers()
-        await ticks(5)
-        const countBefore = updates.length
-        ws.receive({ u: 1001, b: [['98', '3.0']], a: [] })
-        expect(updates.length).toBe(countBefore + 1)
+        const freshWs = MockWebSocket.latest()
+        const countBefore = freshUpdates.length
+        // u=1001 > lastUpdateId=1000 → должно применяться
+        freshWs.receive({ u: 1001, b: [['98', '3.0']], a: [] })
+        expect(freshUpdates.length).toBe(countBefore + 1)
     })
 
     it('обрабатывает ошибку fetch снэпшота без краша', async () => {
@@ -815,11 +825,19 @@ describe('[10] connectKuCoin', () => {
         expect(sub.privateChannel).toBe(false)
     })
 
-    it('запускает ping каждые 20 секунд', () => {
+    it('запускает ping каждые 20 секунд', async () => {
+        // setInterval регистрируется внутри async IIFE после получения токена.
+        // Чтобы fake timers его видели — создаём новое соединение уже под fake timers.
         vi.useFakeTimers()
-        // Имитируем 20с
-        vi.advanceTimersByTime(20000)
-        const pings = ws.sent.filter(s => s.type === 'ping')
+        MockWebSocket.reset()
+        const freshUpdates = []
+        connectOrderBook('kucoin', 'BTC', 'futures', d => freshUpdates.push(d))
+        // Ждём async IIFE (fetch токена) и открытие WS
+        await vi.advanceTimersByTimeAsync(100)
+        const freshWs = MockWebSocket.latest()
+        // Продвигаем на 20с — должен сработать pingInterval
+        await vi.advanceTimersByTimeAsync(20000)
+        const pings = freshWs.sent.filter(s => s?.type === 'ping')
         expect(pings.length).toBeGreaterThan(0)
         vi.useRealTimers()
     })
@@ -937,13 +955,13 @@ describe('[11] aLog — WS логирование', () => {
             ok: true,
             json: async () => ({ lastUpdateId: 1000, bids: [['100', '1']], asks: [['101', '1']] }),
         }))
-        connectOrderBook('binance', 'BTC', 'futures', vi.fn())
-        await tick()
-        const ws = MockWebSocket.latest()
+        // Создаём соединение под fake timers — setTimeout(500мс) будет виден
         vi.useFakeTimers()
-        vi.runAllTimers()
+        MockWebSocket.reset()
+        connectOrderBook('binance', 'BTC', 'futures', vi.fn())
+        await vi.advanceTimersByTimeAsync(50)   // WS открывается
+        await vi.advanceTimersByTimeAsync(700)  // setTimeout(500мс) + fetch + emit
         vi.useRealTimers()
-        await ticks(5)
         expect(aLogMock).toHaveBeenCalledWith('success', expect.any(String), expect.stringContaining('первые данные'))
     })
 

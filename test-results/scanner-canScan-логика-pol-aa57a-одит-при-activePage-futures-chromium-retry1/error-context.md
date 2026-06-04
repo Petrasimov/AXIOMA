@@ -75,7 +75,7 @@ Received: 1
           - text: до прибыли
         - generic [ref=e66]:
           - generic [ref=e67] [cursor=pointer]:
-            - generic [ref=e69]: "01"
+            - generic [ref=e69]: ✓
             - generic [ref=e70]:
               - generic [ref=e71]: Сканер находит сигнал
               - generic [ref=e72]: Система мгновенно получает свежие арбитражные возможности со всех 8 бирж и показывает только лучшие — отсортированные по размеру спреда.
@@ -107,53 +107,29 @@ Received: 1
                 - generic [ref=e101]: PROFIT
                 - generic [ref=e102]: P&L TRACKER
       - generic [ref=e103]:
-        - generic [ref=e108]: AXIOMA — SCANNER VIEW
+        - generic [ref=e108]: AXIOMA — FILTER DRAWER
         - generic [ref=e111]:
           - generic [ref=e112]:
-            - generic [ref=e113]: Пара
-            - generic [ref=e114]: Биржи
-            - generic [ref=e115]: Спред
-            - generic [ref=e116]: +$100
-          - generic [ref=e117]:
-            - generic [ref=e118]:
-              - generic [ref=e119]: BTC/USDT
-              - generic [ref=e120]: Futures
-            - generic [ref=e121]:
-              - img "BN" [ref=e122]
-              - generic [ref=e123]: →
-              - img "BB" [ref=e124]
-            - generic [ref=e125]: +3.42%
-            - generic [ref=e127]: $3.42
-          - generic [ref=e129]:
-            - generic [ref=e130]:
-              - generic [ref=e131]: ETH/USDT
-              - generic [ref=e132]: Spot
-            - generic [ref=e133]:
-              - img "MX" [ref=e134]
-              - generic [ref=e135]: →
-              - img "BG" [ref=e136]
-            - generic [ref=e137]: +2.18%
-            - generic [ref=e139]: $2.18
+            - img [ref=e113]
+            - text: ФИЛЬТРЫ
+          - generic [ref=e115]:
+            - generic [ref=e116]: Биржи
+            - generic [ref=e117]:
+              - img "BN" [ref=e119]
+              - img "BB" [ref=e121]
+              - img "OK" [ref=e123]
+              - img "GT" [ref=e125]
+              - img "KC" [ref=e127]
+              - img "MX" [ref=e129]
+              - img "BG" [ref=e131]
+              - img "BX" [ref=e133]
+          - generic [ref=e134]:
+            - generic [ref=e135]: Мин. спред
+            - generic [ref=e139]: 1.0%
           - generic [ref=e140]:
-            - generic [ref=e141]:
-              - generic [ref=e142]: SOL/USDT
-              - generic [ref=e143]: Futures
-            - generic [ref=e144]:
-              - img "BX" [ref=e145]
-              - generic [ref=e146]: →
-              - img "GT" [ref=e147]
-            - generic [ref=e148]: +1.55%
-            - generic [ref=e150]: $1.55
-          - generic [ref=e151]:
-            - generic [ref=e152]:
-              - generic [ref=e153]: BNB/USDT
-              - generic [ref=e154]: Futures
-            - generic [ref=e155]:
-              - img "KC" [ref=e156]
-              - generic [ref=e157]: →
-              - img "OK" [ref=e158]
-            - generic [ref=e159]: +1.12%
-            - generic [ref=e161]: $1.12
+            - generic [ref=e141]: Стратегия
+            - generic [ref=e145]: Futures-Futures
+            - generic [ref=e149]: Spot-Futures
 ```
 
 # Test source

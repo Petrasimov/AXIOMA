@@ -44,7 +44,7 @@ Received: 1
   - generic [ref=e37]:
     - generic [ref=e38]:
       - generic [ref=e39]: FUTURES ARBITRAGE
-      - generic [ref=e40]: 23:58:27
+      - generic [ref=e40]: 20:21:41
       - button "По спреду" [ref=e42] [cursor=pointer]:
         - img [ref=e43]
         - text: По спреду
