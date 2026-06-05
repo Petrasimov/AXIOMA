@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Environment variables — НИКОГДА не коммитить ключи!
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production
+.env.production.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

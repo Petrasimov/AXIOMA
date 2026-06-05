@@ -6,6 +6,23 @@ import {
 import { parseExchange, calcVwap, calcMaxVolume, calcDepthSpread } from './utils.js'
 import { rlFetch } from './rateLimiter.js'
 
+// ─── Base URL для запросов к СВОЕМУ бэкенду ───────────────────────────────────
+// Dev:        /backend/api/... → Vite proxy → localhost:5000
+// Production: /api/...         → Nginx → C# localhost:5000 (same-origin, CORS нет)
+export const API_BASE = import.meta.env.PROD
+    ? ''          // production: /api/... напрямую (Nginx → C#)
+    : '/backend'  // dev: /backend/api/... (Vite proxy)
+
+// ─── Прямые URL бирж ──────────────────────────────────────────────────────────
+// В dev:        Vite proxy перехватывает /binance-api/... и проксирует к бирже
+// В production: браузер шлёт напрямую к бирже
+//               → Если биржа разрешает CORS — работает ✅
+//               → Если биржа блокирует CORS — добавим Nginx location блок
+//               Проверяем после деплоя для каждой биржи отдельно
+// Никакого EXCHANGE_BASE не нужно — пути одинаковы в dev и production
+// (в dev Vite перехватывает /binance-api/, в prod браузер шлёт туда же
+//  и если CORS ок — работает, если нет — Nginx блок решит точечно)
+
 // ─── Сборщик логов для скачивания ────────────────────────────────────────────
 export const logCollector = {
     entries: [],

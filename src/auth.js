@@ -17,6 +17,14 @@ const SESSION_KEY = 'axioma_auth_session'
 
 import { aLog } from './api.js'
 
+// ─── Base URL для API запросов ────────────────────────────────────────────────
+// Dev:        Vite proxy — /backend → localhost:5000
+// Production: Nginx → бэкенд на том же домене, /backend уже не нужен
+//             Все запросы /api/... напрямую через Nginx
+const API_BASE = import.meta.env.PROD
+    ? ''          // в production: /api/auth/telegram (Nginx проксирует на C#)
+    : '/backend'  // в dev: /backend/api/auth/telegram (Vite proxy)
+
 // ─── Сессия ─────────────────────────────────────────────────────────────────
 
 export function loadSession() {
@@ -77,7 +85,7 @@ export async function authenticateWithTelegram(tgData) {
 
     console.log('[AUTH] payload для бэкенда (camelCase):', JSON.stringify(payload))
     try {
-        const res = await fetch('/backend/api/auth/telegram', {
+        const res = await fetch(`${API_BASE}/api/auth/telegram`, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
@@ -151,7 +159,7 @@ export async function checkAccess(userId) {
 
         // Проверяем что cookie AxionScan.Auth жива
         // Тело ответа не читаем — нас интересует только HTTP статус
-        const res = await fetch('/backend/api/analysis/order-books-json', {
+        const res = await fetch(`${API_BASE}/api/analysis/order-books-json`, {
             credentials: 'include',
         })
 
@@ -178,7 +186,7 @@ export async function checkAccess(userId) {
             const tPut = performance.now()
             // Лог старта запроса актуальных данных пользователя
             aLog('log', `[ШАГ 1] PUT /user-settings — запрашиваем актуальный AuthResponse`)
-            const meRes = await fetch('/backend/api/user-settings', {
+            const meRes = await fetch(`${API_BASE}/api/user-settings`, {
                 method: 'PUT',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
@@ -253,7 +261,7 @@ export async function saveUserSettings(userId, settings) {
 
     try {
         const tSave = performance.now()
-        const res = await fetch('/backend/api/user-settings', {
+        const res = await fetch(`${API_BASE}/api/user-settings`, {
             method: 'PUT',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
