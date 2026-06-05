@@ -8,23 +8,21 @@ export default defineConfig({
     sourcemap: false,
     minify: 'esbuild',
     rollupOptions: {
-      rollupOptions: {
-    output: {
-      manualChunks(id) {
-        if (id.includes('react') || id.includes('react-dom')) {
-          return 'react'
-        }
+      output: {
+        manualChunks(id) {
+          if (id.includes('react') || id.includes('react-dom')) {
+            return 'react'
+          }
 
-        if (id.includes('lucide-react')) {
-          return 'lucide'
-        }
+          if (id.includes('lucide-react')) {
+            return 'lucide'
+          }
 
-        if (id.includes('node_modules')) {
-          return 'vendor'
+          if (id.includes('node_modules')) {
+            return 'vendor'
+          }
         }
       }
-    }
-}
     }
   },
   // В production Vite proxy не работает — его роль берёт на себя Nginx.
