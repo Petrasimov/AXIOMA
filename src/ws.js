@@ -743,6 +743,7 @@ function connectKuCoin(symbol, marketType, onUpdate) {
             let localBids = new Map()
             let localAsks = new Map()
             let initialized = false
+            let snapshotSeq = 0  // sequence из REST снэпшота — отсекаем устаревшие дельты
 
             // Futures: { price, qty }  — формат contractMarket/level2
             // Spot:    { price, size } — формат spotMarket/level2Depth50
@@ -765,6 +766,37 @@ function connectKuCoin(symbol, marketType, onUpdate) {
                 log.emit(bids, asks)
                 onUpdate({ bids, asks })
             }
+
+            // ─── Futures: загружаем REST снэпшот ДО открытия WS ─────────────
+            // /contractMarket/level2 — инкрементальный топик, первое WS сообщение
+            // приходит с пустыми bids/asks. Без снэпшота стакан строится с нуля
+            // из дельт и остаётся пустым несколько минут.
+            // Spot level2Depth50 — сам присылает полный снэпшот в каждом WS сообщении,
+            // REST снэпшот не нужен.
+            if (marketType !== 'spot') {
+                try {
+                    const snapUrl = `/kucoin-api/api/v1/level2/snapshot?symbol=${symbol}USDTM`
+                    log.log(`загружаем REST снэпшот → ${snapUrl}`)
+                    const tSnap = Date.now()
+                    const snapRes = await fetch(snapUrl)
+                    if (handle.closed) return
+                    const snapData = await snapRes.json()
+                    const snap = snapData.data
+                    if (snap?.bids?.length || snap?.asks?.length) {
+                        snapshotSeq = snap.sequence ?? 0
+                        localBids = new Map(snap.bids.map(([p, q]) => [String(p), parseFloat(q)]))
+                        localAsks = new Map(snap.asks.map(([p, q]) => [String(p), parseFloat(q)]))
+                        initialized = true
+                        log.success(`REST снэпшот загружен: bids=${snap.bids.length} asks=${snap.asks.length} seq=${snapshotSeq} ⏱ ${Date.now() - tSnap}мс`)
+                    } else {
+                        log.warn(`REST снэпшот пустой — стакан будет строиться из дельт`)
+                    }
+                } catch (e) {
+                    log.warn(`REST снэпшот не загружен: ${e.message} — стакан будет строиться из дельт`)
+                }
+            }
+
+            if (handle.closed) return
 
             ws = new WebSocket(`${endpoint}?token=${token}`)
 
@@ -820,18 +852,27 @@ function connectKuCoin(symbol, marketType, onUpdate) {
                     localAsks = new Map(rawAsks.map(([p, q]) => [String(p), parseFloat(q)]))
 
                 } else {
-                    // Futures level2: инкрементальные изменения
-                    // { data: { bids: [{price, qty}], asks: [{price, qty}], change: "price,side,qty" } }
+                    // Futures level2: инкрементальные дельты поверх REST снэпшота
+                    // { data: { sequence, change: "price,side,qty" } }
+                    // Первое сообщение всегда приходит с пустыми bids/asks — игнорируем,
+                    // стакан уже инициализирован из REST снэпшота выше.
                     if (!initialized) {
-                        log.log(`инициализация стакана: bids=${book.bids?.length ?? 0} asks=${book.asks?.length ?? 0}`)
-                        localBids = new Map(
-                            book.bids?.map(({ price, qty }) => [String(price), parseFloat(qty)]) ?? []
-                        )
-                        localAsks = new Map(
-                            book.asks?.map(({ price, qty }) => [String(price), parseFloat(qty)]) ?? []
-                        )
-                        initialized = true
+                        // REST снэпшот не загрузился — пробуем инициализироваться из WS
+                        if (book.bids?.length || book.asks?.length) {
+                            log.log(`инициализация из WS: bids=${book.bids?.length ?? 0} asks=${book.asks?.length ?? 0}`)
+                            localBids = new Map(
+                                book.bids?.map(({ price, qty }) => [String(price), parseFloat(qty)]) ?? []
+                            )
+                            localAsks = new Map(
+                                book.asks?.map(({ price, qty }) => [String(price), parseFloat(qty)]) ?? []
+                            )
+                            initialized = true
+                        }
+                        // Если и WS пришёл пустым — ждём следующее сообщение с change
                     } else if (book.change) {
+                        // Пропускаем дельты старше снэпшота
+                        const seq = book.sequence ?? 0
+                        if (snapshotSeq > 0 && seq <= snapshotSeq) return
                         const [price, side, qty] = book.change.split(',')
                         log.log(`change: price=${price} side=${side} qty=${qty}`)
                         const map = side === 'buy' ? localBids : localAsks
