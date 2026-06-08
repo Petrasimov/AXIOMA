@@ -417,9 +417,13 @@ function connectGate(symbol, marketType, onUpdate) {
     let localAsks = new Map()
 
     const applyLevels = (map, levels) => {
-        for (const { p, s } of levels) {
-            if (parseFloat(s) === 0) map.delete(p)
-                else map.set(p, parseFloat(s))
+        for (const item of levels) {
+            // Spot:    ["price", "size"]      — массив
+            // Futures: {p: "price", s: "size"} — объект
+            const price = Array.isArray(item) ? item[0] : item.p
+            const size  = Array.isArray(item) ? item[1] : item.s
+            if (parseFloat(size) === 0) map.delete(price)
+            else map.set(price, parseFloat(size))
         }
     }
 
