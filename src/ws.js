@@ -529,6 +529,21 @@ function connectMEXC(symbol, marketType, onUpdate) {
             // ─── MEXC Spot WS v3 (wbs-api.mexc.com) ─────────────────────────
             // Подписка: spot@public.limit.depth.v3.api@ETHUSDT@20
             // Ответ: { c: "spot@...", d: { asks: [[p,q],...], bids: [[p,q],...] } }
+
+            // Сервер шлёт {"msg":"PING"} каждые ~30с — необходимо ответить {"msg":"PONG"}
+            // иначе сервер тихо закрывает поток данных без закрытия WS-соединения
+            if (msg.msg === 'PING') {
+                log.log(`← PING | отвечаем PONG`)
+                ws.send(JSON.stringify({ msg: 'PONG' }))
+                return
+            }
+
+            // ACK подписки: {"id":0,"code":0,"msg":"SUBSCRIPTION"}
+            if (msg.code !== undefined || msg.msg === 'SUBSCRIPTION') {
+                log.log(`← ACK: code=${msg.code ?? '\u2014'} msg=${msg.msg ?? '\u2014'}`)
+                return
+            }
+
             const d = msg.d
             if (!d) return
 
