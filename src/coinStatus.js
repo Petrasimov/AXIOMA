@@ -163,7 +163,7 @@ async function fetchAllOKXStatus() {
 
         const res = await rlFetch(
             'okx', 300,
-            `https://www.okx.com${path}`,
+            `/okx-api${path}`,
             { headers: {
                 'OK-ACCESS-KEY':        apiKey,
                 'OK-ACCESS-SIGN':       sig,
@@ -349,7 +349,7 @@ async function fetchAllBitgetStatus() {
 
     try {
         const t0  = performance.now()
-        const res = await rlFetch('bitget', 200, 'https://api.bitget.com/api/v2/spot/public/coins')
+        const res = await rlFetch('bitget', 200, '/bitget-api/api/v2/spot/public/coins')
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
         const data = await res.json()
