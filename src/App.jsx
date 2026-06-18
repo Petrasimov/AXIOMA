@@ -9,6 +9,7 @@ import DetailModal from "./components/DetailModal.jsx";
 import LoadingScreen from "./components/LoadingScreen.jsx";
 import ActiveTradesBar from "./components/ActiveTradesBar.jsx";
 import ApiPage from "./components/ApiPage.jsx";
+import FundingPage from "./components/FundingPage.jsx"; 
 import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp, setAdminLogging, aLog } from "./api.js";
 import { calcVwap } from "./utils.js";
 import HomePage from "./components/HomePage.jsx";
@@ -876,6 +877,56 @@ function App() {
     })
   }
 
+  // ── Funding-позиции (ИЗОЛИРОВАНЫ от futures activeCoins/activeTrades) ────────
+  // Ключ localStorage 'fundingActiveTrades' — не пересекается с 'activeTrades'.
+  // Нет синхронизации с БД (funding не требует серверного хранения, только localStorage).
+  // Лимит: 5 позиций. Дедупликация по strategy:symbol:exchange_bid:exchange_ask.
+  const [fundingActiveTrades, setFundingActiveTrades] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('fundingActiveTrades'))
+      return Array.isArray(stored) ? stored : []
+    } catch { return [] }
+  })
+
+  const [fundingTradeError, setFundingTradeError] = useState(null)
+
+  const handleFundingTrade = (opp, avgBid, avgAsk, selectedSpotEx) => {
+    if (fundingActiveTrades.length >= 5) {
+      setFundingTradeError('Достигнут лимит позиций (5). Закройте одну из текущих.')
+      setTimeout(() => setFundingTradeError(null), 4000)
+      return
+    }
+
+    // Стабильный ключ дедупликации — не зависит от volatile DB id
+    const key = `${opp.strategy}:${opp.symbol}:${opp.exchange_bid}:${selectedSpotEx || opp.exchange_ask || ''}`
+    const isDupe = fundingActiveTrades.some(t => t.key === key)
+    if (isDupe) {
+      setFundingTradeError('Эта возможность уже добавлена в активные позиции.')
+      setTimeout(() => setFundingTradeError(null), 3000)
+      return
+    }
+
+    const trade = {
+      id:             `${key}_${Date.now()}`,
+      key,
+      opp,
+      selectedSpotEx: selectedSpotEx || null,
+      avgBid,
+      avgAsk,
+      openedAt: new Date().toISOString(),
+    }
+
+    const next = [...fundingActiveTrades, trade]
+    setFundingActiveTrades(next)
+    localStorage.setItem('fundingActiveTrades', JSON.stringify(next))
+  }
+
+  const removeFundingTrade = (id) => {
+    const next = fundingActiveTrades.filter(t => t.id !== id)
+    setFundingActiveTrades(next)
+    localStorage.setItem('fundingActiveTrades', JSON.stringify(next))
+  }
+
   // ── Что показывать на странице futures ────────────────────────────────────
   const showAuthModal    = activePage === 'futures' && auth.status === 'unknown'
   const showAccessDenied = activePage === 'futures' && auth.status === 'ready' && !auth.user?.isCexCexPaid
@@ -898,6 +949,30 @@ function App() {
           <HomePage onOpenScanner={() => { setActiveTab('futures'); setActivePage('futures') }} />
         ) : activePage === 'api' ? (
           <ApiPage />
+        ) : activePage === 'funding' ? (
+          <>
+            <FundingPage
+              tradeAmount={filters.tradeAmount}
+              exchanges={filters.exchanges}
+              minSpread={filters.minSpread}
+              onOpenFilters={() => setFilterOpen(true)}
+              fundingActiveTrades={fundingActiveTrades}
+              onFundingTrade={handleFundingTrade}
+              onRemoveFundingTrade={removeFundingTrade}
+              fundingTradeError={fundingTradeError}
+            />
+            <FilterDrawer
+                open={filterOpen}
+                onClose={() => setFilterOpen(false)}
+                filters={filters}
+                onFilters={setFilters}
+                defaultFilters={DEFAULT_FILTERS}
+                onSaveSettings={handleSaveSettings}
+                canSave={auth.status === 'ready' && !!auth.user}
+                saveStatus={saveStatus}
+                mode="funding"
+            />
+          </>
         ) : (
           <>
             <Header

@@ -728,7 +728,7 @@ describe('[9] connectMEXC', () => {
         MockWebSocket.reset()
         connectOrderBook('mexc', 'ETH', 'spot', vi.fn())
         await tick()
-        expect(MockWebSocket.latest().url).toContain('wbs.mexc.com')
+        expect(MockWebSocket.latest().url).toContain('wbs-api.mexc.com')
     })
 
     it('отправляет подписку sub.depth при onopen', () => {

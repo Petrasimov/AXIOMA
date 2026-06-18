@@ -3,6 +3,7 @@
  *
  * Изменения:
  * - Вкладка Developers видна и доступна только если authUser?.isAdmin === true
+ * - Вкладка Funding видна и доступна только если authUser?.isAdmin === true (beta)
  * - UserProfile вместо footer когда авторизован
  */
 
@@ -205,6 +206,9 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
 
                     // Вкладка Developers — только для админов
                     if (tab.id === 'developers' && !isAdmin) return null
+
+                    // Вкладка Funding — только для админов (beta)
+                    if (tab.id === 'funding' && !isAdmin) return null
 
                     return (
                         <div key={tab.id}>

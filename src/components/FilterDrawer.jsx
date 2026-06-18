@@ -33,6 +33,51 @@ const style = `
     overflow-y: auto;
   }
 
+  .drawer.mode-funding {
+    width: 420px;
+  }
+
+  .drawer.mode-funding .drawer-body {
+    padding: 28px;
+    gap: 32px;
+  }
+
+  .drawer.mode-funding .filter-label {
+    font-size: 12px;
+    letter-spacing: 1.8px;
+  }
+
+  .drawer.mode-funding .filter-toggle {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .drawer.mode-funding .filter-input {
+    padding: 11px 14px;
+    font-size: 15px;
+  }
+
+  .drawer.mode-funding .filter-input-small {
+    width: 76px;
+    padding: 7px 10px;
+    font-size: 14px;
+  }
+
+  .drawer.mode-funding .filter-slider-value {
+    font-size: 14px;
+    min-width: 44px;
+  }
+
+  .drawer.mode-funding .drawer-title {
+    font-size: 16px;
+  }
+
+  .drawer.mode-funding .reset-btn,
+  .drawer.mode-funding .filter-save {
+    padding: 13px;
+    font-size: 13px;
+  }
+
   .drawer.open {
     transform: translateX(0);
   }
@@ -279,7 +324,7 @@ const style = `
 
 `
 
-function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSaveSettings, canSave, saveStatus }) {
+function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSaveSettings, canSave, saveStatus, mode = 'futures' }) {
     const toggleStrategy = (key) => {
         // Лог переключения стратегии — ключ и новое значение
         const newVal = !filters.strategy[key]
@@ -328,10 +373,10 @@ function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSav
             onClick={onClose}
           />
 
-          <div className={`drawer ${open ? 'open' : ''}`}>
+          <div className={`drawer ${open ? 'open' : ''} ${mode === 'funding' ? 'mode-funding' : ''}`}>
 
             <div className="drawer-header">
-              <span className="drawer-title">ФИЛЬТРЫ</span>
+              <span className="drawer-title">{mode === 'funding' ? 'ФИЛЬТРЫ · FUNDING' : 'ФИЛЬТРЫ'}</span>
               <button className="drawer-close" onClick={onClose}>✕</button>
             </div>
 
@@ -360,7 +405,7 @@ function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSav
                     className="filter-input filter-input-small"
                     type="number"
                     min="0"
-                    max="20"
+                    max={mode === 'funding' ? "2" : "20"}
                     step="0.1"
                     value={filters.minSpread}
                     onChange={e => onFilters(f => ({ ...f, minSpread: parseFloat(e.target.value) || 0 }))}
@@ -371,17 +416,17 @@ function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSav
                       className="filter-slider"
                       type="range"
                       min="0"
-                      max="20"
+                      max={mode === 'funding' ? "2" : "20"}
                       step="0.1"
                       value={filters.minSpread}
-                      style={{ '--val': (filters.minSpread / 20) * 100 }}
+                      style={{ '--val': (filters.minSpread / (mode === 'funding' ? 2 : 20)) * 100 }}
                       onChange={e => onFilters(f => ({ ...f, minSpread: parseFloat(e.target.value) || 0 }))}
                     />
                   </div>
                 </div>
                 <div className="filter-slider-marks">
                   <span>0%</span>
-                  <span>20%</span>
+                  <span>{mode === 'funding' ? '2%' : '20%'}</span>
                 </div>
               </div>
 
@@ -398,76 +443,82 @@ function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSav
                   />
               </div>
 
-              <div className="filter-section">
-                <div className="filter-label">Стратегия</div>
-                <div className="filter-row">
-                  <button
-                    className={`filter-toggle ${filters.strategy.ff ? 'active' : ''}`}
-                    onClick={() => toggleStrategy('ff')}
-                  >
-                    Futures-Futures
-                  </button>
-                  <button
-                    className={`filter-toggle ${filters.strategy.sf ? 'active' : ''}`}
-                    onClick={() => toggleStrategy('sf')}
-                  >
-                    Spot-Futures
-                  </button>
+              {mode === 'futures' && (
+                <div className="filter-section">
+                  <div className="filter-label">Стратегия</div>
+                  <div className="filter-row">
+                    <button
+                      className={`filter-toggle ${filters.strategy.ff ? 'active' : ''}`}
+                      onClick={() => toggleStrategy('ff')}
+                    >
+                      Futures-Futures
+                    </button>
+                    <button
+                      className={`filter-toggle ${filters.strategy.sf ? 'active' : ''}`}
+                      onClick={() => toggleStrategy('sf')}
+                    >
+                      Spot-Futures
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              <div className="filter-section">
-                <div className="filter-label">Ставка финансирования</div>
-                  <div className="filter-row">
-                    <button
-                      className={`filter-toggle ${filters.funding.positive ? 'active' : ''}`}
-                      onClick={() => toggleFunding('positive')}
-                      disabled={filters.onlyPositiveFunding}
-                    >
-                      Положительная
-                    </button>
-                    <button
-                      className={`filter-toggle ${filters.funding.negative ? 'active' : ''}`}
-                      onClick={() => toggleFunding('negative')}
-                      disabled={filters.onlyPositiveFunding}
-                    >
-                      Отрицательная
-                    </button>
-                  </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color:'var(--text-secondary)' }}>
-                    <input
-                      type="checkbox"
-                      checked={filters.onlyPositiveFunding}
-                      onChange={e => {
-                        // Лог переключения onlyPositiveFunding — новое значение
-                        aLog('log', `[FILTER] onlyPositiveFunding → ${e.target.checked}`)
-                        onFilters(f => ({ ...f, onlyPositiveFunding: e.target.checked }))
-                      }}
-                    />
-                    Только положительный funding spread
-                  </label>
-              </div>
+              {mode === 'futures' && (
+                <div className="filter-section">
+                  <div className="filter-label">Ставка финансирования</div>
+                    <div className="filter-row">
+                      <button
+                        className={`filter-toggle ${filters.funding.positive ? 'active' : ''}`}
+                        onClick={() => toggleFunding('positive')}
+                        disabled={filters.onlyPositiveFunding}
+                      >
+                        Положительная
+                      </button>
+                      <button
+                        className={`filter-toggle ${filters.funding.negative ? 'active' : ''}`}
+                        onClick={() => toggleFunding('negative')}
+                        disabled={filters.onlyPositiveFunding}
+                      >
+                        Отрицательная
+                      </button>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color:'var(--text-secondary)' }}>
+                      <input
+                        type="checkbox"
+                        checked={filters.onlyPositiveFunding}
+                        onChange={e => {
+                          // Лог переключения onlyPositiveFunding — новое значение
+                          aLog('log', `[FILTER] onlyPositiveFunding → ${e.target.checked}`)
+                          onFilters(f => ({ ...f, onlyPositiveFunding: e.target.checked }))
+                        }}
+                      />
+                      Только положительный funding spread
+                    </label>
+                </div>
+              )}
 
-              <div className="filter-section">
-                <div className="filter-label">Переводы</div>
-                  <div className="filter-row">
+              {mode === 'futures' && (
+                <div className="filter-section">
+                  <div className="filter-label">Переводы</div>
+                    <div className="filter-row">
 
-                    <button
-                      className={`filter-toggle ${filters.transfer.deposit ? 'active' : ''}`}
-                      onClick={() => toggleTransfer('deposit')}
-                    >
-                      Депозит
-                    </button>
+                      <button
+                        className={`filter-toggle ${filters.transfer.deposit ? 'active' : ''}`}
+                        onClick={() => toggleTransfer('deposit')}
+                      >
+                        Депозит
+                      </button>
 
-                    <button
-                      className={`filter-toggle ${filters.transfer.withdraw ? 'active' : ''}`}
-                      onClick={() => toggleTransfer('withdraw')}
-                    >
-                      Вывод
-                    </button>
+                      <button
+                        className={`filter-toggle ${filters.transfer.withdraw ? 'active' : ''}`}
+                        onClick={() => toggleTransfer('withdraw')}
+                      >
+                        Вывод
+                      </button>
 
-                  </div>
-              </div>
+                    </div>
+                </div>
+              )}
 
             </div>
 
