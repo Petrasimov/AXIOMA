@@ -218,6 +218,7 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
                                     if (!tab.enabled) return
                                     onTabChange(tab.id)
                                     if (tab.id === 'main') onPageChange?.('home')
+                                    else if (tab.id === 'funding') onPageChange?.('funding')
                                     else if (tab.id !== 'developers') onPageChange?.('futures')
                                 }}
                             >
