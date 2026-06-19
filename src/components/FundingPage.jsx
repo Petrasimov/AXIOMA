@@ -985,8 +985,13 @@ function FundingPage({
     const [loading, setLoading] = useState(true)
 
     // Логирование только для админа — аналог aLog из futures-сканера
+    // isAdminRef нужен потому что useEffect с [] захватывает isAdmin=false
+    // при первом рендере (до завершения проверки сессии), а ref всегда актуален.
+    const isAdminRef = useRef(isAdmin)
+    useEffect(() => { isAdminRef.current = isAdmin }, [isAdmin])
+
     function fLog(level, ...args) {
-        if (!isAdmin) return
+        if (!isAdminRef.current) return
         const styles = {
             log:     'color:#8bb8d0',
             info:    'color:#3d87c0;font-weight:bold',
@@ -1031,6 +1036,7 @@ function FundingPage({
       if (opp.strategy === 'sf') {
         const spotExchanges = getAllSpotExchanges(opp)
         if (spotExchanges.length > 1) {
+          fLog('log', `[FUNDING] Клик → SpotPicker: ${opp.symbol} | ${opp.exchange_bid} | spots: [${spotExchanges.join(',')}]`)
           setPickerOpen(true)
           return
         }
@@ -1040,6 +1046,7 @@ function FundingPage({
         // FF → ask-биржа уже известна
         setSelectedSpotEx(opp.exchange_ask)
       }
+      fLog('log', `[FUNDING] Клик → модалка: ${opp.symbol} ${opp.spread?.toFixed(4)}% | ${opp.exchange_bid}→${opp.exchange_ask || '?'} | strategy=${opp.strategy}`)
       setDetailOpen(true)
     }
 
@@ -1048,6 +1055,7 @@ function FundingPage({
       // Ищем opp в текущих данных, чтобы иметь актуальные данные
       const key = oppKey(trade.opp)
       const liveOpp = data.find(o => oppKey(o) === key) || trade.opp
+      fLog('log', `[FUNDING] ActiveBar клик → модалка: ${trade.opp.symbol} | avgBid=${trade.avgBid} avgAsk=${trade.avgAsk}`)
       setSelectedOpp(liveOpp)
       setSelectedSpotEx(trade.selectedSpotEx)
       setSelectedActiveFundingTrade(trade)
@@ -1089,6 +1097,24 @@ function FundingPage({
                 const ff = json.data?.filter(o => o.strategy === 'ff').length ?? 0
                 const sf = json.data?.filter(o => o.strategy === 'sf').length ?? 0
                 fLog('log', `[FUNDING] FF: ${ff} | SF: ${sf}`)
+                // Покрытие next_funding_time — показываем какие биржи возвращают null
+                if (json.data?.length) {
+                    const withTime = json.data.filter(o => o.next_funding_time != null).length
+                    const pct = ((withTime / count) * 100).toFixed(0)
+                    fLog('log', `[FUNDING] next_funding_time: ${withTime}/${count} (${pct}%)`)
+                    // Биржи с нулевым покрытием (группируем по exchange_bid)
+                    const nullByEx = {}
+                    json.data.filter(o => o.next_funding_time == null).forEach(o => {
+                        nullByEx[o.exchange_bid] = (nullByEx[o.exchange_bid] || 0) + 1
+                    })
+                    if (Object.keys(nullByEx).length > 0) {
+                        const nullStr = Object.entries(nullByEx)
+                            .sort((a, b) => b[1] - a[1])
+                            .map(([ex, n]) => `${ex}×${n}`)
+                            .join(', ')
+                        fLog('warn', `[FUNDING] Без next_funding_time: ${nullStr}`)
+                    }
+                }
                 setData(json.data || [])
                 setError(null)
             } catch (err) {
@@ -1138,18 +1164,6 @@ function FundingPage({
     const ffCount = visibleOpps.filter(o => o.strategy === 'ff').length
     const sfCount = visibleOpps.filter(o => o.strategy === 'sf').length
 
-    // Лог фильтрации — только для админа
-    useEffect(() => {
-        if (!isAdmin || loading) return
-        fLog('log', `[FUNDING] Фильтрация | всего: ${data.length} | бирж: [${exchanges?.join(',') ?? 'все'}] | minSpread: ${minSpread}%`)
-        fLog('log', `[FUNDING] После фильтра бирж: ${filteredByExchange.length} | после minSpread: ${filteredBySpread.length} | видимых: ${visibleOpps.length}`)
-        fLog('log', `[FUNDING] FF: ${ffCount} | SF: ${sfCount} | скрытых: ${hiddenMap.size}`)
-        if (visibleOpps.length > 0) {
-            const top = visibleOpps[0]
-            fLog('success', `[FUNDING] Топ: ${top.symbol} ${top.spread?.toFixed(4)}% (${top.exchange_bid}→${top.exchange_ask || '?'})`)
-        }
-    }, [data, exchanges, minSpread, hiddenMap.size, loading])
-
     const byStrategy = strategy === 'all'
         ? visibleOpps
         : visibleOpps.filter(o => o.strategy === strategy)
@@ -1162,6 +1176,23 @@ function FundingPage({
         if (aFav !== bFav) return aFav ? -1 : 1
         return (b.spread ?? 0) - (a.spread ?? 0)
     })
+
+    // Лог фильтрации — однократно после сортировки, только для админа.
+    // Используем ref чтобы не логировать одно и то же дважды подряд.
+    const lastFilterLogRef = useRef('')
+    if (isAdminRef.current && !loading) {
+        const logKey = `${data.length}:${visibleOpps.length}:${ffCount}:${sfCount}:${sorted[0]?.symbol ?? '-'}`
+        if (logKey !== lastFilterLogRef.current) {
+            lastFilterLogRef.current = logKey
+            fLog('log', `[FUNDING] Фильтрация | всего: ${data.length} | бирж: [${exchanges?.join(',') ?? 'все'}] | minSpread: ${minSpread}%`)
+            fLog('log', `[FUNDING] После фильтра бирж: ${filteredByExchange.length} | после minSpread: ${filteredBySpread.length} | видимых: ${visibleOpps.length}`)
+            fLog('log', `[FUNDING] FF: ${ffCount} | SF: ${sfCount} | скрытых: ${hiddenMap.size} | в табе "${strategy}": ${sorted.length}`)
+            if (sorted.length > 0) {
+                const top = sorted[0]
+                fLog('success', `[FUNDING] Топ: ${top.symbol} ${top.spread?.toFixed(4)}% (${top.exchange_bid}→${top.exchange_ask || '?'})`)
+            }
+        }
+    }
 
     return (
         <div className="funding-page">
