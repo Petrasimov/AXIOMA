@@ -582,7 +582,7 @@ const style = `
         font-family: var(--font-mono);
         font-size: 10px;
         font-weight: 600;
-        color: #c8a84b;
+        color: #ffffff;
         white-space: nowrap;
     }
 
@@ -663,7 +663,7 @@ const style = `
         font-family: var(--font-mono);
         font-size: 14px;
         font-weight: 700;
-        color: #c8a84b;
+        color: #ffffff;
         white-space: nowrap;
     }
 
