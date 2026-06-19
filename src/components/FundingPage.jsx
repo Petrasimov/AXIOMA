@@ -409,6 +409,7 @@ const style = `
     .fp-content {
         flex: 1;
         overflow-y: auto;
+        overflow-x: hidden;
         padding: 18px;
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -449,6 +450,7 @@ const style = `
         flex-direction: column;
         transition: border-color 0.15s;
         height: 100%;
+        min-width: 0;
     }
 
     .fp-card:hover { border-color: var(--accent); }
@@ -602,8 +604,9 @@ const style = `
         display: flex;
         flex-direction: column;
         gap: 5px;
-        min-width: 110px;
-        flex-shrink: 0;
+        min-width: 0;
+        flex-shrink: 1;
+        max-width: 50%;
     }
 
     .fp-ask-ex {
@@ -970,6 +973,7 @@ function FundingHiddenDropdown({ hiddenMap, onRestore }) {
 
 function FundingPage({
   tradeAmount, exchanges, minSpread, onOpenFilters,
+  isAdmin,
   // Новые пропсы для funding-позиций (изолированы от futures)
   fundingActiveTrades,
   onFundingTrade,
@@ -979,6 +983,22 @@ function FundingPage({
     const [data, setData] = useState([])
     const [strategy, setStrategy] = useState('all')
     const [loading, setLoading] = useState(true)
+
+    // Логирование только для админа — аналог aLog из futures-сканера
+    function fLog(level, ...args) {
+        if (!isAdmin) return
+        const styles = {
+            log:     'color:#8bb8d0',
+            info:    'color:#3d87c0;font-weight:bold',
+            warn:    'color:#f0a500;font-weight:bold',
+            error:   'color:#e03e3e;font-weight:bold',
+            success: 'color:#00c97a;font-weight:bold',
+        }
+        const style = styles[level] ?? styles.log
+        if (level === 'error') console.error('%c' + (args[0] ?? ''), style, ...args.slice(1))
+        else if (level === 'warn') console.warn('%c' + (args[0] ?? ''), style, ...args.slice(1))
+        else console.log('%c' + (args[0] ?? ''), style, ...args.slice(1))
+    }
     const [error, setError] = useState(null)
 
     // Избранное/скрытые — изолированное хранилище funding-сканера, см. usePersistedIdSet выше
@@ -1053,15 +1073,27 @@ function FundingPage({
 
     useEffect(() => {
         let cancelled = false
+        let cycle = 0
 
         async function load() {
+            cycle++
+            fLog('info', `[FUNDING] ═══════ Цикл ${cycle} ═══════`)
+            fLog('log', `[FUNDING] GET ${FUNDING_API_BASE}/rates?limit=2000`)
+            const t0 = performance.now()
             try {
                 const json = await fetchFundingRates()
                 if (cancelled) return
+                const count = json.data?.length ?? 0
+                const elapsed = (performance.now() - t0).toFixed(0)
+                fLog('success', `[FUNDING] ✅ Получено ${count} возможностей | ⏱ ${elapsed}мс`)
+                const ff = json.data?.filter(o => o.strategy === 'ff').length ?? 0
+                const sf = json.data?.filter(o => o.strategy === 'sf').length ?? 0
+                fLog('log', `[FUNDING] FF: ${ff} | SF: ${sf}`)
                 setData(json.data || [])
                 setError(null)
             } catch (err) {
                 if (cancelled) return
+                fLog('error', `[FUNDING] ❌ Ошибка: ${err.message}`)
                 setError(err.message)
             } finally {
                 if (!cancelled) setLoading(false)
@@ -1105,6 +1137,18 @@ function FundingPage({
 
     const ffCount = visibleOpps.filter(o => o.strategy === 'ff').length
     const sfCount = visibleOpps.filter(o => o.strategy === 'sf').length
+
+    // Лог фильтрации — только для админа
+    useEffect(() => {
+        if (!isAdmin || loading) return
+        fLog('log', `[FUNDING] Фильтрация | всего: ${data.length} | бирж: [${exchanges?.join(',') ?? 'все'}] | minSpread: ${minSpread}%`)
+        fLog('log', `[FUNDING] После фильтра бирж: ${filteredByExchange.length} | после minSpread: ${filteredBySpread.length} | видимых: ${visibleOpps.length}`)
+        fLog('log', `[FUNDING] FF: ${ffCount} | SF: ${sfCount} | скрытых: ${hiddenMap.size}`)
+        if (visibleOpps.length > 0) {
+            const top = visibleOpps[0]
+            fLog('success', `[FUNDING] Топ: ${top.symbol} ${top.spread?.toFixed(4)}% (${top.exchange_bid}→${top.exchange_ask || '?'})`)
+        }
+    }, [data, exchanges, minSpread, hiddenMap.size, loading])
 
     const byStrategy = strategy === 'all'
         ? visibleOpps

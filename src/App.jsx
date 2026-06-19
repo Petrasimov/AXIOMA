@@ -956,6 +956,7 @@ function App() {
               exchanges={filters.exchanges}
               minSpread={filters.minSpread}
               onOpenFilters={() => setFilterOpen(true)}
+              isAdmin={auth.status === 'ready' && auth.user?.isAdmin === true}
               fundingActiveTrades={fundingActiveTrades}
               onFundingTrade={handleFundingTrade}
               onRemoveFundingTrade={removeFundingTrade}
