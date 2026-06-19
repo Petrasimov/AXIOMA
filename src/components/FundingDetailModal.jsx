@@ -726,7 +726,7 @@ function FundingDetailModal({
                       <div className="fdm-ex-funding-label">Ставка funding</div>
                       <div className="fdm-ex-funding-rate">
                         {bidFundingRate != null
-                          ? `${bidFundingRate >= 0 ? '+' : ''}${bidFundingRate.toFixed(4)}%`
+                          ? `${bidFundingRate >= 0 ? '+' : ''}${(bidFundingRate * 100).toFixed(4)}%`
                           : '—'
                         }
                       </div>
@@ -756,7 +756,7 @@ function FundingDetailModal({
                       </div>
                       <div className="fdm-ex-funding-rate" style={!isFF ? { color: 'var(--text-muted)' } : {}}>
                         {isFF && askFundingRate != null
-                          ? `${askFundingRate >= 0 ? '+' : ''}${askFundingRate.toFixed(4)}%`
+                          ? `${askFundingRate >= 0 ? '+' : ''}${(askFundingRate * 100).toFixed(4)}%`
                           : '—'
                         }
                       </div>
@@ -852,7 +852,7 @@ function FundingDetailModal({
                         <div className="fdm-stat-label">Rate Short ({bidExName})</div>
                         <div className="fdm-stat-val warn">
                           {bidFundingRate != null
-                            ? `${bidFundingRate >= 0 ? '+' : ''}${bidFundingRate.toFixed(4)}%`
+                            ? `${bidFundingRate >= 0 ? '+' : ''}${(bidFundingRate * 100).toFixed(4)}%`
                             : '—'
                           }
                         </div>
@@ -861,7 +861,7 @@ function FundingDetailModal({
                         <div className="fdm-stat-label">Rate Long ({askExName})</div>
                         <div className="fdm-stat-val" style={{ color: 'var(--text-secondary)' }}>
                           {askFundingRate != null
-                            ? `${askFundingRate >= 0 ? '+' : ''}${askFundingRate.toFixed(4)}%`
+                            ? `${askFundingRate >= 0 ? '+' : ''}${(askFundingRate * 100).toFixed(4)}%`
                             : '—'
                           }
                         </div>
@@ -873,7 +873,7 @@ function FundingDetailModal({
                       <div className="fdm-stat-label">Ставка финансирования ({bidExName})</div>
                       <div className="fdm-stat-val warn">
                         {opp.funding_rate != null
-                          ? `${opp.funding_rate >= 0 ? '+' : ''}${opp.funding_rate.toFixed(4)}%`
+                          ? `${opp.funding_rate >= 0 ? '+' : ''}${(opp.funding_rate * 100).toFixed(4)}%`
                           : '—'
                         }
                       </div>

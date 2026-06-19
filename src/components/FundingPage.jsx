@@ -170,8 +170,9 @@ function calcProfit(spread, tradeAmount) {
 
 function formatRate(rate) {
     if (rate == null) return '—'
-    const sign = rate >= 0 ? '+' : ''
-    return `${sign}${rate.toFixed(6)}`
+    const pct = rate * 100
+    const sign = pct >= 0 ? '+' : ''
+    return `${sign}${pct.toFixed(4)}%`
 }
 
 /**
@@ -581,7 +582,7 @@ const style = `
         font-family: var(--font-mono);
         font-size: 10px;
         font-weight: 600;
-        color: var(--accent-bright);
+        color: #c8a84b;
         white-space: nowrap;
     }
 
@@ -662,7 +663,7 @@ const style = `
         font-family: var(--font-mono);
         font-size: 14px;
         font-weight: 700;
-        color: var(--accent-bright);
+        color: #c8a84b;
         white-space: nowrap;
     }
 
