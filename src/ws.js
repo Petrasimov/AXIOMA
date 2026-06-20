@@ -626,14 +626,22 @@ function connectMEXC(symbol, marketType, onUpdate) {
 
     ws.onmessage = async (event) => {
         try {
+            let text
             if (event.data instanceof Blob) {
-                const before = event.data.size
-                const text = await decompressBingX(event.data)
-                log.log(`декомпрессия: ${before}B → ${text.length}B`)
-                handleMessage(text)
+                // MEXC spot (.pb канал) шлёт бинарные данные — это НЕ gzip.
+                // Читаем как обычный текст (сервер шлёт JSON-совместимый ответ).
+                if (marketType === 'spot') {
+                    text = await event.data.text()
+                } else {
+                    // MEXC futures использует gzip (через decompressBingX)
+                    const before = event.data.size
+                    text = await decompressBingX(event.data)
+                    log.log(`декомпрессия: ${before}B → ${text.length}B`)
+                }
             } else {
-                handleMessage(event.data)
+                text = event.data
             }
+            handleMessage(text)
         } catch (e) {
             log.error(`ошибка обработки сообщения: ${e.message}`)
             console.warn('MEXC message error:', e)

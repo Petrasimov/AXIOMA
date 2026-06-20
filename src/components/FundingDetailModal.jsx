@@ -624,11 +624,15 @@ function FundingDetailModal({
   const vwapAskExit = askBook ? calcVwap(askBook.bids, tradeAmount) : null
 
   // Максимальный объём до VWAP-цены (для отображения в панелях)
-  const maxVolBid = (bidBook && vwapAsk)
-    ? calcMaxVolume(bidBook.bids, vwapAsk, 'short')
+  // Максимальный объём входа:
+  // Short side: объём bids bid-биржи доступных выше VWAP short (т.е. топ стакана до VWAP)
+  // Long side:  объём asks ask-биржи доступных ниже VWAP long (т.е. топ стакана до VWAP)
+  // Используем VWAP той же стороны как ориентир — это объём который реально можно исполнить
+  const maxVolBid = (bidBook && vwapBid)
+    ? calcMaxVolume(bidBook.bids, vwapBid, 'short')
     : null
-  const maxVolAsk = (askBook && vwapBid)
-    ? calcMaxVolume(askBook.asks, vwapBid, 'long')
+  const maxVolAsk = (askBook && vwapAsk)
+    ? calcMaxVolume(askBook.asks, vwapAsk, 'long')
     : null
 
   // ── Калькулятор ─────────────────────────────────────────────────────────────
