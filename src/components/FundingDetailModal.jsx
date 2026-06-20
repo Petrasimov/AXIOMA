@@ -81,15 +81,6 @@ const FEES = {
   'MEXC':    { futures: 0.02,  spot: 0.05 },
   'OKX':     { futures: 0.05,  spot: 0.10 },
 }
-// Комиссия в % (0.05 = 0.05%) × 2 стороны = полная стоимость открытия+закрытия
-function getTotalFee(bidExName, askExName, isFF) {
-  const bidFee = FEES[bidExName]?.futures ?? 0.06
-  const askFee = isFF
-    ? (FEES[askExName]?.futures ?? 0.06)
-    : (FEES[askExName]?.spot    ?? 0.10)
-  // × 2: открытие + закрытие обеих позиций
-  return (bidFee + askFee) * 2
-}
 
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 const style = `
@@ -673,7 +664,13 @@ function FundingDetailModal({
   })()
 
   // Комиссия: taker обеих бирж × 2 (открытие + закрытие)
-  const commissionPct = getTotalFee(bidExName, askExName, isFF)
+  const commissionPct = (() => {
+    const bidFee = FEES[bidExName]?.futures ?? 0.06
+    const askFee = isFF
+      ? (FEES[askExName]?.futures ?? 0.06)
+      : (FEES[askExName]?.spot    ?? 0.10)
+    return (bidFee + askFee) * 2
+  })()
 
   // PnL = (entrySpread + exitSpread + fundingRateNet - commission) × tradeAmount / 100
   // entrySpread — зафиксированная прибыль от входа
