@@ -17,7 +17,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, ExternalLink } from 'lucide-react'
 import { connectOrderBook } from '../ws.js'
-import { calcVwap, calcMaxVolume, formatPrice, formatVolume, getSpreadColor } from '../utils.js'
+import { calcVwap, calcMaxVolume, formatPrice, formatVolume } from '../utils.js'
 
 // ─── Маппинг: название биржи в funding-API → id для connectOrderBook ─────────
 const WS_EX_ID = {
