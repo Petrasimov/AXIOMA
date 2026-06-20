@@ -653,6 +653,13 @@ function FundingDetailModal({
     ? (vwapAskExit - vwapBidExit) / vwapAskExit * 100
     : null
 
+  // Funding данные для панелей и расчётов
+  // Объявляем ДО fundingRateNet который их использует
+  const bidFundingRate   = isFF ? opp.funding_rate_bid : opp.funding_rate
+  const bidFundingTime   = isFF ? opp.next_funding_time_bid : opp.next_funding_time
+  const askFundingRate   = isFF ? opp.funding_rate_ask : null
+  const askFundingTime   = isFF ? opp.next_funding_time_ask : null
+
   // Ставка финансирования (в % за период, уже умножена на 100 при отображении)
   // FF: разница ставок bid-биржи и ask-биржи
   // SF: только ставка short-биржи (spot не имеет funding)
@@ -723,12 +730,6 @@ function FundingDetailModal({
       if (askLinks) window.open(isFF ? askLinks.futures(sym) : askLinks.spot(sym), '_blank')
     }
   }
-
-  // Funding данные для панелей
-  const bidFundingRate   = isFF ? opp.funding_rate_bid : opp.funding_rate
-  const bidFundingTime   = isFF ? opp.next_funding_time_bid : opp.next_funding_time
-  const askFundingRate   = isFF ? opp.funding_rate_ask : null
-  const askFundingTime   = isFF ? opp.next_funding_time_ask : null
 
   const strategyLabel = isFF ? 'FUTURES · FUTURES' : 'SPOT · FUTURES'
 
