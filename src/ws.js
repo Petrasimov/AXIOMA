@@ -531,7 +531,7 @@ function connectMEXC(symbol, marketType, onUpdate) {
 
         if (marketType === 'spot') {
             // ─── MEXC Spot WS v3 (wbs-api.mexc.com) ─────────────────────────
-            // Подписка: spot@public.limit.depth.v3.api.pb@ETHUSDT@20
+            // Подписка: spot@public.limit.depth.v3.api@ETHUSDT@20 (JSON формат)
             // Ответ: { c: "spot@...", d: { asks: [[p,q],...], bids: [[p,q],...] } }
 
             // Сервер шлёт {"msg":"PING"} каждые ~30с — необходимо ответить {"msg":"PONG"}
@@ -542,9 +542,8 @@ function connectMEXC(symbol, marketType, onUpdate) {
                 return
             }
 
-            // ACK подписки (новый формат .pb):
-            // { "id":0, "code":0, "msg":"spot@public.limit.depth.v3.api.pb@ETHUSDT@20" }
-            if (msg.code !== undefined || msg.msg === 'SUBSCRIPTION' || msg.msg?.includes('spot@public.limit.depth')) {
+            // ACK подписки: { "id":0, "code":0, "msg":"spot@public.limit.depth.v3.api@ETHUSDT@20" }
+            if (msg.code !== undefined || msg.msg === 'SUBSCRIPTION' || msg.msg?.includes('spot@public')) {
                 log.log(`← ACK: code=${msg.code ?? '\u2014'} msg=${msg.msg ?? '\u2014'}`)
                 if (msg.msg?.includes('Blocked')) {
                     log.error(`MEXC spot WS заблокирован для ${symCap} — подписка отклонена`)
@@ -552,17 +551,13 @@ function connectMEXC(symbol, marketType, onUpdate) {
                 return
             }
 
-            // Новый формат .pb: { publiclimitdepths: { bidsList: [{price,quantity}], asksList: [...] } }
-            // Старый формат (без .pb): { d: { bids: [[p,q]], asks: [[p,q]] } }
-            const book = msg.publiclimitdepths ?? msg.d
+            // Формат JSON: { d: { bids: [[p,q]], asks: [[p,q]], ... } }
+            // (канал без .pb возвращает стандартный JSON — protobuf не нужен)
+            const book = msg.d
             if (!book) return
 
-            const bids = book.bidsList
-                ? book.bidsList.map(({ price, quantity }) => [price, quantity])
-                : (book.bids ?? [])
-            const asks = book.asksList
-                ? book.asksList.map(({ price, quantity }) => [price, quantity])
-                : (book.asks ?? [])
+            const bids = book.bids ?? []
+            const asks = book.asks ?? []
 
             if (!initialized && (bids.length > 0 || asks.length > 0)) {
                 log.log(`инициализация стакана: bids=${bids.length} asks=${asks.length}`)
@@ -608,13 +603,13 @@ function connectMEXC(symbol, marketType, onUpdate) {
     ws.onopen = () => {
         log.success(`WS открыт`)
         if (marketType === 'spot') {
-            // Spot v3 API Protocol Buffers: канал spot@public.limit.depth.v3.api.pb
-            // (старый канал без .pb возвращает Blocked! для новых монет)
+            // Spot v3 API JSON: канал spot@public.limit.depth.v3.api (без .pb)
+            // .pb канал шлёт бинарный protobuf — без схемы не парсится в браузере
             const sub = {
                 method: 'SUBSCRIPTION',
-                params: [`spot@public.limit.depth.v3.api.pb@${symCap}@20`]
+                params: [`spot@public.limit.depth.v3.api@${symCap}@20`]
             }
-            log.log(`подписка → spot@public.limit.depth.v3.api.pb@${symCap}@20`)
+            log.log(`подписка → spot@public.limit.depth.v3.api@${symCap}@20`)
             ws.send(JSON.stringify(sub))
         } else {
             // Futures: старый протокол sub.depth
@@ -628,8 +623,7 @@ function connectMEXC(symbol, marketType, onUpdate) {
         try {
             let text
             if (event.data instanceof Blob) {
-                // MEXC spot (.pb канал) шлёт бинарные данные — это НЕ gzip.
-                // Читаем как обычный текст (сервер шлёт JSON-совместимый ответ).
+                // MEXC spot шлёт данные в виде blob — читаем как текст (JSON).
                 if (marketType === 'spot') {
                     text = await event.data.text()
                 } else {
