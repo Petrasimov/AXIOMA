@@ -3,7 +3,7 @@
  *
  * Изменения:
  * - Вкладка Developers видна и доступна только если authUser?.isAdmin === true
- * - Вкладка Funding видна и доступна только если authUser?.isAdmin === true (beta)
+ * - Вкладка Funding видна всем у кого есть isCexCexPaid доступ
  * - UserProfile вместо footer когда авторизован
  */
 
@@ -185,7 +185,8 @@ const style = `
 function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, onLogout }) {
     const [futuresSubTab, setFuturesSubTab] = useState('cex-cex')
 
-    const isAdmin = authUser?.isAdmin === true
+    const isAdmin      = authUser?.isAdmin === true
+    const isCexCexPaid = authUser?.isCexCexPaid === true
 
     return (
         <>
@@ -207,8 +208,8 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
                     // Вкладка Developers — только для админов
                     if (tab.id === 'developers' && !isAdmin) return null
 
-                    // Вкладка Funding — только для админов (beta)
-                    if (tab.id === 'funding' && !isAdmin) return null
+                    // Вкладка Funding — для всех у кого есть доступ isCexCexPaid
+                    if (tab.id === 'funding' && !isCexCexPaid) return null
 
                     return (
                         <div key={tab.id}>
