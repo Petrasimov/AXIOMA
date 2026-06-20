@@ -613,23 +613,34 @@ function FundingDetailModal({
   )
 
   // Итоговый спред входа:
-  // entrySpread = opp.spread − (avgAsk − avgBid) / avgBid × 100
-  // Единая формула: если avgAsk > avgBid → разница вычитается (ухудшение),
-  //                 если avgAsk < avgBid → разница отрицательна → прибавляется.
+  // bid = цена short-входа (продали на bid-бирже)
+  // ask = цена long-входа (купили на ask-бирже)
+  // entrySpread = (avgBid - avgAsk) / avgBid * 100
+  // Положительный если bid > ask → правильная позиция → при закрытии будет прибыль.
+  const avgBidNum = parseFloat(avgBid)
+  const avgAskNum = parseFloat(avgAsk)
   const entrySpread = calcFilled
-    ? opp.spread - (parseFloat(avgAsk) - parseFloat(avgBid)) / parseFloat(avgBid) * 100
+    ? (avgBidNum - avgAskNum) / avgBidNum * 100
     : null
 
-  // Спред выхода (от live VWAP закрытия):
-  // exitSpread = (vwapBidExit − vwapAskExit) / vwapBidExit × 100
+  // Спред выхода:
+  // Для закрытия: нужно купить на bid-бирже (по ask стакана) и продать на ask-бирже (по bid стакана)
+  // exitSpread = (vwapAskExit - vwapBidExit) / vwapAskExit * 100
+  // Стремится к 0% при идеальном выходе.
+  // vwapBidExit = VWAP по asks bid-биржи (цена откупа short)
+  // vwapAskExit = VWAP по bids ask-биржи (цена закрытия long)
   const exitSpread = (vwapBidExit && vwapAskExit)
-    ? (vwapBidExit - vwapAskExit) / vwapBidExit * 100
+    ? (vwapAskExit - vwapBidExit) / vwapAskExit * 100
     : null
 
-  // P&L при текущей сумме сделки:
-  const entryPnl = entrySpread !== null
-    ? (entrySpread * tradeAmount / 100)
-    : null
+  // Profit — текущая прибыль с учётом спреда входа и спреда выхода:
+  // profit = (entrySpread - exitSpread) * tradeAmount / 100
+  // Если exitSpread → 0, то profit ≈ entrySpread * tradeAmount / 100
+  const livePnl = (entrySpread !== null && exitSpread !== null)
+    ? (entrySpread - exitSpread) * tradeAmount / 100
+    : entrySpread !== null
+      ? entrySpread * tradeAmount / 100
+      : null
 
   // Текущий profit (по базовому спреду из API, для сводки)
   const basePnl = (opp.spread * tradeAmount / 100)
@@ -710,7 +721,14 @@ function FundingDetailModal({
               {/* Биржевые панели */}
               <div className="fdm-ex-pair">
                 {/* SHORT side — bid-биржа */}
-                <div className="fdm-ex-panel short">
+                <div
+                  className="fdm-ex-panel short"
+                  style={{ cursor: TERMINAL_LINKS[bidExName] ? 'pointer' : 'default' }}
+                  onClick={() => {
+                    const links = TERMINAL_LINKS[bidExName]
+                    if (links) window.open(links.futures(sym), '_blank')
+                  }}
+                >
                   <div className="fdm-ex-tag short">SHORT FUTURES</div>
                   <div className="fdm-ex-name">{bidExName}</div>
                   <div className="fdm-ex-row">
@@ -736,7 +754,14 @@ function FundingDetailModal({
                 </div>
 
                 {/* BUY side — ask-биржа (spot для SF, futures для FF) */}
-                <div className="fdm-ex-panel buy">
+                <div
+                  className="fdm-ex-panel buy"
+                  style={{ cursor: TERMINAL_LINKS[askExName] ? 'pointer' : 'default' }}
+                  onClick={() => {
+                    const links = TERMINAL_LINKS[askExName]
+                    if (links) window.open(isFF ? links.futures(sym) : links.spot(sym), '_blank')
+                  }}
+                >
                   <div className="fdm-ex-tag buy">
                     {isFF ? 'LONG FUTURES' : 'BUY SPOT'}
                   </div>
@@ -837,12 +862,12 @@ function FundingDetailModal({
                 <div className="fdm-section-title">Сводка</div>
                 <div className="fdm-stats">
                   <div className="fdm-stat">
-                    <div className="fdm-stat-label">Profit / ${tradeAmount}</div>
+                    <div className="fdm-stat-label">Profit</div>
                     <div className="fdm-stat-val ok">+${basePnl.toFixed(2)}</div>
                   </div>
                   <div className="fdm-stat">
                     <div className="fdm-stat-label">Funding In</div>
-                    <div className="fdm-stat-val acc">
+                    <div className="fdm-stat-val" style={{ color: '#ffffff' }}>
                       <LiveCountdown isoString={opp.next_funding_time} />
                     </div>
                   </div>
@@ -850,7 +875,7 @@ function FundingDetailModal({
                     <>
                       <div className="fdm-stat">
                         <div className="fdm-stat-label">Rate Short ({bidExName})</div>
-                        <div className="fdm-stat-val warn">
+                        <div className="fdm-stat-val" style={{ color: 'var(--error)' }}>
                           {bidFundingRate != null
                             ? `${bidFundingRate >= 0 ? '+' : ''}${(bidFundingRate * 100).toFixed(4)}%`
                             : '—'
@@ -859,7 +884,7 @@ function FundingDetailModal({
                       </div>
                       <div className="fdm-stat">
                         <div className="fdm-stat-label">Rate Long ({askExName})</div>
-                        <div className="fdm-stat-val" style={{ color: 'var(--text-secondary)' }}>
+                        <div className="fdm-stat-val" style={{ color: 'var(--success)' }}>
                           {askFundingRate != null
                             ? `${askFundingRate >= 0 ? '+' : ''}${(askFundingRate * 100).toFixed(4)}%`
                             : '—'
@@ -871,7 +896,7 @@ function FundingDetailModal({
                   {!isFF && (
                     <div className="fdm-stat" style={{ gridColumn: '1 / -1' }}>
                       <div className="fdm-stat-label">Ставка финансирования ({bidExName})</div>
-                      <div className="fdm-stat-val warn">
+                      <div className="fdm-stat-val" style={{ color: 'var(--warning)' }}>
                         {opp.funding_rate != null
                           ? `${opp.funding_rate >= 0 ? '+' : ''}${(opp.funding_rate * 100).toFixed(4)}%`
                           : '—'
@@ -925,11 +950,11 @@ function FundingDetailModal({
                       </span>
                     </div>
                     <div className="fdm-calc-result">
-                      <span className="fdm-calc-result-label">Спред выхода (live)</span>
+                      <span className="fdm-calc-result-label">Спред выхода</span>
                       <span
                         className="fdm-calc-result-val"
                         style={{ color: exitSpread != null
-                          ? getSpreadColor(exitSpread)
+                          ? exitSpread <= 0.05 ? 'var(--success)' : exitSpread <= 0.3 ? 'var(--warning)' : 'var(--error)'
                           : 'var(--text-muted)'
                         }}
                       >
@@ -940,46 +965,22 @@ function FundingDetailModal({
                       </span>
                     </div>
                     <div className="fdm-calc-result">
-                      <span className="fdm-calc-result-label">P&L при ${tradeAmount}</span>
+                      <span className="fdm-calc-result-label">P&L</span>
                       <span
                         className="fdm-calc-result-val"
-                        style={{ color: entryPnl >= 0 ? 'var(--success)' : 'var(--error)' }}
+                        style={{ color: livePnl != null
+                          ? livePnl >= 0 ? 'var(--success)' : 'var(--error)'
+                          : 'var(--text-muted)'
+                        }}
                       >
-                        {entryPnl >= 0 ? '+' : ''}${entryPnl.toFixed(2)}
+                        {livePnl != null
+                          ? `${livePnl >= 0 ? '+' : ''}$${livePnl.toFixed(2)}`
+                          : '—'
+                        }
                       </span>
                     </div>
                   </div>
                 )}
-              </div>
-
-              {/* Терминалы */}
-              <div className="fdm-section">
-                <div className="fdm-section-title">Терминалы бирж</div>
-                <div className="fdm-links">
-                  {TERMINAL_LINKS[bidExName] && (
-                    <button
-                      className="fdm-link-btn"
-                      onClick={() => window.open(TERMINAL_LINKS[bidExName].futures(sym), '_blank')}
-                    >
-                      <span>{bidExName} Futures — Short</span>
-                      <ExternalLink size={12} />
-                    </button>
-                  )}
-                  {TERMINAL_LINKS[askExName] && (
-                    <button
-                      className="fdm-link-btn"
-                      onClick={() => window.open(
-                        isFF
-                          ? TERMINAL_LINKS[askExName].futures(sym)
-                          : TERMINAL_LINKS[askExName].spot(sym),
-                        '_blank'
-                      )}
-                    >
-                      <span>{askExName} {isFF ? 'Futures — Long' : 'Spot — Buy'}</span>
-                      <ExternalLink size={12} />
-                    </button>
-                  )}
-                </div>
               </div>
 
               {/* Кнопка Торговать / Выход */}
