@@ -67,6 +67,30 @@ const TERMINAL_LINKS = {
   },
 }
 
+// ─── Taker fees (стандартный уровень, без скидок токенами/VIP) ───────────────
+// Источник: официальные страницы комиссий бирж (2025–2026)
+// Используются taker-комиссии т.к. арбитраж открывается рыночными ордерами.
+const FEES = {
+  'Binance': { futures: 0.05,  spot: 0.10 },
+  'BingX':   { futures: 0.05,  spot: 0.10 },
+  'Bitget':  { futures: 0.06,  spot: 0.10 },
+  'Bybit':   { futures: 0.055, spot: 0.10 },
+  'Gate':    { futures: 0.05,  spot: 0.10 },
+  'Gate.io': { futures: 0.05,  spot: 0.10 },
+  'KuCoin':  { futures: 0.06,  spot: 0.10 },
+  'MEXC':    { futures: 0.02,  spot: 0.05 },
+  'OKX':     { futures: 0.05,  spot: 0.10 },
+}
+// Комиссия в % (0.05 = 0.05%) × 2 стороны = полная стоимость открытия+закрытия
+function getTotalFee(bidExName, askExName, isFF) {
+  const bidFee = FEES[bidExName]?.futures ?? 0.06
+  const askFee = isFF
+    ? (FEES[askExName]?.futures ?? 0.06)
+    : (FEES[askExName]?.spot    ?? 0.10)
+  // × 2: открытие + закрытие обеих позиций
+  return (bidFee + askFee) * 2
+}
+
 // ─── CSS ─────────────────────────────────────────────────────────────────────
 const style = `
   .fdm-overlay {
@@ -303,6 +327,7 @@ const style = `
   .fdm-vwap {
     display: flex; padding: 11px 16px;
     gap: 0; border-bottom: 1px solid var(--border);
+    align-items: center;
   }
   .fdm-vwap-item { flex: 1; }
   .fdm-vwap-label {
@@ -319,6 +344,15 @@ const style = `
   .fdm-vwap-sep {
     width: 1px; background: var(--border);
     margin: 0 16px;
+  }
+  .fdm-vwap-diff {
+    text-align: center;
+    padding: 0 16px;
+    flex-shrink: 0;
+  }
+  .fdm-vwap-diff-val {
+    font-family: var(--font-mono);
+    font-size: 13px; font-weight: 700;
   }
 
   /* RIGHT */
@@ -613,34 +647,45 @@ function FundingDetailModal({
   )
 
   // Итоговый спред входа:
-  // bid = цена short-входа (продали на bid-бирже)
-  // ask = цена long-входа (купили на ask-бирже)
-  // entrySpread = (avgBid - avgAsk) / avgBid * 100
-  // Положительный если bid > ask → правильная позиция → при закрытии будет прибыль.
+  // bid = цена short-входа, ask = цена long-входа
+  // entrySpread > 0 если bid > ask → правильная позиция
   const avgBidNum = parseFloat(avgBid)
   const avgAskNum = parseFloat(avgAsk)
   const entrySpread = calcFilled
     ? (avgBidNum - avgAskNum) / avgBidNum * 100
     : null
 
-  // Спред выхода:
-  // Для закрытия: нужно купить на bid-бирже (по ask стакана) и продать на ask-бирже (по bid стакана)
-  // exitSpread = (vwapAskExit - vwapBidExit) / vwapAskExit * 100
-  // Стремится к 0% при идеальном выходе.
-  // vwapBidExit = VWAP по asks bid-биржи (цена откупа short)
-  // vwapAskExit = VWAP по bids ask-биржи (цена закрытия long)
+  // Спред выхода (live):
+  // При закрытии: откупаем short по asks bid-биржи, закрываем long по bids ask-биржи
+  // exitSpread > 0 → выход прибыльный, < 0 → выход убыточный
   const exitSpread = (vwapBidExit && vwapAskExit)
     ? (vwapAskExit - vwapBidExit) / vwapAskExit * 100
     : null
 
-  // Profit — текущая прибыль с учётом спреда входа и спреда выхода:
-  // profit = (entrySpread - exitSpread) * tradeAmount / 100
-  // Если exitSpread → 0, то profit ≈ entrySpread * tradeAmount / 100
-  const livePnl = (entrySpread !== null && exitSpread !== null)
-    ? (entrySpread - exitSpread) * tradeAmount / 100
-    : entrySpread !== null
-      ? entrySpread * tradeAmount / 100
-      : null
+  // Ставка финансирования (в % за период, уже умножена на 100 при отображении)
+  // FF: разница ставок bid-биржи и ask-биржи
+  // SF: только ставка short-биржи (spot не имеет funding)
+  const fundingRateNet = (() => {
+    const bidRate = bidFundingRate != null ? bidFundingRate * 100 : null
+    const askRate = askFundingRate != null ? askFundingRate * 100 : null
+    if (isFF) return (bidRate != null && askRate != null) ? bidRate - askRate : bidRate
+    return bidRate
+  })()
+
+  // Комиссия: taker обеих бирж × 2 (открытие + закрытие)
+  const commissionPct = getTotalFee(bidExName, askExName, isFF)
+
+  // PnL = (entrySpread + exitSpread + fundingRateNet - commission) × tradeAmount / 100
+  // entrySpread — зафиксированная прибыль от входа
+  // exitSpread  — прибыль/убыток от текущего момента выхода (обновляется live)
+  // fundingRateNet — прибыль от ставки финансирования
+  // commissionPct  — суммарная комиссия за открытие и закрытие позиций
+  const livePnl = (() => {
+    if (entrySpread === null) return null
+    const exit    = exitSpread    ?? 0
+    const funding = fundingRateNet ?? 0
+    return (entrySpread + exit + funding - commissionPct) * tradeAmount / 100
+  })()
 
   // Текущий profit (по базовому спреду из API, для сводки)
   const basePnl = (opp.spread * tradeAmount / 100)
@@ -800,10 +845,6 @@ function FundingDetailModal({
                   <div className="fdm-ob-label">
                     Стакан — {askExName} asks / {bidExName} bids
                   </div>
-                  <div className="fdm-ob-live">
-                    <div className="fdm-ob-dot" />
-                    LIVE
-                  </div>
                 </div>
 
                 {(askRows.length === 0 && bidRows.length === 0) ? (
@@ -844,7 +885,24 @@ function FundingDetailModal({
                   </div>
                 </div>
                 <div className="fdm-vwap-sep" />
-                <div className="fdm-vwap-item">
+                {/* Разница % между VWAP bid и VWAP ask */}
+                {(vwapBid && vwapAsk) && (() => {
+                  const diff = (vwapBid - vwapAsk) / vwapBid * 100
+                  const isPos = diff >= 0
+                  return (
+                    <div className="fdm-vwap-diff">
+                      <div className="fdm-vwap-label">Разница</div>
+                      <div
+                        className="fdm-vwap-diff-val"
+                        style={{ color: isPos ? 'var(--success)' : 'var(--error)' }}
+                      >
+                        {isPos ? '+' : ''}{diff.toFixed(4)}%
+                      </div>
+                    </div>
+                  )
+                })()}
+                <div className="fdm-vwap-sep" />
+                <div className="fdm-vwap-item" style={{ textAlign: 'right' }}>
                   <div className="fdm-vwap-label">VWAP Buy (${tradeAmount})</div>
                   <div className="fdm-vwap-val ask">
                     {vwapAsk ? formatPrice(vwapAsk) : '—'}
@@ -867,7 +925,7 @@ function FundingDetailModal({
                   </div>
                   <div className="fdm-stat">
                     <div className="fdm-stat-label">Funding In</div>
-                    <div className="fdm-stat-val" style={{ color: '#ffffff' }}>
+                    <div className="fdm-stat-val" style={{ color: '#ffffff', fontFamily: 'var(--font-mono)', fontSize: '15px', fontWeight: 700 }}>
                       <LiveCountdown isoString={opp.next_funding_time} />
                     </div>
                   </div>
