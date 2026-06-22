@@ -877,7 +877,7 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
                                    : rec.strategy  // уже нормализован или неизвестный
 
                     return {
-                        id: index + 1,
+                        id: `${rec.symbol}_${bidEx.id}_${askEx.id}_${strategy}`,
                         symbol: rec.symbol,
                         strategy,
                         bid_ex: bidEx.id,
@@ -979,7 +979,7 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
             }
         })
 
-        return { ...opp, id: idx + 1, variants }
+        return { ...opp, id: `${opp.symbol}_${opp.bid_ex}_${opp.ask_ex}_${opp.strategy}`, variants }
     })
 
     // Сортируем по спреду (лучшие карточки — первые)
