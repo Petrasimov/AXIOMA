@@ -167,9 +167,15 @@ function connectBingX(symbol, marketType, onUpdate) {
     const sym = `${symbol}-USDT`
     const log = makeWsLogger('bingx', symbol, marketType)
 
-    log.info(`подключение → wss://open-api-ws.bingx.com/market`)
+    // Spot:    wss://open-api-ws.bingx.com/market
+    // Futures: wss://open-api-swap.bingx.com/swap-market (perpetual swap endpoint)
+    // Использование spot endpoint для futures даёт неправильные цены
+    const wsUrl = marketType === 'futures'
+        ? 'wss://open-api-swap.bingx.com/swap-market'
+        : 'wss://open-api-ws.bingx.com/market'
+    log.info(`подключение → ${wsUrl}`)
 
-    const ws = new WebSocket('wss://open-api-ws.bingx.com/market')
+    const ws = new WebSocket(wsUrl)
 
     let localBids = new Map()
     let localAsks = new Map()
