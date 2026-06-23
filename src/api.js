@@ -730,19 +730,14 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
 
     console.log(`[ШАГ 4.1] ✅ VWAP посчитан для ${vwapResults.length}/${rawRecords.length} записей | ⏱ ${(performance.now() - t41).toFixed(0)}мс`)
 
-    // Шаг 4.2 — фильтруем по спреду (только положительный <= 50%)
-    console.log('[ШАГ 4.2] Фильтруем по спреду (>0% и <=50%)...')
+    // Шаг 4.2 — фильтруем по спреду (только положительный, верхний лимит снят)
+    console.log('[ШАГ 4.2] Фильтруем по спреду (>0%)...')
     const t42 = performance.now()
 
     const spreadFiltered = vwapResults.filter(({ rec, spread, bid_price, ask_price }) => {
-        if (spread <= 0 || spread > 50) {
-            if (spread > 50) {
-                // Аномалия — цены в БД битые (неверный масштаб или нет торгов)
-                aLog('warn', `[ШАГ 4.2] ⚠️ АНОМАЛИЯ spread=${spread.toFixed(2)}% | ${rec.symbol} | ${rec.bid_ex}→${rec.ask_ex} | bid=${bid_price?.toFixed(8)} ask=${ask_price?.toFixed(8)}`)
-            } else {
-                // Нормальный отрицательный — нет арбитража, ask > bid, рабочее поведение
-                aLog('log', `[ШАГ 4.2] ↩ нет арбитража spread=${spread.toFixed(2)}% | ${rec.symbol} | ${rec.bid_ex}→${rec.ask_ex}`)
-            }
+        if (spread <= 0) {
+            // Нормальный отрицательный — нет арбитража, ask > bid, рабочее поведение
+            aLog('log', `[ШАГ 4.2] ↩ нет арбитража spread=${spread.toFixed(2)}% | ${rec.symbol} | ${rec.bid_ex}→${rec.ask_ex}`)
             return false
         }
         return true
@@ -856,7 +851,7 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
                     const finalAskPrice = ask_price
                     const finalSpread = spread
 
-                    if (!finalBidPrice || !finalAskPrice || finalSpread <= 0 || finalSpread > 50) return null
+                    if (!finalBidPrice || !finalAskPrice || finalSpread <= 0) return null
 
                     // Max size — полный доступный объём каждого стакана в USD.
                     // Старый calcMaxVolume(finalBid, finalAskPrice, 'long') всегда возвращал null:
