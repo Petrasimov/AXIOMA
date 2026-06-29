@@ -182,6 +182,9 @@ const style = `
     border-top: 1px solid var(--border);
     flex-shrink: 0;
     margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .reset-btn {
