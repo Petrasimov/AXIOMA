@@ -182,9 +182,6 @@ const style = `
     border-top: 1px solid var(--border);
     flex-shrink: 0;
     margin-top: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
   }
 
   .reset-btn {
@@ -336,7 +333,6 @@ const style = `
     cursor: pointer;
     transition: border-color 0.15s, color 0.15s;
     text-transform: uppercase;
-    margin-bottom: 8px;
   }
 
   .filter-save:hover {
