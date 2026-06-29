@@ -318,3 +318,37 @@ export async function saveUserSettings(userId, settings) {
         return { ok: false, reason: 'error' }
     }
 }
+
+// PUT /api/user-settings/notifications — включение/отключение Telegram уведомлений
+// Меняет только поле ActiveNotifications, не трогает остальные настройки
+//   { ok: true }                       — статус обновлён
+//   { ok: false, reason: 'unauthorized' } — cookie истекла
+//   { ok: false, reason: 'error' }        — ошибка сервера / сети
+export async function toggleNotifications(active) {
+    aLog('log', `[AUTH] toggleNotifications → active=${active}`)
+    try {
+        const res = await fetch(`${API_BASE}/api/user-settings/notifications`, {
+            method: 'PUT',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ active }),
+        })
+
+        if (res.status === 401) {
+            aLog('warn', `[AUTH] toggleNotifications → 401, cookie истекла`)
+            return { ok: false, reason: 'unauthorized' }
+        }
+
+        if (!res.ok) {
+            aLog('error', `[AUTH] toggleNotifications → HTTP ${res.status}`)
+            return { ok: false, reason: 'error' }
+        }
+
+        aLog('success', `[AUTH] toggleNotifications ✅ activeNotifications=${active}`)
+        return { ok: true }
+
+    } catch (err) {
+        aLog('error', `[AUTH] toggleNotifications ❌ сетевая ошибка: ${err.message}`)
+        return { ok: false, reason: 'error' }
+    }
+}

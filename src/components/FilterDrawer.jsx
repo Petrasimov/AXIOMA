@@ -202,6 +202,47 @@ const style = `
     color: var(--error);
   }
 
+  /* ─── Кнопка Telegram уведомлений ─── */
+  .notif-btn {
+    width: 100%;
+    padding: 10px;
+    background: transparent;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+
+  .notif-btn.off {
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+
+  .notif-btn.off:hover {
+    border-color: var(--success);
+    color: var(--success);
+  }
+
+  .notif-btn.on {
+    border: 1px solid var(--success);
+    color: var(--success);
+    background: #001810;
+  }
+
+  .notif-btn.on:hover {
+    background: #002418;
+  }
+
+  .drawer.mode-funding .notif-btn {
+    padding: 13px;
+    font-size: 13px;
+  }
+
   .filter-slider-row {
     display: flex;
     align-items: center;
@@ -324,7 +365,7 @@ const style = `
 
 `
 
-function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSaveSettings, canSave, saveStatus, mode = 'futures' }) {
+function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSaveSettings, canSave, saveStatus, mode = 'futures', activeNotifications, onToggleNotifications }) {
     const toggleStrategy = (key) => {
         // Лог переключения стратегии — ключ и новое значение
         const newVal = !filters.strategy[key]
@@ -525,6 +566,27 @@ function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSav
             
 
             <div className="drawer-footer">
+              {onToggleNotifications && (
+                <button
+                  className={`notif-btn ${activeNotifications ? 'on' : 'off'}`}
+                  onClick={onToggleNotifications}
+                  title={activeNotifications ? 'Выключить Telegram уведомления' : 'Включить Telegram уведомления'}
+                >
+                  {activeNotifications ? (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                      <circle cx="18" cy="5" r="4" fill="currentColor"/>
+                    </svg>
+                  ) : (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                    </svg>
+                  )}
+                  {activeNotifications ? 'ВЫКЛЮЧИТЬ УВЕДОМЛЕНИЯ' : 'ВКЛЮЧИТЬ УВЕДОМЛЕНИЯ'}
+                </button>
+              )}
               <button
                   className={`filter-save${saveStatus ? ' ' + saveStatus : ''}`}
                   onClick={() => {

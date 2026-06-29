@@ -13,7 +13,7 @@ import FundingPage from "./components/FundingPage.jsx";
 import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp, setAdminLogging, aLog } from "./api.js";
 import { calcVwap } from "./utils.js";
 import HomePage from "./components/HomePage.jsx";
-import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings } from "./auth.js";
+import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings, toggleNotifications } from "./auth.js";
 import TelegramAuthModal from "./components/TelegramAuthModal.jsx";
 import AccessDenied from "./components/AccessDenied.jsx";
 
@@ -150,6 +150,10 @@ function App() {
   // Инициализируется из userSettings при checkAccess (ШАГ 2)
   const [activeCoins, setActiveCoins] = useState([])
 
+  // activeNotifications — включены ли Telegram уведомления о новых возможностях
+  // Инициализируется из userSettings при checkAccess, меняется кнопкой в FilterDrawer
+  const [activeNotifications, setActiveNotifications] = useState(false)
+
   // ── Auth ───────────────────────────────────────────────────────────────────
   // Три возможных статуса:
   //   'unknown'  — не авторизован, показываем TelegramAuthModal
@@ -262,6 +266,11 @@ function App() {
           } else {
               setActiveCoins([])
           }
+          // ─────────────────────────────────────────────────────────────────────
+
+          // ── activeNotifications → инициализируем из userSettings ──────────────
+          setActiveNotifications(access.userSettings.activeNotifications ?? false)
+          aLog('log', `[ШАГ 2] activeNotifications=${access.userSettings.activeNotifications ?? false}`)
           // ─────────────────────────────────────────────────────────────────────
 
       } else {
@@ -848,6 +857,32 @@ function App() {
     }
     aLog('groupEnd')
   }
+
+  // Включение/отключение Telegram уведомлений
+  // Оптимистично обновляет UI сразу, откатывает если бэкенд вернул ошибку
+  const handleToggleNotifications = async () => {
+    const next = !activeNotifications
+    setActiveNotifications(next) // оптимистичное обновление
+    aLog('log', `[APP] handleToggleNotifications → active=${next}`)
+
+    const result = await toggleNotifications(next)
+
+    if (!result.ok) {
+        setActiveNotifications(!next) // откат
+        if (result.reason === 'unauthorized') {
+            aLog('warn', `[APP] handleToggleNotifications → 401, разлогиниваем`)
+            clearSession()
+            clearInterval(accessIntervalRef.current)
+            accessIntervalRef.current = null
+            setAuth({ status: 'unknown', user: null })
+        } else {
+            aLog('error', `[APP] handleToggleNotifications ❌ ошибка: ${result.reason}`)
+        }
+    } else {
+        aLog('success', `[APP] handleToggleNotifications ✅ activeNotifications=${next}`)
+    }
+  }
+
   // tradeError — уведомление при превышении лимита активных позиций (исчезает через 4с)
   const [tradeError, setTradeError] = useState(null)
 
@@ -972,6 +1007,8 @@ function App() {
                 canSave={auth.status === 'ready' && !!auth.user}
                 saveStatus={saveStatus}
                 mode="funding"
+                activeNotifications={activeNotifications}
+                onToggleNotifications={handleToggleNotifications}
             />
           </>
         ) : (
@@ -1041,6 +1078,8 @@ function App() {
                   saveStatus={saveStatus}
                   showAllTransfer={showAllTransfer}
                   onShowAllTransfer={setShowAllTransfer}
+                  activeNotifications={activeNotifications}
+                  onToggleNotifications={handleToggleNotifications}
               />
             </div>
           </>
