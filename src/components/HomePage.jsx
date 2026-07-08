@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react"
+import { ArrowRight } from "lucide-react"
 
 const PANEL_LABELS = [
   'AXIOMA — SCANNER VIEW',
@@ -25,21 +26,28 @@ const style = `
   .hp-bg-glow::before {
     content: '';
     position: absolute;
-    width: 700px; height: 700px;
-    background: radial-gradient(circle, rgba(47,105,151,0.13) 0%, transparent 70%);
-    top: -250px; left: 15%;
-    animation: hp-float1 9s ease-in-out infinite;
+    width: 760px; height: 760px;
+    background: radial-gradient(circle, rgba(47,105,151,0.16) 0%, transparent 70%);
+    top: -260px; left: 12%;
+    animation: hp-float1 18s ease-in-out infinite;
   }
   .hp-bg-glow::after {
     content: '';
     position: absolute;
-    width: 450px; height: 450px;
-    background: radial-gradient(circle, rgba(0,201,122,0.07) 0%, transparent 70%);
-    bottom: 60px; right: 8%;
-    animation: hp-float2 11s ease-in-out infinite;
+    width: 520px; height: 520px;
+    background: radial-gradient(circle, rgba(0,201,122,0.09) 0%, transparent 70%);
+    bottom: 40px; right: 6%;
+    animation: hp-float2 22s ease-in-out infinite;
   }
-  @keyframes hp-float1 { 0%,100%{transform:translateY(0)} 50%{transform:translateY(28px)} }
-  @keyframes hp-float2 { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-18px)} }
+  .hp-bg-glow-extra {
+    position: absolute;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(61,135,192,0.1) 0%, transparent 70%);
+    top: 38%; right: 22%;
+    animation: hp-float1 26s ease-in-out infinite reverse;
+  }
+  @keyframes hp-float1 { 0%,100%{transform:translateY(0)} 50%{transform:translateY(24px)} }
+  @keyframes hp-float2 { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-16px)} }
 
   /* ════ BLOCK 1: HERO ════ */
   .hp-hero {
@@ -48,19 +56,20 @@ const style = `
     align-items: center;
     justify-content: center;
     text-align: center;
-    padding: 52px 48px 44px;
+    min-height: 92vh;
+    padding: 80px 48px 64px;
     border-bottom: 1px solid var(--border);
     position: relative;
   }
 
   .hp-h1 {
-    font-size: 46px;
+    font-size: 64px;
     font-weight: 900;
     line-height: 1.08;
-    letter-spacing: -1.5px;
+    letter-spacing: -2px;
     color: var(--text-primary);
-    margin-bottom: 18px;
-    max-width: 640px;
+    margin-bottom: 26px;
+    max-width: 820px;
   }
   .hp-h1-grad {
     background: linear-gradient(135deg, var(--accent-bright) 0%, #7dd3fc 50%, var(--success) 100%);
@@ -70,75 +79,82 @@ const style = `
   }
 
   .hp-sub {
-    font-size: 14px;
+    font-size: 17px;
     color: var(--text-secondary);
     line-height: 1.8;
-    max-width: 490px;
-    margin-bottom: 34px;
+    max-width: 620px;
+    margin-bottom: 44px;
   }
 
   .hp-actions {
     display: flex;
     align-items: center;
-    gap: 14px;
-    margin-bottom: 40px;
+    gap: 16px;
+    margin-bottom: 52px;
   }
   .hp-btn-primary {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 1px;
-    padding: 13px 30px;
+    padding: 16px 36px;
+    border-radius: var(--radius-md);
     background: linear-gradient(135deg, var(--accent) 0%, var(--accent-bright) 100%);
     color: white;
-    border: none;
+    border: 1px solid rgba(255,255,255,0.14);
     cursor: pointer;
-    box-shadow: 0 4px 24px rgba(47,105,151,0.38);
+    box-shadow: 0 4px 24px rgba(47,105,151,0.38), inset 0 1px 0 rgba(255,255,255,0.18);
     transition: transform 0.15s, box-shadow 0.15s;
   }
   .hp-btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 32px rgba(47,105,151,0.5);
+    box-shadow: 0 8px 32px rgba(47,105,151,0.5), inset 0 1px 0 rgba(255,255,255,0.22);
   }
   .hp-btn-secondary {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: 1px;
-    padding: 12px 24px;
-    background: transparent;
+    padding: 15px 26px;
+    border-radius: var(--radius-md);
+    background: rgba(255,255,255,0.02);
+    backdrop-filter: blur(8px);
     color: var(--text-secondary);
-    border: 1px solid var(--border);
+    border: 1px solid var(--glass-border);
     cursor: pointer;
     transition: all 0.15s;
   }
   .hp-btn-secondary:hover {
     color: var(--text-primary);
-    border-color: var(--accent);
+    border-color: var(--glass-border-hover);
+    background: rgba(93,163,214,0.08);
   }
 
   /* Exchange favicons */
   .hp-ex-logos {
     display: flex;
-    gap: 8px;
+    gap: 10px;
     align-items: center;
     justify-content: center;
   }
   .hp-favicon-wrap {
-    width: 36px; height: 36px;
-    border: 1px solid var(--border);
-    background: var(--bg-card);
+    width: 42px; height: 42px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    background: var(--glass-fill);
+    backdrop-filter: blur(10px);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: border-color 0.2s, transform 0.2s;
+    transition: border-color 0.2s, transform 0.2s, background 0.2s, box-shadow 0.2s;
     position: relative;
     cursor: pointer;
     text-decoration: none;
   }
   .hp-favicon-wrap:hover {
-    border-color: var(--accent-bright);
+    border-color: var(--glass-border-hover);
     transform: translateY(-3px);
-    background: var(--bg-hover);
+    background: var(--glass-fill-hover);
+    box-shadow: var(--shadow-glass);
   }
   .hp-favicon-wrap img {
     width: 20px; height: 20px;
@@ -153,29 +169,43 @@ const style = `
 
   /* ════ BLOCK 2: HOW IT WORKS ════ */
   .hp-howto {
-    background: var(--bg-secondary);
-    border-top: 1px solid var(--border);
+    background: transparent;
+    border-top: 1px solid var(--glass-border);
     display: grid;
     grid-template-columns: 1fr 1fr;
-    min-height: 440px;
+    column-gap: 36px;
+    min-height: 520px;
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+  }
+  .hp-howto::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(circle at 12% 15%, rgba(240,165,0,0.055) 0%, transparent 50%),
+      radial-gradient(circle at 88% 85%, rgba(125,211,252,0.06) 0%, transparent 50%),
+      linear-gradient(180deg, rgba(4,8,13,0.55) 0%, rgba(4,8,13,0.2) 100%);
   }
 
   .hp-timeline-col {
-    padding: 40px 44px;
-    border-right: 1px solid var(--border);
+    padding: 64px 60px 64px 96px;
     display: flex;
     flex-direction: column;
+    justify-content: center;
   }
   .hp-section-label {
     font-family: var(--font-mono);
-    font-size: 9px;
+    font-size: 10px;
     letter-spacing: 2px;
     color: var(--accent-bright);
     text-transform: uppercase;
     display: flex;
     align-items: center;
     gap: 10px;
-    margin-bottom: 20px;
+    margin-bottom: 22px;
   }
   .hp-section-label::after {
     content: '';
@@ -184,26 +214,26 @@ const style = `
     background: var(--border);
   }
   .hp-howto-title {
-    font-size: 20px;
+    font-size: 26px;
     font-weight: 800;
     color: var(--text-primary);
-    margin-bottom: 28px;
-    letter-spacing: -0.3px;
-    line-height: 1.25;
+    margin-bottom: 36px;
+    letter-spacing: -0.4px;
+    line-height: 1.28;
   }
   .hp-howto-title span { color: var(--accent-bright); }
 
   .hp-timeline { display: flex; flex-direction: column; flex: 1; }
   .hp-tl-step {
     display: grid;
-    grid-template-columns: 48px 1fr;
+    grid-template-columns: 40px 1fr;
     position: relative;
     cursor: pointer;
   }
   .hp-tl-step:not(:last-child) .hp-tl-left::after {
     content: '';
     position: absolute;
-    left: 15px; top: 34px;
+    left: 15px; top: 38px;
     height: calc(100% - 4px);
     width: 1px;
     background: var(--border);
@@ -242,31 +272,32 @@ const style = `
     background: rgba(0,201,122,0.12);
     color: var(--success);
   }
-  .hp-tl-right { padding: 4px 0 24px 16px; }
+  .hp-tl-right { padding: 2px 0 34px 20px; }
   .hp-tl-step:last-child .hp-tl-right { padding-bottom: 0; }
   .hp-tl-title {
-    font-size: 13px; font-weight: 700;
-    color: var(--text-muted); margin-bottom: 4px;
+    font-size: 16px; font-weight: 700;
+    color: var(--text-muted); margin-bottom: 7px;
     transition: color 0.2s;
   }
   .hp-tl-step.active .hp-tl-title,
   .hp-tl-step.done .hp-tl-title { color: var(--text-primary); }
   .hp-tl-desc {
-    font-size: 11px; color: var(--text-muted);
-    line-height: 1.6; max-width: 280px;
+    font-size: 13.5px; color: var(--text-muted);
+    line-height: 1.7; max-width: 380px;
     transition: color 0.2s;
   }
   .hp-tl-step.active .hp-tl-desc,
   .hp-tl-step.done .hp-tl-desc { color: var(--text-secondary); }
   .hp-tl-tags {
-    display: flex; gap: 6px; margin-top: 8px;
+    display: flex; gap: 7px; margin-top: 10px;
     flex-wrap: wrap; opacity: 0; transition: opacity 0.3s;
   }
   .hp-tl-step.active .hp-tl-tags,
   .hp-tl-step.done .hp-tl-tags { opacity: 1; }
   .hp-tl-tag {
-    font-family: var(--font-mono); font-size: 8px;
-    letter-spacing: 1px; padding: 2px 7px;
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 1px; padding: 3px 8px;
+    border-radius: 20px;
     border: 1px solid var(--border); color: var(--text-muted);
   }
   .hp-tl-tag.blue { border-color: rgba(61,135,192,0.3); color: var(--accent-bright); }
@@ -275,7 +306,13 @@ const style = `
 
   /* Right visual panel */
   .hp-panel-col {
-    background: var(--bg-card);
+    background: var(--glass-fill);
+    backdrop-filter: blur(22px) saturate(150%);
+    -webkit-backdrop-filter: blur(22px) saturate(150%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-glass);
+    margin: 64px 60px 64px 0;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -284,8 +321,8 @@ const style = `
   .hp-panel-topbar {
     display: flex; align-items: center; gap: 7px;
     padding: 10px 16px;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--glass-border);
     flex-shrink: 0;
   }
   .hp-panel-dot { width: 8px; height: 8px; border-radius: 50%; }
@@ -317,7 +354,8 @@ const style = `
     display: grid;
     grid-template-columns: 1fr 1fr 76px 56px;
     gap: 8px; padding: 6px 10px;
-    background: var(--bg-secondary); border: 1px solid var(--border);
+    background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
   }
   .hp-scan-th {
     font-family: var(--font-mono); font-size: 8px;
@@ -327,10 +365,11 @@ const style = `
     display: grid;
     grid-template-columns: 1fr 1fr 76px 56px;
     gap: 8px; padding: 9px 10px;
-    background: var(--bg-secondary); border: 1px solid var(--border);
+    background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
     align-items: center;
   }
-  .hp-scan-row.hl { border-color: var(--accent); background: rgba(47,105,151,0.08); }
+  .hp-scan-row.hl { border-color: var(--accent-bright); background: rgba(47,105,151,0.1); }
   .hp-scan-sym { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--text-primary); }
   .hp-scan-sub { font-size: 9px; color: var(--text-muted); margin-top: 2px; font-family: var(--font-mono); }
   .hp-scan-exes { display: flex; align-items: center; gap: 5px; }
@@ -345,14 +384,16 @@ const style = `
   /* ── VIS 1: Filters ── */
   .hp-filter-mock {
     width: 100%; max-width: 420px;
-    background: var(--bg-secondary); border: 1px solid var(--border);
+    background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
   }
   .hp-filter-head {
-    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    padding: 16px 20px; border-bottom: 1px solid var(--glass-border);
     font-size: 13px; font-weight: 700; letter-spacing: 1px;
     display: flex; align-items: center; gap: 10px; color: var(--text-primary);
   }
-  .hp-filter-sec { padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .hp-filter-sec { padding: 16px 20px; border-bottom: 1px solid var(--glass-border); }
   .hp-filter-sec:last-child { border-bottom: none; }
   .hp-filter-lbl {
     font-family: var(--font-mono); font-size: 9px; color: var(--text-muted);
@@ -360,11 +401,11 @@ const style = `
   }
   .hp-fex-row { display: flex; gap: 7px; flex-wrap: wrap; }
   .hp-fex {
-    width: 32px; height: 32px; border: 1px solid var(--border);
-    background: var(--bg-card); display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    background: rgba(255,255,255,0.02); display: flex; align-items: center; justify-content: center;
   }
   .hp-fex img { width: 18px; height: 18px; }
-  .hp-fex.sel { border-color: var(--accent-bright); background: rgba(61,135,192,0.12); }
   .hp-fex.sel { border-color: var(--accent-bright); background: rgba(61,135,192,0.12); }
   .hp-slider-row { display: flex; align-items: center; gap: 10px; }
   .hp-slider { flex: 1; height: 3px; background: var(--border); border-radius: 2px; }
@@ -383,22 +424,25 @@ const style = `
   /* ── VIS 2: Trade entry ── */
   .hp-trade-mock {
     width: 100%; max-width: 420px;
-    background: var(--bg-secondary); border: 1px solid var(--border);
+    background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
   }
   .hp-trade-head {
-    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    padding: 16px 20px; border-bottom: 1px solid var(--glass-border);
     display: flex; align-items: center; justify-content: space-between;
   }
   .hp-trade-sym { font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: var(--text-primary); }
   .hp-trade-badge {
     font-family: var(--font-mono); font-size: 14px; font-weight: 700;
-    padding: 5px 14px; background: rgba(0,201,122,0.12);
+    padding: 5px 14px; border-radius: 20px; background: rgba(0,201,122,0.12);
     border: 1px solid rgba(0,201,122,0.25); color: var(--success);
   }
   .hp-trade-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
   .hp-trade-sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .hp-trade-side {
     padding: 16px 14px; border: 1px solid;
+    border-radius: var(--radius-sm);
     display: flex; flex-direction: column; gap: 8px;
   }
   .hp-trade-side.long { border-color: rgba(0,201,122,0.3); background: rgba(0,201,122,0.05); }
@@ -412,6 +456,7 @@ const style = `
     display: flex; align-items: center; justify-content: space-between;
     padding: 13px 14px; background: rgba(0,201,122,0.05);
     border: 1px solid rgba(0,201,122,0.15);
+    border-radius: var(--radius-sm);
   }
   .hp-trade-profit-lbl { font-size: 12px; color: var(--text-secondary); }
   .hp-trade-profit-val { font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--success); }
@@ -440,6 +485,7 @@ const style = `
     font-size: 9px;
     font-weight: 700;
     padding: 3px 8px;
+    border-radius: 20px;
     background: rgba(0,201,122,0.1);
     border: 1px solid rgba(0,201,122,0.25);
     color: var(--success);
@@ -466,6 +512,7 @@ const style = `
     align-items: center;
     justify-content: space-between;
     padding: 9px 12px;
+    border-radius: var(--radius-sm);
     background: rgba(0,201,122,0.06);
     border: 1px solid rgba(0,201,122,0.2);
   }
@@ -481,8 +528,8 @@ const style = `
   .hp-panel-nav {
     display: flex; justify-content: center;
     gap: 8px; padding: 11px 0;
-    border-top: 1px solid var(--border);
-    background: var(--bg-secondary);
+    border-top: 1px solid var(--glass-border);
+    background: rgba(255,255,255,0.02);
   }
   .hp-nav-dot {
     width: 24px; height: 3px; border-radius: 2px;
@@ -490,6 +537,99 @@ const style = `
     transition: background 0.2s, width 0.2s;
   }
   .hp-nav-dot.active { background: var(--accent-bright); width: 32px; }
+
+  /* ════ BLOCK 3: FUNDING TUTORIAL ════ */
+  .hp-funding {
+    padding: 80px 48px 96px;
+    border-top: 1px solid var(--glass-border);
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+  }
+  .hp-funding::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(circle at 82% 12%, rgba(0,201,122,0.06) 0%, transparent 50%),
+      radial-gradient(circle at 10% 88%, rgba(47,105,151,0.07) 0%, transparent 50%),
+      linear-gradient(180deg, rgba(4,8,13,0.2) 0%, rgba(4,8,13,0.55) 100%);
+  }
+
+  .hp-funding-eyebrow {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 2px;
+    color: var(--accent-bright); text-transform: uppercase; margin-bottom: 14px; text-align: center;
+  }
+  .hp-funding-title {
+    font-size: 28px; font-weight: 800; margin-bottom: 14px;
+    text-align: center; letter-spacing: -0.4px; max-width: 560px;
+  }
+  .hp-funding-desc {
+    font-size: 13.5px; color: var(--text-secondary); line-height: 1.7;
+    text-align: center; max-width: 540px; margin-bottom: 40px;
+  }
+
+  .hp-funding-card {
+    width: 100%; max-width: 760px;
+    background: var(--glass-fill); backdrop-filter: blur(22px) saturate(150%);
+    border: 1px solid var(--glass-border); border-radius: var(--radius-xl); box-shadow: var(--shadow-glass);
+    padding: 36px 40px;
+  }
+
+  .fc-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+  .fc-label { font-size: 12px; color: var(--text-secondary); font-weight: 600; }
+  .fc-val { font-family: var(--font-mono); font-size: 20px; font-weight: 800; transition: color 0.2s; }
+  .fc-slider {
+    width: 100%; -webkit-appearance: none; height: 5px; border-radius: 3px;
+    background: linear-gradient(90deg, var(--error) 0%, var(--text-muted) 50%, var(--success) 100%);
+    outline: none; margin-bottom: 8px; cursor: pointer;
+  }
+  .fc-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; box-shadow: 0 0 0 4px rgba(61,135,192,0.35), 0 2px 8px rgba(0,0,0,0.4); cursor: pointer;
+  }
+  .fc-marks { display: flex; justify-content: space-between; font-size: 9px; color: var(--text-muted); font-family: var(--font-mono); margin-bottom: 32px; }
+
+  .fc-diagram { display: grid; grid-template-columns: 1fr 56px 1fr; align-items: center; margin-bottom: 28px; }
+  .fc-side {
+    padding: 20px 18px; border-radius: var(--radius-md); border: 1px solid; transition: all 0.25s ease;
+    display: flex; flex-direction: column; gap: 10px; position: relative; overflow: hidden;
+  }
+  .fc-side::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; transition: background 0.25s ease; }
+  .fc-side-badge { font-family: var(--font-mono); font-size: 10px; font-weight: 800; letter-spacing: 2px; padding: 4px 10px; border-radius: 20px; align-self: flex-start; }
+  .fc-side-ex { font-size: 14px; font-weight: 700; }
+  .fc-side-market { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; }
+  .fc-side-note { font-size: 10.5px; color: var(--text-secondary); line-height: 1.5; margin-top: 2px; }
+
+  .fc-side.mode-short { border-color: rgba(224,62,62,0.35); background: rgba(224,62,62,0.06); }
+  .fc-side.mode-short::before { background: var(--error); box-shadow: 0 0 10px var(--error); }
+  .fc-side.mode-short .fc-side-badge { background: rgba(224,62,62,0.18); color: var(--error); border: 1px solid rgba(224,62,62,0.4); }
+
+  .fc-side.mode-long { border-color: rgba(0,201,122,0.35); background: rgba(0,201,122,0.06); }
+  .fc-side.mode-long::before { background: var(--success); box-shadow: 0 0 10px var(--success); }
+  .fc-side.mode-long .fc-side-badge { background: rgba(0,201,122,0.18); color: var(--success); border: 1px solid rgba(0,201,122,0.4); }
+
+  .fc-diagram-arrow { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-muted); }
+  .fc-diagram-arrow span { font-family: var(--font-mono); font-size: 8px; letter-spacing: 1px; text-transform: uppercase; }
+
+  .fc-result {
+    display: flex; align-items: center; justify-content: space-between; padding: 18px 22px;
+    border-radius: var(--radius-md); margin-bottom: 22px;
+    background: linear-gradient(135deg, rgba(0,231,143,0.16), rgba(0,168,102,0.06));
+    border: 1px solid rgba(0,201,122,0.3);
+  }
+  .fc-result-lbl { font-size: 12px; color: var(--text-secondary); }
+  .fc-result-val { font-family: var(--font-mono); font-size: 24px; font-weight: 900; color: var(--success); }
+
+  .fc-caption {
+    font-size: 12px; color: var(--text-secondary); line-height: 1.7; text-align: center;
+    padding-top: 18px; border-top: 1px solid var(--glass-border);
+  }
+  .fc-caption b { color: var(--text-primary); }
 `
 
 const EXCHANGES_LIST = [
@@ -527,7 +667,7 @@ const STEPS = [
 ]
 
 // ─── Favicon с fallback ───────────────────────────────────────────────────────
-function ExFavicon({ domain, fallback, color, url, size = 20, wrapSize = 36 }) {
+function ExFavicon({ domain, fallback, color, url, size = 22, wrapSize = 42 }) {
   const [err, setErr] = useState(false)
   const handleClick = () => { if (url) window.open(url, '_blank') }
   return (
@@ -766,6 +906,7 @@ function SpreadConvergenceChart() {
 
 export default function HomePage({ onOpenScanner }) {
   const [step, setStep] = useState(0)
+  const [fundingRate, setFundingRate] = useState(4) // -10..10 → -0.10%..+0.10%
   const timerRef = useRef(null)
 
   const goToStep = (n) => {
@@ -783,10 +924,17 @@ export default function HomePage({ onOpenScanner }) {
     return () => clearInterval(timerRef.current)
   }, [])
 
+  // ── Слайд 3: фандинг — производные значения от слайдера ставки ──
+  const fundingRatePct = fundingRate / 100
+  const fundingIsPositive = fundingRatePct >= 0
+  const fundingPayout = (1000 * Math.abs(fundingRatePct) / 100).toFixed(2)
+
   return (
     <>
       <style>{style}</style>
-      <div className="hp-bg-glow" />
+      <div className="hp-bg-glow">
+        <div className="hp-bg-glow-extra" />
+      </div>
 
       <div className="hp-wrap">
 
@@ -994,6 +1142,73 @@ export default function HomePage({ onOpenScanner }) {
           </div>
 
         </div>
+
+        {/* ══ BLOCK 3: FUNDING TUTORIAL ══ */}
+        <div className="hp-funding">
+          <div className="hp-funding-eyebrow">// funding arbitrage tutorial</div>
+          <div className="hp-funding-title">Куда LONG, куда SHORT — зависит от знака ставки</div>
+          <div className="hp-funding-desc">
+            Подвигай слайдер и посмотри, как меняется расстановка позиций. Сканер делает этот выбор автоматически — здесь просто наглядно почему именно так.
+          </div>
+
+          <div className="hp-funding-card">
+            <div className="fc-row">
+              <span className="fc-label">Ставка финансирования на Binance Futures</span>
+              <span className="fc-val" style={{ color: fundingIsPositive ? 'var(--success)' : 'var(--error)' }}>
+                {fundingIsPositive ? '+' : ''}{fundingRatePct.toFixed(3)}%
+              </span>
+            </div>
+
+            <input
+              type="range"
+              className="fc-slider"
+              min="-10"
+              max="10"
+              value={fundingRate}
+              onChange={e => setFundingRate(parseInt(e.target.value, 10))}
+            />
+            <div className="fc-marks">
+              <span>-0.10% (шорты платят лонгам)</span>
+              <span>0%</span>
+              <span>+0.10% (лонги платят шортам)</span>
+            </div>
+
+            <div className="fc-diagram">
+              <div className={`fc-side ${fundingIsPositive ? 'mode-short' : 'mode-long'}`}>
+                <span className="fc-side-badge">{fundingIsPositive ? 'SHORT' : 'LONG'}</span>
+                <span className="fc-side-ex">Binance</span>
+                <span className="fc-side-market">Futures</span>
+                <span className="fc-side-note">
+                  {fundingIsPositive
+                    ? 'Лонги платят фандинг — открываем шорт и получаем выплату каждые 8ч.'
+                    : 'Шорты платят фандинг — открываем лонг и получаем выплату каждые 8ч.'}
+                </span>
+              </div>
+
+              <div className="fc-diagram-arrow">
+                <ArrowRight size={28} />
+                <span>хедж</span>
+              </div>
+
+              <div className={`fc-side ${fundingIsPositive ? 'mode-long' : 'mode-short'}`}>
+                <span className="fc-side-badge">{fundingIsPositive ? 'LONG' : 'SHORT'}</span>
+                <span className="fc-side-ex">Binance</span>
+                <span className="fc-side-market">Spot</span>
+                <span className="fc-side-note">Нейтрализует движение цены — прибыль только от разницы ставок.</span>
+              </div>
+            </div>
+
+            <div className="fc-result">
+              <span className="fc-result-lbl">Выплата за 8ч при позиции $1000</span>
+              <span className="fc-result-val">+${fundingPayout}</span>
+            </div>
+
+            <div className="fc-caption">
+              Правило простое: <b>кто платит фандинг — от того уходим</b>. Ставка положительная → лонги платят → мы открываем <b>SHORT</b> и хеджируем <b>LONG на споте</b>. Ставка отрицательная → шорты платят → всё наоборот.
+            </div>
+          </div>
+        </div>
+
       </div>
     </>
   )

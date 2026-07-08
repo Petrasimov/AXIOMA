@@ -21,6 +21,19 @@
 
   --font-sans: 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+
+  /* ── Liquid Glass: скругления ── */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 26px;
+
+  /* ── Liquid Glass: стеклянные заливки/тени ── */
+  --glass-fill: linear-gradient(135deg, rgba(24,52,80,0.5), rgba(10,22,35,0.4));
+  --glass-fill-hover: linear-gradient(135deg, rgba(32,66,100,0.62), rgba(14,30,46,0.5));
+  --glass-border: rgba(93,163,214,0.22);
+  --glass-border-hover: rgba(93,163,214,0.5);
+  --shadow-glass: 0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
 /* ----------------- Основные настройки ----------------- */
@@ -92,6 +105,3 @@ body {
   from { background-position: 0 0; }
   to   { background-position: 320px 320px; }
 }
-
-
-
