@@ -32,10 +32,21 @@ const style = `
         gap: 12px;
         padding: 0 20px;
         height: 72px;
-        background: var(--bg-secondary);
-        border-bottom: 1px solid var(--border);
+        background: rgba(10,26,37,0.68);
+        backdrop-filter: blur(20px) saturate(140%);
+        -webkit-backdrop-filter: blur(20px) saturate(140%);
+        border-bottom: 1px solid var(--glass-border);
         flex-shrink: 0;
         align-items: center;
+        position: relative;
+    }
+
+    .header::after {
+        content: '';
+        position: absolute;
+        left: 0; right: 0; top: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
     }
 
     .header-title {
@@ -62,9 +73,10 @@ const style = `
         display: flex;
         align-items: center;
         gap: 6px;
-        padding: 6px 12px;
-        background: transparent;
-        border: 1px solid var(--border);
+        padding: 7px 13px;
+        background: rgba(255,255,255,0.02);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-sm);
         color: var(--text-secondary);
         font-size: 13px;
         font-family: var(--font-sans);
@@ -76,14 +88,16 @@ const style = `
     }
 
     .header-btn:hover {
-        border-color: var(--accent);
+        border-color: var(--glass-border-hover);
         color: var(--text-primary);
+        background: rgba(93,163,214,0.08);
     }
 
     .header-btn.active {
-        background: var(--accent);
-        border-color: var(--accent);
+        background: var(--glass-fill-hover);
+        border-color: var(--accent-bright);
         color: white;
+        box-shadow: var(--shadow-glass);
     }
 
     .header-icon-btn {
@@ -92,8 +106,9 @@ const style = `
         justify-content: center;
         width: 35px;
         height: 35px;
-        background: transparent;
-        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.02);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-sm);
         color: var(--text-secondary);
         cursor: pointer;
         transition: all 0.15s ease;
@@ -101,28 +116,33 @@ const style = `
     }
 
     .header-icon-btn:hover {
-        border-color: var(--accent);
+        border-color: var(--glass-border-hover);
         color: var(--text-primary);
+        background: rgba(93,163,214,0.08);
     }
 
     .header-icon-btn.active {
-        background: var(--accent);
-        border-color: var(--accent);
+        background: var(--glass-fill-hover);
+        border-color: var(--accent-bright);
         color: white;
         height: 30px;
+        box-shadow: var(--shadow-glass);
     }
 
     .header-view-toggle {
         display: flex;
-        border: 1px solid var(--border);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
         align-items: center;
         height: 30px;
-        align-self: centerж
+        align-self: center;
     }
 
     .header-view-toggle .header-icon-btn {
         border: none;
-        border-right: 1px solid var(--border);
+        border-radius: 0;
+        border-right: 1px solid var(--glass-border);
     }
 
     .header-view-toggle .header-icon-btn:last-child {
@@ -137,9 +157,13 @@ const style = `
         position: absolute;
         top: calc(100% + 6px);
         right: 0;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
+        background: var(--glass-fill);
+        backdrop-filter: blur(22px) saturate(150%);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-glass);
         min-width: 160px;
+        overflow: hidden;
         z-index: 100;
     }
 
@@ -158,7 +182,7 @@ const style = `
 
     .sort-option:hover {
         color: var(--text-primary);
-        background: var(--bg-hover);
+        background: rgba(93,163,214,0.1);
     }
 
     .sort-option.selected {
@@ -226,6 +250,7 @@ function HiddenDropdown({ hiddenItems, onRestore }) {
                         fontSize: 9,
                         fontWeight: 700,
                         width: 14, height: 14,
+                        borderRadius: '50%',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
                         {hiddenItems.length}

@@ -16,8 +16,11 @@ const style = `
 
 
     .table-wrapper {
-        background: var(--bg-secondary);
-        border: 1px solid var(--border);
+        background: var(--glass-fill);
+        backdrop-filter: blur(18px) saturate(140%);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-glass);
         overflow: hidden;
         margin: 20px;
     }
@@ -28,7 +31,8 @@ const style = `
     }
 
     .table-view thead {
-        background: var(--bg-secondary);
+        background: rgba(255,255,255,0.02);
+        backdrop-filter: blur(18px);
         position: sticky;
         top: 0;
         z-index: 1;
@@ -41,15 +45,14 @@ const style = `
         color: var(--accent-bright);
         letter-spacing: 1.5px;
         text-transform: uppercase;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--glass-border);
         font-weight: 700;
         white-space: nowrap;
-        background: var(--bg-card);
     }
 
 
     .table-row {
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--glass-border);
         cursor: pointer;
         transition: background 0.15s ease;
     }
@@ -59,7 +62,7 @@ const style = `
     }
 
     .table-row:hover {
-        background: var(--bg-hover);
+        background: rgba(93,163,214,0.08);
     }
 
     .table-row td {
@@ -92,8 +95,9 @@ const style = `
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        padding: 2px 7px;
+        padding: 2px 8px;
         border: 1px solid currentColor;
+        border-radius: 20px;
         font-size: 9px;
         font-weight: 700;
         letter-spacing: 1px;

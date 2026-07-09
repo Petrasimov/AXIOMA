@@ -1,19 +1,23 @@
 const style = `
   .modal-overlay {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.75);
-    backdrop-filter: blur(4px);
+    background: rgba(3,8,13,0.6);
+    backdrop-filter: blur(9px);
     z-index: 300;
     display: flex; align-items: center; justify-content: center;
     padding: 20px;
   }
   .modal {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
+    background: rgba(13,32,51,0.74);
+    backdrop-filter: blur(30px) saturate(160%);
+    -webkit-backdrop-filter: blur(30px) saturate(160%);
+    border: 1px solid var(--glass-border-hover);
+    border-radius: var(--radius-xl);
     width: 980px; max-width: 100%;
-    box-shadow: 0 32px 96px rgba(0,0,0,0.7);
+    box-shadow: 0 32px 96px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.06);
     display: flex; flex-direction: column;
     max-height: 92vh;
+    overflow: hidden;
   }
 
   /* HEADER */
@@ -33,7 +37,8 @@ const style = `
   .dm-strategy {
     font-size: 10px; font-weight: 600; letter-spacing: 2px;
     color: rgba(255,255,255,0.55);
-    padding: 3px 10px;
+    padding: 3px 11px;
+    border-radius: 20px;
     border: 1px solid rgba(255,255,255,0.15);
     background: rgba(255,255,255,0.05);
   }
@@ -46,6 +51,7 @@ const style = `
   .dm-btn {
     background: rgba(255,255,255,0.07);
     border: 1px solid rgba(255,255,255,0.12);
+    border-radius: var(--radius-sm);
     color: rgba(255,255,255,0.65);
     cursor: pointer; width: 32px; height: 32px;
     display: flex; align-items: center; justify-content: center;
@@ -61,7 +67,7 @@ const style = `
     flex: 1; min-height: 0; overflow: hidden;
   }
   .dm-col-l {
-    border-right: 1px solid var(--border);
+    border-right: 1px solid var(--glass-border);
     padding: 12px;
     display: flex; flex-direction: column; gap: 8px;
     overflow-y: auto;
@@ -75,16 +81,19 @@ const style = `
   /* EXCHANGE CARD */
   .ex-card {
     border: 1px solid; overflow: hidden;
+    border-radius: var(--radius-md);
     position: relative; cursor: pointer;
     transition: box-shadow 0.15s, border-color 0.15s;
+    backdrop-filter: blur(8px);
   }
   .ex-card::before {
     content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    border-radius: 3px 0 0 3px;
   }
-  .ex-card.buy { background: #030f09; border-color: rgba(0,201,122,0.2); }
+  .ex-card.buy { background: linear-gradient(135deg, rgba(0,201,122,0.09), rgba(0,201,122,0.02)); border-color: rgba(0,201,122,0.22); }
   .ex-card.buy:hover { border-color: rgba(0,201,122,0.45); box-shadow: inset 0 0 60px rgba(0,201,122,0.07); }
   .ex-card.buy::before { background: var(--success); box-shadow: 0 0 8px var(--success); }
-  .ex-card.sell { background: #0f0404; border-color: rgba(224,62,62,0.2); }
+  .ex-card.sell { background: linear-gradient(135deg, rgba(224,62,62,0.09), rgba(224,62,62,0.02)); border-color: rgba(224,62,62,0.22); }
   .ex-card.sell:hover { border-color: rgba(224,62,62,0.45); box-shadow: inset 0 0 60px rgba(224,62,62,0.07); }
   .ex-card.sell::before { background: var(--error); box-shadow: 0 0 8px var(--error); }
   .ex-inner { padding: 11px 12px 12px 16px; }
@@ -104,7 +113,7 @@ const style = `
   .ex-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
   .ex-role { font-size: 8px; letter-spacing: 1px; color: var(--text-muted); margin-top: 1px; }
   .ex-badge {
-    font-size: 8px; letter-spacing: 1.5px; padding: 2px 7px; border: 1px solid; font-weight: 700;
+    font-size: 8px; letter-spacing: 1.5px; padding: 3px 8px; border: 1px solid; border-radius: 20px; font-weight: 700;
   }
   .ex-badge.buy { color: var(--success); border-color: rgba(0,201,122,0.35); }
   .ex-badge.sell { color: var(--error); border-color: rgba(224,62,62,0.35); }
@@ -129,20 +138,23 @@ const style = `
   /* SPREAD SEPARATOR */
   .spread-sep {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 10px 8px 16px;
-    background: rgba(47,105,151,0.05);
-    border: 1px solid rgba(47,105,151,0.18);
+    padding: 10px 12px 10px 16px;
+    background: var(--glass-fill);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border-hover);
+    border-radius: var(--radius-md);
   }
   .ss-left { display: flex; align-items: center; gap: 8px; }
   .ss-label { font-size: 8px; color: var(--text-muted); letter-spacing: 1.5px; }
   .ss-val { font-family: var(--font-mono); font-size: 20px; font-weight: 700; }
   .ss-grade {
     font-size: 9px; font-weight: 700; letter-spacing: 2px;
-    padding: 2px 7px; border: 1px solid;
+    padding: 3px 8px; border: 1px solid; border-radius: 20px;
   }
 
   .trade-btn {
-    padding: 7px 16px; font-size: 9px; font-weight: 700; letter-spacing: 1.5px;
+    padding: 8px 18px; font-size: 9px; font-weight: 700; letter-spacing: 1.5px;
+    border-radius: var(--radius-sm);
     cursor: pointer; border: 1px solid; transition: all 0.15s;
     font-family: var(--font-sans); white-space: nowrap;
   }
@@ -164,7 +176,8 @@ const style = `
 
   /* CHART */
   .chart-tabs {
-    display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    display: flex; border-bottom: 1px solid var(--glass-border); flex-shrink: 0;
+    background: rgba(255,255,255,0.015);
   }
   .chart-tab {
     padding: 10px 13px; font-size: 10px; letter-spacing: 0.8px;
@@ -183,9 +196,11 @@ const style = `
   }
   .chart-area svg { flex: 1; }
   .chart-locked-overlay {
-    position: absolute; inset: 0;
+    position: absolute; inset: 8px;
+    border-radius: var(--radius-md);
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    background: rgba(7,24,40,0.85);
+    background: rgba(7,24,40,0.82);
+    backdrop-filter: blur(6px);
     font-size: 12px; color: var(--text-muted); gap: 8px;
   }
   .chart-lock-icon { font-size: 22px; }
@@ -195,7 +210,7 @@ const style = `
   }
   .chart-legend {
     display: flex; gap: 14px; padding: 5px 10px 6px;
-    flex-shrink: 0; border-top: 1px solid #0a1e2e;
+    flex-shrink: 0; border-top: 1px solid var(--glass-border);
   }
   .legend-item { display: flex; align-items: center; gap: 5px; font-size: 9px; color: var(--text-muted); }
   .leg-line { width: 14px; height: 2px; flex-shrink: 0; }
@@ -203,25 +218,27 @@ const style = `
 
   /* EXIT CALCULATOR */
   .exit-calc {
-    flex-shrink: 0; border-top: 1px solid #0a1e2e;
-    padding: 10px 12px; background: #050f1a;
+    flex-shrink: 0; border-top: 1px solid var(--glass-border);
+    padding: 12px 14px; background: rgba(255,255,255,0.015);
   }
   .exit-calc-title {
     font-size: 8px; letter-spacing: 2px; text-transform: uppercase;
     color: var(--accent-bright); margin-bottom: 8px; font-weight: 600;
   }
   .exit-calc-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-  .exit-calc-label { font-size: 9px; color: #3d6680; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .exit-calc-label { font-size: 9px; color: var(--text-muted); letter-spacing: 0.5px; margin-bottom: 3px; }
   .exit-calc-input {
-    width: 100%; background: #071828; border: 1px solid #0e2a42;
-    color: var(--text-primary); padding: 7px 10px;
+    width: 100%; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary); padding: 8px 11px;
     font-family: var(--font-mono); font-size: 13px;
-    outline: none; transition: border-color 0.15s; box-sizing: border-box;
+    outline: none; transition: border-color 0.15s, box-shadow 0.15s; box-sizing: border-box;
   }
-  .exit-calc-input:focus { border-color: var(--accent-bright); }
+  .exit-calc-input:focus { border-color: var(--accent-bright); box-shadow: 0 0 0 3px rgba(61,135,192,0.15); }
   .exit-calc-results { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .exit-calc-result {
-    background: #071828; border: 1px solid #0e2a42; padding: 8px 10px;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); padding: 9px 11px;
+    border-radius: var(--radius-sm);
     border-left: 2px solid var(--accent-bright);
   }
   .exit-calc-result-label { font-size: 8px; color: #3d6680; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px; }

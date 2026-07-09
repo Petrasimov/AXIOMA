@@ -6,21 +6,37 @@ import { aLog, enrichSingleOpportunity } from "../api.js"
 
 const style = `
   .opp-card {
-    background: #0d1e2d;
-    border: 1px solid var(--border);
+    background: var(--glass-fill);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-glass);
     overflow: hidden;
     cursor: pointer;
     display: flex;
     flex-direction: column;
-    transition: border-color 0.18s ease, box-shadow 0.18s ease;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, transform 0.18s ease;
     opacity: 0;
     animation: card-appear 0.3s ease both;
     min-height: 420px;
+    position: relative;
+  }
+
+  .opp-card::before {
+    content: '';
+    position: absolute;
+    top: -50%; left: -20%;
+    width: 65%; height: 70%;
+    background: radial-gradient(circle, rgba(255,255,255,0.06), transparent 70%);
+    pointer-events: none;
   }
 
   .opp-card:hover {
-    border-color: var(--accent-bright);
-    box-shadow: 0 0 0 1px rgba(47,105,151,0.2), 0 8px 32px rgba(0,0,0,0.55);
+    border-color: var(--glass-border-hover);
+    background: var(--glass-fill-hover);
+    box-shadow: 0 16px 44px rgba(0,0,0,0.55), 0 0 0 1px rgba(93,163,214,0.18);
+    transform: translateY(-2px);
   }
 
   .card-top-bar {
@@ -52,8 +68,9 @@ const style = `
     font-weight: 600;
     letter-spacing: 1.2px;
     color: var(--text-secondary);
-    padding: 2px 6px;
-    border: 1px solid var(--border);
+    padding: 3px 8px;
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
   }
 
   .card-age {
@@ -88,11 +105,13 @@ const style = `
   .card-side {
     flex: 1;
     border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
     padding: 10px 11px 9px;
     position: relative;
     overflow: hidden;
     cursor: pointer;
     min-height: 0;
+    backdrop-filter: blur(6px);
   }
 
   .card-side::before {
@@ -100,15 +119,16 @@ const style = `
     position: absolute;
     left: 0; top: 0; bottom: 0;
     width: 3px;
+    border-radius: 3px 0 0 3px;
   }
 
   .buy-side {
-    background: #030f09;
-    border-color: rgba(0,201,122,0.18);
+    background: linear-gradient(135deg, rgba(0,201,122,0.09), rgba(0,201,122,0.02));
+    border-color: rgba(0,201,122,0.2);
   }
 
   .buy-side:hover {
-    border-color: rgba(0,201,122,0.4);
+    border-color: rgba(0,201,122,0.45);
     box-shadow: inset 0 0 60px rgba(0,201,122,0.08);
   }
 
@@ -118,12 +138,12 @@ const style = `
   }
 
   .sell-side {
-    background: #0f0404;
-    border-color: rgba(224,62,62,0.18);
+    background: linear-gradient(135deg, rgba(224,62,62,0.09), rgba(224,62,62,0.02));
+    border-color: rgba(224,62,62,0.2);
   }
 
   .sell-side:hover {
-    border-color: rgba(224,62,62,0.4);
+    border-color: rgba(224,62,62,0.45);
     box-shadow: inset 0 0 60px rgba(224,62,62,0.08);
   }
 
@@ -237,8 +257,9 @@ const style = `
     gap: 6px;
     padding: 7px 14px;
     margin: 0 10px 6px;
-    border: 1px solid var(--border);
-    background: rgba(47,105,151,0.06);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    background: rgba(93,163,214,0.06);
     cursor: pointer;
     font-size: 10px;
     font-weight: 600;
@@ -249,9 +270,9 @@ const style = `
   }
 
   .card-toggle:hover {
-    border-color: var(--accent);
+    border-color: var(--glass-border-hover);
     color: var(--accent-bright);
-    background: rgba(47,105,151,0.12);
+    background: rgba(93,163,214,0.12);
   }
 
   /* ─── Кнопка варианта ─── */
@@ -260,8 +281,9 @@ const style = `
     align-items: center;
     gap: 8px;
     padding: 9px 12px;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
     cursor: pointer;
     transition: all 0.15s ease;
     width: 100%;
@@ -270,8 +292,8 @@ const style = `
   }
 
   .variant-btn:hover {
-    border-color: var(--accent-bright);
-    background: var(--bg-hover);
+    border-color: var(--glass-border-hover);
+    background: rgba(93,163,214,0.08);
   }
 
   /* Порядок: продажа → покупка → стратегия → спред → прибыль */
@@ -312,8 +334,9 @@ const style = `
     font-weight: 700;
     letter-spacing: 1px;
     color: var(--text-muted);
-    border: 1px solid var(--border);
-    padding: 2px 6px;
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 2px 7px;
     flex-shrink: 0;
     margin-left: auto;
   }
@@ -339,7 +362,7 @@ const style = `
     display: flex;
     align-items: center;
     gap: 12px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--glass-border);
     flex-shrink: 0;
   }
 
@@ -378,13 +401,15 @@ const style = `
   .profit-badge {
     display: flex;
     align-items: center;
-    padding: 5px 12px;
+    padding: 6px 13px;
+    border-radius: 20px;
     font-size: 13px;
     font-weight: 800;
     font-family: var(--font-mono);
-    background: rgba(0,201,122,0.18);
+    background: linear-gradient(135deg, rgba(0,231,143,0.25), rgba(0,168,102,0.12));
     border: 1px solid rgba(0,201,122,0.4);
     color: var(--success);
+    box-shadow: 0 0 16px rgba(0,201,122,0.15), inset 0 1px 0 rgba(255,255,255,0.1);
     white-space: nowrap;
   }
 

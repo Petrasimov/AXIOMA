@@ -7,9 +7,8 @@ const style = `
         width: 100%;
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 1px;
-        background: var(--border);
-        border-bottom: 1px solid var(--border);
+        gap: 10px;
+        padding: 12px 16px;
     }
 
     .stat-label {
@@ -39,13 +38,23 @@ const style = `
     }
 
     .stat-card {
-        background: var(--bg-secondary);
-        padding: 12px 20px;
+        background: var(--glass-fill);
+        backdrop-filter: blur(16px) saturate(140%);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-glass);
+        padding: 13px 18px;
         display: flex;
         flex-direction: column;
         gap: 4px;
         opacity: 0;
         animation: stat-appear 0.4s ease both;
+        transition: border-color 0.18s ease, background 0.18s ease;
+    }
+
+    .stat-card:hover {
+        border-color: var(--glass-border-hover);
+        background: var(--glass-fill-hover);
     }
 
     @keyframes dot-bounce {
