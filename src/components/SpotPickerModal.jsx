@@ -13,19 +13,22 @@ import { X } from 'lucide-react'
 const style = `
   .spm-overlay {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.75);
-    backdrop-filter: blur(4px);
+    background: rgba(3,8,13,0.62);
+    backdrop-filter: blur(8px);
     z-index: 310;
     display: flex; align-items: center; justify-content: center;
     padding: 20px;
   }
 
   .spm-modal {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
+    background: rgba(13,32,51,0.74);
+    backdrop-filter: blur(28px) saturate(150%);
+    border: 1px solid var(--glass-border-hover);
+    border-radius: var(--radius-lg);
     width: 380px;
-    box-shadow: 0 32px 96px rgba(0,0,0,0.7);
+    box-shadow: 0 32px 96px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
     display: flex; flex-direction: column;
+    overflow: hidden;
     animation: spm-appear 0.15s ease;
   }
 
@@ -57,6 +60,7 @@ const style = `
   .spm-close {
     background: rgba(255,255,255,0.07);
     border: 1px solid rgba(255,255,255,0.12);
+    border-radius: var(--radius-sm);
     color: rgba(255,255,255,0.65);
     cursor: pointer; width: 28px; height: 28px;
     display: flex; align-items: center; justify-content: center;
@@ -82,14 +86,15 @@ const style = `
   .spm-row {
     display: flex; align-items: center; gap: 12px;
     padding: 11px 14px;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
     cursor: pointer;
     transition: border-color 0.15s, background 0.15s;
   }
   .spm-row:hover {
-    border-color: var(--accent-bright);
-    background: var(--bg-hover);
+    border-color: var(--glass-border-hover);
+    background: rgba(93,163,214,0.08);
   }
 
   .spm-ex-logo {

@@ -17,9 +17,10 @@ const style = `
   .fab {
     display: flex;
     gap: 8px;
-    padding: 8px 16px;
-    background: #060f18;
-    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    background: rgba(10,26,37,0.6);
+    backdrop-filter: blur(16px) saturate(140%);
+    border-bottom: 1px solid var(--glass-border);
     overflow-x: auto;
     flex-shrink: 0;
     align-items: center;
@@ -37,7 +38,7 @@ const style = `
     align-self: center;
     flex-shrink: 0;
     padding-right: 8px;
-    border-right: 1px solid var(--border);
+    border-right: 1px solid var(--glass-border);
     margin-right: 4px;
     white-space: nowrap;
   }
@@ -51,15 +52,20 @@ const style = `
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 6px 10px;
-    background: #0d1e2d;
-    border: 1px solid var(--border);
+    padding: 7px 12px;
+    background: var(--glass-fill);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
     cursor: pointer;
     flex-shrink: 0;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, background 0.15s;
   }
 
-  .fab-card:hover { border-color: var(--accent-bright); }
+  .fab-card:hover {
+    border-color: var(--glass-border-hover);
+    background: var(--glass-fill-hover);
+  }
 
   .fab-symbol {
     font-family: var(--font-mono);
@@ -108,7 +114,7 @@ const style = `
   .fab-divider {
     width: 1px;
     height: 24px;
-    background: var(--border);
+    background: var(--glass-border);
     flex-shrink: 0;
   }
 
