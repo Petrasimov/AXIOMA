@@ -8,7 +8,7 @@
  */
 
 import { useState } from "react"
-import { Home, TrendingUp, Percent, BookOpen, ArrowLeftRight, Shuffle, Code2 } from "lucide-react"
+import { Home, TrendingUp, Percent, BookOpen, ArrowLeftRight, Shuffle, Code2, Users } from "lucide-react"
 import { TABS } from "../constants"
 import UserProfile from './UserProfile.jsx'
 
@@ -17,6 +17,7 @@ const TAB_ICONS = {
     futures: TrendingUp,
     funding: Percent,
     promo: BookOpen,
+    about: Users,
     developers: Code2,
 }
 
@@ -240,6 +241,7 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
                                     if (tab.id === 'main') onPageChange?.('home')
                                     else if (tab.id === 'funding') onPageChange?.('funding')
                                     else if (tab.id === 'promo') onPageChange?.('training')
+                                    else if (tab.id === 'about') onPageChange?.('about')
                                     else if (tab.id !== 'developers') onPageChange?.('futures')
                                 }}
                             >

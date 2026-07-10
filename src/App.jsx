@@ -14,6 +14,7 @@ import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp, setAdmi
 import { calcVwap } from "./utils.js";
 import HomePage from "./components/HomePage.jsx";
 import TrainingPage from "./components/TrainingPage.jsx";
+import AboutPage from "./components/AboutPage.jsx";
 import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings, toggleNotifications } from "./auth.js";
 import TelegramAuthModal from "./components/TelegramAuthModal.jsx";
 import AccessDenied from "./components/AccessDenied.jsx";
@@ -985,6 +986,8 @@ function App() {
           <HomePage onOpenScanner={() => { setActiveTab('futures'); setActivePage('futures') }} />
         ) : activePage === 'training' ? (
           <TrainingPage />
+        ) : activePage === 'about' ? (
+          <AboutPage />
         ) : activePage === 'api' ? (
           <ApiPage />
         ) : activePage === 'funding' ? (

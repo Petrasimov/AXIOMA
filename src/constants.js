@@ -91,5 +91,6 @@ export const TABS = [
     { id: 'futures',    label: 'Futures',    enabled: true  },
     { id: 'funding',    label: 'Funding',    enabled: true },
     { id: 'promo',      label: 'Training',   enabled: true  },
+    { id: 'about',      label: 'О нас',      enabled: true  },
     { id: 'developers', label: 'Developers', enabled: true  },
 ]
