@@ -34,8 +34,9 @@ const style = `
         height: 36px;
         min-width: 36px;
         border-radius: 50%;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
+        background: var(--glass-fill);
+        backdrop-filter: blur(8px);
+        border: 1px solid var(--glass-border);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -141,15 +142,16 @@ const style = `
         position: absolute;
         bottom: calc(100% + 8px);
         left: 8px;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 10px;
+        background: var(--glass-fill);
+        backdrop-filter: blur(22px) saturate(150%);
+        border: 1px solid var(--glass-border-hover);
+        border-radius: var(--radius-md);
         padding: 12px 14px;
         font-size: 12px;
         color: var(--text-secondary);
         font-family: var(--font-sans);
         white-space: nowrap;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+        box-shadow: var(--shadow-glass), 0 8px 24px rgba(0,0,0,0.4);
         animation: tooltip-up 0.15s ease;
         z-index: 300;
         min-width: 160px;
@@ -177,7 +179,7 @@ const style = `
     .user-logout-btn {
         width: 100%;
         padding: 7px 10px;
-        border-radius: 6px;
+        border-radius: var(--radius-sm);
         border: 1px solid rgba(224, 62, 62, 0.3);
         background: transparent;
         color: var(--error);

@@ -44,9 +44,11 @@ const style = `
     .access-denied-icon {
         width: 72px;
         height: 72px;
-        border-radius: 18px;
-        background: rgba(47, 105, 151, 0.1);
-        border: 1px solid rgba(47, 105, 151, 0.2);
+        border-radius: var(--radius-lg);
+        background: var(--glass-fill);
+        backdrop-filter: blur(14px);
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--shadow-glass);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -81,8 +83,8 @@ const style = `
         gap: 8px;
         padding: 0 24px;
         height: 44px;
-        border-radius: 8px;
-        border: none;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(255,255,255,0.14);
         cursor: pointer;
         background: #2AABEE;
         color: #fff;
@@ -92,6 +94,7 @@ const style = `
         letter-spacing: 0.3px;
         transition: all 0.15s ease;
         text-decoration: none;
+        box-shadow: 0 4px 20px rgba(42,171,238,0.25);
     }
 
     .access-denied-btn:hover {

@@ -13,6 +13,7 @@ import FundingPage from "./components/FundingPage.jsx";
 import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp, setAdminLogging, aLog } from "./api.js";
 import { calcVwap } from "./utils.js";
 import HomePage from "./components/HomePage.jsx";
+import TrainingPage from "./components/TrainingPage.jsx";
 import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings, toggleNotifications } from "./auth.js";
 import TelegramAuthModal from "./components/TelegramAuthModal.jsx";
 import AccessDenied from "./components/AccessDenied.jsx";
@@ -982,6 +983,8 @@ function App() {
       <div className="main-area" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
         {activePage === 'home' ? (
           <HomePage onOpenScanner={() => { setActiveTab('futures'); setActivePage('futures') }} />
+        ) : activePage === 'training' ? (
+          <TrainingPage />
         ) : activePage === 'api' ? (
           <ApiPage />
         ) : activePage === 'funding' ? (

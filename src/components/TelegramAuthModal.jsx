@@ -50,9 +50,9 @@ const style = `
     .tg-overlay {
         position: fixed;
         inset: 0;
-        background: rgba(6, 6, 6, 0.85);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
+        background: rgba(3, 8, 13, 0.68);
+        backdrop-filter: blur(9px);
+        -webkit-backdrop-filter: blur(9px);
         z-index: 1000;
         display: flex;
         align-items: center;
@@ -73,24 +73,28 @@ const style = `
     .tg-modal {
         width: 420px;
         max-width: calc(100vw - 32px);
-        background: var(--bg-secondary);
-        border: 1px solid var(--border);
-        border-radius: 12px;
+        background: rgba(13,32,51,0.76);
+        backdrop-filter: blur(28px) saturate(150%);
+        -webkit-backdrop-filter: blur(28px) saturate(150%);
+        border: 1px solid var(--glass-border-hover);
+        border-radius: var(--radius-lg);
         padding: 36px 32px 32px;
         display: flex;
         flex-direction: column;
         align-items: center;
         gap: 0;
         animation: tg-slide-up 0.25s ease;
-        box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+        box-shadow: 0 24px 64px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
     }
 
     .tg-logo-wrap {
         width: 56px;
         height: 56px;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 14px;
+        background: var(--glass-fill);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-glass);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -146,7 +150,7 @@ const style = `
     .tg-divider {
         width: 100%;
         height: 1px;
-        background: var(--border);
+        background: var(--glass-border);
         margin: 20px 0;
     }
 
@@ -189,7 +193,7 @@ const style = `
     .tg-btn {
         width: 100%;
         height: 48px;
-        border-radius: 8px;
+        border-radius: var(--radius-md);
         border: none;
         cursor: pointer;
         display: flex;
@@ -206,6 +210,8 @@ const style = `
     .tg-btn-primary {
         background: #2AABEE;
         color: #fff;
+        border: 1px solid rgba(255,255,255,0.14);
+        box-shadow: 0 4px 20px rgba(42,171,238,0.25);
     }
 
     .tg-btn-primary:hover {
@@ -215,16 +221,16 @@ const style = `
     }
 
     .tg-btn-secondary {
-        background: transparent;
+        background: rgba(255,255,255,0.02);
         color: var(--text-secondary);
-        border: 1px solid var(--border);
+        border: 1px solid var(--glass-border);
         margin-top: 10px;
     }
 
     .tg-btn-secondary:hover {
         color: var(--text-primary);
-        border-color: var(--accent);
-        background: var(--bg-hover);
+        border-color: var(--glass-border-hover);
+        background: rgba(93,163,214,0.08);
     }
 
     .tg-status-icon {
@@ -236,6 +242,7 @@ const style = `
         justify-content: center;
         margin-bottom: 16px;
         font-size: 22px;
+        backdrop-filter: blur(10px);
     }
 
     .tg-status-icon.warning {
