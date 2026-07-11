@@ -17,6 +17,7 @@ import {
 import { TRAINING_SECTIONS, TRAINING_MODULES } from '../data/trainingContent.js'
 import { useTrainingProgress } from '../hooks/useTrainingProgress.js'
 import LessonModal from './LessonModal.jsx'
+import Footer from './Footer.jsx'
 
 const ICONS = { BookOpen, Settings, Shuffle, Percent, MonitorSmartphone, ShieldCheck }
 
@@ -113,7 +114,7 @@ const style = `
   .tp-card-progress-fill { height:100%; background:var(--mc); transition:width 0.4s ease; }
 `
 
-function TrainingPage() {
+function TrainingPage({ onNavigate }) {
     const { progress, isLessonDone, markLesson } = useTrainingProgress(TRAINING_MODULES)
     const [openModuleId, setOpenModuleId] = useState(null)
     const [lessonIndex, setLessonIndex] = useState(0)
@@ -245,6 +246,7 @@ function TrainingPage() {
                     </div>
 
                 </div>
+                <Footer onNavigate={onNavigate} />
             </div>
 
             {openModule && (

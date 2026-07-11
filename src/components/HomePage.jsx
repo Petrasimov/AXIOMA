@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { ArrowRight } from "lucide-react"
+import Footer from "./Footer.jsx"
 
 const PANEL_LABELS = [
   'AXIOMA — SCANNER VIEW',
@@ -14,6 +15,78 @@ const style = `
     overflow-y: auto;
     position: relative;
     z-index: 1;
+    scroll-behavior: smooth;
+  }
+
+  /* ─── Система появления блоков при скролле ─── */
+  .hp-reveal {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+                transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: opacity, transform;
+  }
+  .hp-reveal.in { opacity: 1; transform: translateY(0); }
+
+  /* появление сбоку — для таймлайна */
+  .hp-reveal-x { opacity: 0; transform: translateX(-24px); transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.22,1,0.36,1); }
+  .hp-reveal-x.in { opacity: 1; transform: translateX(0); }
+
+  /* мягкое увеличение — для карточек/графика */
+  .hp-reveal-scale { opacity: 0; transform: scale(0.96) translateY(16px); transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22,1,0.36,1); }
+  .hp-reveal-scale.in { opacity: 1; transform: scale(1) translateY(0); }
+
+  /* hero — появление при загрузке, каскадом */
+  @keyframes hp-hero-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .hp-hero > * { animation: hp-hero-up 0.8s cubic-bezier(0.22,1,0.36,1) backwards; }
+  .hp-hero > *:nth-child(1) { animation-delay: 0.05s; }
+  .hp-hero > *:nth-child(2) { animation-delay: 0.15s; }
+  .hp-hero > *:nth-child(3) { animation-delay: 0.25s; }
+  .hp-hero > *:nth-child(4) { animation-delay: 0.35s; }
+  .hp-hero > *:nth-child(5) { animation-delay: 0.45s; }
+
+  /* индикатор прокрутки вниз */
+  .hp-scroll-hint {
+    position: absolute;
+    bottom: 28px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    color: var(--text-muted); font-size: 10px;
+    font-family: var(--font-mono); letter-spacing: 1.5px;
+    animation: hp-hint-fade 3s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .hp-scroll-hint-mouse {
+    width: 22px; height: 34px; border-radius: 12px;
+    border: 1.5px solid var(--glass-border-hover);
+    display: flex; justify-content: center; padding-top: 6px;
+  }
+  .hp-scroll-hint-dot {
+    width: 3px; height: 6px; border-radius: 2px;
+    background: var(--accent-bright);
+    animation: hp-hint-dot 1.8s ease-in-out infinite;
+  }
+  @keyframes hp-hint-dot {
+    0%   { opacity: 0; transform: translateY(0); }
+    40%  { opacity: 1; }
+    80%  { opacity: 0; transform: translateY(9px); }
+    100% { opacity: 0; }
+  }
+  @keyframes hp-hint-fade {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 0.9; }
+  }
+
+  /* уважение к настройке "меньше движения" */
+  @media (prefers-reduced-motion: reduce) {
+    .hp-reveal, .hp-reveal-x, .hp-reveal-scale {
+      opacity: 1 !important; transform: none !important; transition: none !important;
+    }
+    .hp-hero > * { animation: none !important; }
+    .hp-scroll-hint { animation: none; }
   }
 
   .hp-bg-glow {
@@ -904,7 +977,36 @@ function SpreadConvergenceChart() {
   )
 }
 
-export default function HomePage({ onOpenScanner }) {
+// Обёртка появления блока при попадании во вьюпорт
+function Reveal({ children, variant = '', delay = 0, className = '' }) {
+  const ref = useRef(null)
+  const [shown, setShown] = useState(false)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setShown(true); obs.disconnect() } },
+      { threshold: 0.1, rootMargin: '0px 0px -40px 0px' }
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [])
+
+  const base = variant === 'x' ? 'hp-reveal-x' : variant === 'scale' ? 'hp-reveal-scale' : 'hp-reveal'
+
+  return (
+    <div
+      ref={ref}
+      className={`${base} ${shown ? 'in' : ''} ${className}`}
+      style={{ transitionDelay: `${delay}ms` }}
+    >
+      {children}
+    </div>
+  )
+}
+
+export default function HomePage({ onOpenScanner, onNavigate }) {
   const [step, setStep] = useState(0)
   const [fundingRate, setFundingRate] = useState(4) // -10..10 → -0.10%..+0.10%
   const timerRef = useRef(null)
@@ -966,9 +1068,17 @@ export default function HomePage({ onOpenScanner }) {
               <ExFavicon key={ex.domain} {...ex} />
             ))}
           </div>
+
+          <div className="hp-scroll-hint">
+            <div className="hp-scroll-hint-mouse">
+              <div className="hp-scroll-hint-dot" />
+            </div>
+            ЛИСТАЙ ВНИЗ
+          </div>
         </div>
 
         {/* ══ BLOCK 2: HOW IT WORKS ══ */}
+        <Reveal>
         <div className="hp-howto">
 
           {/* Left: timeline */}
@@ -1142,8 +1252,10 @@ export default function HomePage({ onOpenScanner }) {
           </div>
 
         </div>
+        </Reveal>
 
         {/* ══ BLOCK 3: FUNDING TUTORIAL ══ */}
+        <Reveal variant="scale">
         <div className="hp-funding">
           <div className="hp-funding-eyebrow">// funding arbitrage tutorial</div>
           <div className="hp-funding-title">Куда LONG, куда SHORT — зависит от знака ставки</div>
@@ -1193,8 +1305,12 @@ export default function HomePage({ onOpenScanner }) {
               <div className={`fc-side ${fundingIsPositive ? 'mode-long' : 'mode-short'}`}>
                 <span className="fc-side-badge">{fundingIsPositive ? 'LONG' : 'SHORT'}</span>
                 <span className="fc-side-ex">Binance</span>
-                <span className="fc-side-market">Spot</span>
-                <span className="fc-side-note">Нейтрализует движение цены — прибыль только от разницы ставок.</span>
+                <span className="fc-side-market">{fundingIsPositive ? 'Spot' : 'Futures'}</span>
+                <span className="fc-side-note">
+                  {fundingIsPositive
+                    ? 'Нейтрализует движение цены — прибыль только от разницы ставок.'
+                    : 'Хедж только на фьючерсе: спот шортить нельзя. Прибыль — от ставки.'}
+                </span>
               </div>
             </div>
 
@@ -1204,11 +1320,13 @@ export default function HomePage({ onOpenScanner }) {
             </div>
 
             <div className="fc-caption">
-              Правило простое: <b>кто платит фандинг — от того уходим</b>. Ставка положительная → лонги платят → мы открываем <b>SHORT</b> и хеджируем <b>LONG на споте</b>. Ставка отрицательная → шорты платят → всё наоборот.
+              Правило простое: <b>кто платит фандинг — от того уходим</b>. Ставка положительная → лонги платят → открываем <b>SHORT на фьючерсе</b> и хеджируем <b>LONG на споте</b>. Ставка отрицательная → шорты платят → открываем <b>LONG на фьючерсе</b>, а хеджируем <b>SHORT тоже на фьючерсе</b> — спот шортить нельзя.
             </div>
           </div>
         </div>
+        </Reveal>
 
+        <Footer onNavigate={onNavigate} />
       </div>
     </>
   )

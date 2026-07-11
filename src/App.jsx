@@ -15,6 +15,7 @@ import { calcVwap } from "./utils.js";
 import HomePage from "./components/HomePage.jsx";
 import TrainingPage from "./components/TrainingPage.jsx";
 import AboutPage from "./components/AboutPage.jsx";
+import LegalPage from "./components/LegalPage.jsx";
 import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings, toggleNotifications } from "./auth.js";
 import TelegramAuthModal from "./components/TelegramAuthModal.jsx";
 import AccessDenied from "./components/AccessDenied.jsx";
@@ -96,6 +97,22 @@ function App() {
     try { return localStorage.getItem('activePage') || 'home' }
     catch { return 'home' }
   })
+  // какой юр-документ открыт (для страницы legal)
+  const [legalDoc, setLegalDoc] = useState('offer')
+
+  // Единый навигатор для футера и внутренних ссылок.
+  // Принимает 'futures' | 'funding' | 'training' | 'about' | 'legal:<docId>'
+  const navigateTo = (page) => {
+    if (typeof page !== 'string') return
+    if (page.startsWith('legal:')) {
+      setLegalDoc(page.split(':')[1] || 'offer')
+      setActivePage('legal')
+      return
+    }
+    const tabMap = { futures: 'futures', funding: 'funding', training: 'promo', about: 'about', home: 'main' }
+    if (tabMap[page]) setActiveTab(tabMap[page])
+    setActivePage(page)
+  }
   const [sortMode, setSortMode] = useState(() => {
     try { return localStorage.getItem('sortMode') || 'spread' }
     catch { return 'spread' }
@@ -983,11 +1000,16 @@ function App() {
 
       <div className="main-area" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
         {activePage === 'home' ? (
-          <HomePage onOpenScanner={() => { setActiveTab('futures'); setActivePage('futures') }} />
+          <HomePage
+            onOpenScanner={() => { setActiveTab('futures'); setActivePage('futures') }}
+            onNavigate={navigateTo}
+          />
         ) : activePage === 'training' ? (
-          <TrainingPage />
+          <TrainingPage onNavigate={navigateTo} />
         ) : activePage === 'about' ? (
-          <AboutPage />
+          <AboutPage onNavigate={navigateTo} />
+        ) : activePage === 'legal' ? (
+          <LegalPage initialDoc={legalDoc} onNavigate={navigateTo} />
         ) : activePage === 'api' ? (
           <ApiPage />
         ) : activePage === 'funding' ? (

@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import Footer from './Footer.jsx'
 import {
     Target, Sparkles, Users, MonitorSmartphone, Map as MapIcon,
     Send, MessageCircle, Globe, Rocket, Zap, ShieldCheck,
@@ -217,7 +218,7 @@ function Reveal({ children, delay = 0 }) {
 
 const ROAD_ICON = { done: CheckCircle2, active: Loader, future: Circle }
 
-function AboutPage() {
+function AboutPage({ onNavigate }) {
     return (
         <>
             <style>{style}</style>
@@ -408,6 +409,7 @@ function AboutPage() {
                     </Reveal>
 
                 </div>
+                <Footer onNavigate={onNavigate} />
             </div>
         </>
     )
