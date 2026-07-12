@@ -16,6 +16,8 @@ import HomePage from "./components/HomePage.jsx";
 import TrainingPage from "./components/TrainingPage.jsx";
 import AboutPage from "./components/AboutPage.jsx";
 import LegalPage from "./components/LegalPage.jsx";
+import TopMoversPage from "./components/TopMoversPage.jsx";
+import ProfileModal from "./components/ProfileModal.jsx";
 import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings, toggleNotifications } from "./auth.js";
 import TelegramAuthModal from "./components/TelegramAuthModal.jsx";
 import AccessDenied from "./components/AccessDenied.jsx";
@@ -100,8 +102,11 @@ function App() {
   // какой юр-документ открыт (для страницы legal)
   const [legalDoc, setLegalDoc] = useState('offer')
 
+  // модалка профиля пользователя
+  const [profileOpen, setProfileOpen] = useState(false)
+
   // Единый навигатор для футера и внутренних ссылок.
-  // Принимает 'futures' | 'funding' | 'training' | 'about' | 'legal:<docId>'
+  // Принимает 'futures' | 'funding' | 'training' | 'about' | 'movers' | 'legal:<docId>'
   const navigateTo = (page) => {
     if (typeof page !== 'string') return
     if (page.startsWith('legal:')) {
@@ -109,9 +114,29 @@ function App() {
       setActivePage('legal')
       return
     }
-    const tabMap = { futures: 'futures', funding: 'funding', training: 'promo', about: 'about', home: 'main' }
+    const tabMap = {
+      futures: 'futures', funding: 'funding', training: 'promo',
+      about: 'about', movers: 'movers', home: 'main',
+    }
     if (tabMap[page]) setActiveTab(tabMap[page])
     setActivePage(page)
+  }
+
+  // Переход из «Топ роста» в арбитражный сканер.
+  //
+  // ⚠️ ОГРАНИЧЕНИЕ: сейчас просто открывает сканер, БЕЗ фильтрации по монете —
+  // потому что в сканере пока НЕТ поиска/фильтра по символу монеты.
+  // Чтобы кнопка «Арбитраж →» действительно показывала конкретную монету,
+  // нужно сначала добавить в сканер поиск (отдельная задача).
+  // Пока сохраняем символ в state — он готов к использованию, когда поиск появится.
+  const [pendingCoinSearch, setPendingCoinSearch] = useState(null)
+
+  const openArbitrageForCoin = (coin) => {
+    const symbol = coin?.symbol
+    if (!symbol) return
+    setPendingCoinSearch(symbol)   // задел под будущий поиск в сканере
+    setActiveTab('futures')
+    setActivePage('futures')
   }
   const [sortMode, setSortMode] = useState(() => {
     try { return localStorage.getItem('sortMode') || 'spread' }
@@ -996,6 +1021,7 @@ function App() {
         onPageChange={setActivePage}
         authUser={auth.status === 'ready' ? auth.user : null}
         onLogout={handleLogout}
+        onOpenProfile={() => setProfileOpen(true)}
       />
 
       <div className="main-area" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
@@ -1008,6 +1034,11 @@ function App() {
           <TrainingPage onNavigate={navigateTo} />
         ) : activePage === 'about' ? (
           <AboutPage onNavigate={navigateTo} />
+        ) : activePage === 'movers' ? (
+          <TopMoversPage
+            onNavigate={navigateTo}
+            onOpenArbitrage={openArbitrageForCoin}
+          />
         ) : activePage === 'legal' ? (
           <LegalPage initialDoc={legalDoc} onNavigate={navigateTo} />
         ) : activePage === 'api' ? (
@@ -1130,6 +1161,15 @@ function App() {
           />
         )}
       </div>
+
+      {/* Модалка профиля — поверх всего, доступна с любой страницы */}
+      {profileOpen && auth.status === 'ready' && auth.user && (
+        <ProfileModal
+          user={auth.user}
+          onClose={() => setProfileOpen(false)}
+          onLogout={handleLogout}
+        />
+      )}
     </div>
   )
 }

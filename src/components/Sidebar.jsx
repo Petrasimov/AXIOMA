@@ -8,7 +8,7 @@
  */
 
 import { useState } from "react"
-import { Home, TrendingUp, Percent, BookOpen, ArrowLeftRight, Shuffle, Code2, Users } from "lucide-react"
+import { Home, TrendingUp, Percent, BookOpen, ArrowLeftRight, Shuffle, Code2, Users, Flame } from "lucide-react"
 import { TABS } from "../constants"
 import UserProfile from './UserProfile.jsx'
 
@@ -16,6 +16,7 @@ const TAB_ICONS = {
     main: Home,
     futures: TrendingUp,
     funding: Percent,
+    movers: Flame,
     promo: BookOpen,
     about: Users,
     developers: Code2,
@@ -202,7 +203,7 @@ const style = `
     }
 `
 
-function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, onLogout }) {
+function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, onLogout, onOpenProfile }) {
     const [futuresSubTab, setFuturesSubTab] = useState('cex-cex')
 
     const isAdmin      = authUser?.isAdmin === true
@@ -240,6 +241,7 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
                                     onTabChange(tab.id)
                                     if (tab.id === 'main') onPageChange?.('home')
                                     else if (tab.id === 'funding') onPageChange?.('funding')
+                                    else if (tab.id === 'movers') onPageChange?.('movers')
                                     else if (tab.id === 'promo') onPageChange?.('training')
                                     else if (tab.id === 'about') onPageChange?.('about')
                                     else if (tab.id !== 'developers') onPageChange?.('futures')
@@ -284,7 +286,7 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
 
                 {/* Профиль / версия */}
                 {authUser ? (
-                    <UserProfile user={authUser} onLogout={onLogout} />
+                    <UserProfile user={authUser} onOpenProfile={onOpenProfile} />
                 ) : (
                     <div className="sidebar-footer">
                         AXIOM v1.0

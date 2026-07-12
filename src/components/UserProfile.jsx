@@ -7,9 +7,6 @@
  *   иначе                  → "Нет доступа"    (красный)
  */
 
-import { useState } from 'react'
-import { clearSession } from '../auth.js'
-
 const style = `
     .user-profile {
         margin-top: auto;
@@ -208,9 +205,7 @@ function TgBadge() {
     )
 }
 
-function UserProfile({ user, onLogout }) {
-    const [showTooltip, setShowTooltip] = useState(false)
-
+function UserProfile({ user, onOpenProfile }) {
     const isAdmin = user?.isAdmin === true
     const hasAccess = user?.isCexCexPaid === true
     const initial = (user?.login || 'U').charAt(0).toUpperCase()
@@ -228,19 +223,13 @@ function UserProfile({ user, onLogout }) {
         badgeText = 'Нет доступа'
     }
 
-    function handleLogout() {
-        clearSession()
-        setShowTooltip(false)
-        onLogout?.()
-    }
-
     return (
         <>
             <style>{style}</style>
             <div
                 className="user-profile"
-                onClick={() => setShowTooltip(v => !v)}
-                title={user?.login}
+                onClick={() => onOpenProfile?.()}
+                title="Открыть профиль"
             >
                 {/* Аватар */}
                 <div className="user-avatar">
@@ -259,17 +248,6 @@ function UserProfile({ user, onLogout }) {
                         {badgeText}
                     </div>
                 </div>
-
-                {/* Тултип */}
-                {showTooltip && (
-                    <div className="user-tooltip" onClick={e => e.stopPropagation()}>
-                        <div className="user-tooltip-name">{user?.login}</div>
-                        <div className="user-tooltip-id">ID: {user?.userId}</div>
-                        <button className="user-logout-btn" onClick={handleLogout}>
-                            Выйти из аккаунта
-                        </button>
-                    </div>
-                )}
             </div>
         </>
     )
