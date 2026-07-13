@@ -134,15 +134,21 @@ function FundingDirectionSim() {
             <input type="range" className="ts-slider grad" min="-10" max="10" value={rate} onChange={e => setRate(+e.target.value)} />
             <div className="ts-marks"><span>−0.10%</span><span>0%</span><span>+0.10%</span></div>
             <div className="ts-diagram">
+                {/* Нога, которая ПОЛУЧАЕТ фандинг */}
                 <div className={`ts-side ${positive ? 'short' : 'long'}`}>
                     <div className="ts-side-badge" style={{ color: positive ? 'var(--error)' : 'var(--success)' }}>{positive ? 'SHORT' : 'LONG'}</div>
-                    <div className="ts-side-ex">Фьючерс</div>
+                    <div className="ts-side-ex">Фьючерс · биржа А</div>
                     <div className="ts-side-mkt">получаем ставку</div>
                 </div>
                 <div className="ts-arrow">⇄</div>
+                {/* ХЕДЖ-нога.
+                    При отрицательной ставке хедж обязан быть на ДРУГОЙ бирже:
+                    LONG и SHORT на одной бирже взаимно погасят фандинг (получил по одной —
+                    заплатил по другой), в сумме ноль, а с комиссиями минус.
+                    Прибыль = РАЗНИЦА ставок между биржами. */}
                 <div className={`ts-side ${positive ? 'long' : 'short'}`}>
                     <div className="ts-side-badge" style={{ color: positive ? 'var(--success)' : 'var(--error)' }}>{positive ? 'LONG' : 'SHORT'}</div>
-                    <div className="ts-side-ex">{positive ? 'Спот' : 'Фьючерс'}</div>
+                    <div className="ts-side-ex">{positive ? 'Спот' : 'Фьючерс · биржа Б'}</div>
                     <div className="ts-side-mkt">хедж цены</div>
                 </div>
             </div>
@@ -152,8 +158,8 @@ function FundingDirectionSim() {
             </div>
             <div className="ts-note">
                 {positive
-                    ? 'Ставка положительная: SHORT на фьючерсе (получаем выплату) + LONG на споте как хедж. Спотовый лонг компенсирует движение цены.'
-                    : 'Ставка отрицательная: LONG на фьючерсе (получаем выплату) + SHORT на фьючерсе как хедж. Спот тут не подходит — лонг на споте терял бы вместе с фьючерсным лонгом, а шорт на споте невозможен.'}
+                    ? 'Ставка положительная: SHORT на фьючерсе (получаем выплату) + LONG на споте как хедж. Спот фандинга не имеет — взаимного погашения нет.'
+                    : 'Ставка отрицательная: LONG на фьючерсе биржи А (получаем выплату) + SHORT на фьючерсе биржи Б, где ставка выше. На одной бирже обе ноги фандинг бы взаимно погасили — прибыль возникает только из разницы ставок между биржами.'}
             </div>
         </div>
     )

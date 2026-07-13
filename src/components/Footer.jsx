@@ -5,7 +5,8 @@
  * (на сканерах и странице разработчика не рендерится — там рабочая область).
  *
  * Проп onNavigate(page) — переключение вкладок по ссылкам «Продукт».
- * Ссылки документов — заглушки (помечены «СКОРО»), соцсети ВК/Instagram — задел.
+ * Ссылки документов ведут на LegalPage, FAQ — на FaqPage.
+ * Связь: главная кнопка (бот-менеджер) + канал и прямой контакт.
  */
 
 import { Send, MessageCircle, User, AlertTriangle } from 'lucide-react'
@@ -41,17 +42,31 @@ const style = `
   .footer-link.soon:hover { transform:none; color:var(--text-muted); }
   .footer-soon-tag { font-size:8px; font-family:var(--font-mono); letter-spacing:1px; padding:2px 6px; border-radius:10px; border:1px solid var(--border); color:var(--text-muted); margin-left:6px; vertical-align:middle; }
 
-  .footer-socials { display:flex; flex-direction:column; gap:9px; }
-  .footer-social { display:flex; align-items:center; gap:11px; padding:9px 12px; background:rgba(255,255,255,0.02); border:1px solid var(--glass-border); border-radius:var(--radius-md); text-decoration:none; transition:all 0.15s; }
-  .footer-social:hover { border-color:var(--glass-border-hover); background:rgba(93,163,214,0.07); transform:translateY(-2px); }
-  .footer-social.soon { opacity:0.5; cursor:default; }
-  .footer-social.soon:hover { transform:none; border-color:var(--glass-border); background:rgba(255,255,255,0.02); }
-  .footer-social-ic { width:32px; height:32px; border-radius:var(--radius-sm); background:rgba(61,135,192,0.12); border:1px solid rgba(61,135,192,0.25); display:flex; align-items:center; justify-content:center; color:var(--accent-bright); flex-shrink:0; }
-  .footer-social-t { font-size:12.5px; font-weight:700; }
-  .footer-social-s { font-size:10px; color:var(--text-muted); margin-top:1px; }
-  .footer-socials-soon-row { display:flex; gap:9px; margin-top:2px; }
-  .footer-social-mini { flex:1; justify-content:center; }
-  .footer-soon-label { font-size:9px; color:var(--text-muted); font-family:var(--font-mono); text-align:center; margin-top:2px; }
+  /* ─── Связь: главная кнопка + второстепенные (вариант B) ─── */
+  .footer-main-btn {
+    display:flex; align-items:center; gap:11px; width:100%;
+    padding:13px 16px; border-radius:var(--radius-md); margin-bottom:10px;
+    background:linear-gradient(135deg, var(--accent), var(--accent-bright));
+    color:#fff; border:1px solid rgba(255,255,255,0.14);
+    box-shadow:0 4px 18px rgba(47,105,151,0.3);
+    text-decoration:none; transition:transform 0.15s, box-shadow 0.15s;
+  }
+  .footer-main-btn:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(47,105,151,0.42); }
+  .footer-main-txt { display:flex; flex-direction:column; font-size:13px; font-weight:700; line-height:1.3; }
+  .footer-main-sub { font-size:10px; opacity:0.82; font-weight:400; margin-top:2px; }
+
+  .footer-sm-row { display:flex; gap:8px; }
+  .footer-sm-btn {
+    flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+    padding:10px; border-radius:var(--radius-sm);
+    background:rgba(255,255,255,0.02); border:1px solid var(--glass-border);
+    color:var(--text-secondary); font-size:11px; text-decoration:none;
+    transition:all 0.15s; white-space:nowrap;
+  }
+  .footer-sm-btn:hover {
+    border-color:var(--glass-border-hover); color:var(--accent-bright);
+    background:rgba(93,163,214,0.08);
+  }
 
   .footer-disclaimer { display:flex; gap:11px; padding:16px 18px; margin-bottom:24px; background:rgba(240,165,0,0.05); border:1px solid rgba(240,165,0,0.18); border-radius:var(--radius-md); }
   .footer-disclaimer-ic { color:var(--warning); flex-shrink:0; margin-top:1px; }
@@ -101,6 +116,7 @@ function Footer({ onNavigate }) {
                             <div className="footer-col-title">Продукт</div>
                             <button className="footer-link" onClick={() => onNavigate?.('futures')}>Фьючерсный арбитраж</button>
                             <button className="footer-link" onClick={() => onNavigate?.('funding')}>Арбитраж фандинга</button>
+                            <button className="footer-link" onClick={() => onNavigate?.('movers')}>Топ роста и падения</button>
                             <button className="footer-link" onClick={() => onNavigate?.('training')}>Академия</button>
                             <button className="footer-link" onClick={() => onNavigate?.('about')}>О нас</button>
                         </div>
@@ -111,35 +127,45 @@ function Footer({ onNavigate }) {
                             <button className="footer-link" onClick={() => onNavigate?.('legal:offer')}>Оферта</button>
                             <button className="footer-link" onClick={() => onNavigate?.('legal:privacy')}>Политика конфиденциальности</button>
                             <button className="footer-link" onClick={() => onNavigate?.('legal:terms')}>Условия использования</button>
-                            <span className="footer-link soon">FAQ<span className="footer-soon-tag">СКОРО</span></span>
+                            <button className="footer-link" onClick={() => onNavigate?.('faq')}>FAQ</button>
                         </div>
 
-                        {/* Связь */}
+                        {/* Связь — вариант B: одно главное действие + второстепенные */}
                         <div>
                             <div className="footer-col-title">Связь</div>
-                            <div className="footer-socials">
-                                <a className="footer-social" href="https://t.me/Axioma_Scan" target="_blank" rel="noopener noreferrer">
-                                    <div className="footer-social-ic"><Send size={16} /></div>
-                                    <div>
-                                        <div className="footer-social-t">Telegram-канал</div>
-                                        <div className="footer-social-s">новости проекта</div>
-                                    </div>
+
+                            {/* Главное действие — бот-менеджер */}
+                            <a
+                                className="footer-main-btn"
+                                href="https://t.me/Axioma_Scan"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <Send size={18} />
+                                <span className="footer-main-txt">
+                                    Написать нам
+                                    <span className="footer-main-sub">доступ, вопросы, поддержка</span>
+                                </span>
+                            </a>
+
+                            {/* Второстепенные */}
+                            <div className="footer-sm-row">
+                                <a
+                                    className="footer-sm-btn"
+                                    href="https://t.me/Axioma_Scan"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    <MessageCircle size={13} /> Канал
                                 </a>
-                                <a className="footer-social" href="https://t.me/Axioma_Scan" target="_blank" rel="noopener noreferrer">
-                                    <div className="footer-social-ic"><MessageCircle size={16} /></div>
-                                    <div>
-                                        <div className="footer-social-t">Бот-менеджер</div>
-                                        <div className="footer-social-s">доступ и вопросы</div>
-                                    </div>
+                                <a
+                                    className="footer-sm-btn"
+                                    href="https://t.me/Eeighth"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    <User size={13} /> @Eeighth
                                 </a>
-                                <a className="footer-social" href="https://t.me/Eeighth" target="_blank" rel="noopener noreferrer">
-                                    <div className="footer-social-ic"><User size={16} /></div>
-                                    <div>
-                                        <div className="footer-social-t">@Eeighth</div>
-                                        <div className="footer-social-s">прямая связь</div>
-                                    </div>
-                                </a>
-                                <div className="footer-soon-label">ВК · Instagram — скоро</div>
                             </div>
                         </div>
 

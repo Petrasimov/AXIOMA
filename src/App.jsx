@@ -16,6 +16,7 @@ import HomePage from "./components/HomePage.jsx";
 import TrainingPage from "./components/TrainingPage.jsx";
 import AboutPage from "./components/AboutPage.jsx";
 import LegalPage from "./components/LegalPage.jsx";
+import FaqPage from "./components/FaqPage.jsx";
 import TopMoversPage from "./components/TopMoversPage.jsx";
 import ProfileModal from "./components/ProfileModal.jsx";
 import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings, toggleNotifications } from "./auth.js";
@@ -114,6 +115,7 @@ function App() {
       setActivePage('legal')
       return
     }
+    // faq и legal — страницы без вкладки в сайдбаре (вход через футер)
     const tabMap = {
       futures: 'futures', funding: 'funding', training: 'promo',
       about: 'about', movers: 'movers', home: 'main',
@@ -1039,6 +1041,8 @@ function App() {
             onNavigate={navigateTo}
             onOpenArbitrage={openArbitrageForCoin}
           />
+        ) : activePage === 'faq' ? (
+          <FaqPage onNavigate={navigateTo} />
         ) : activePage === 'legal' ? (
           <LegalPage initialDoc={legalDoc} onNavigate={navigateTo} />
         ) : activePage === 'api' ? (

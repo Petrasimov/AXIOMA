@@ -11,28 +11,12 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import Footer from './Footer.jsx'
+import { TEAM } from '../data/teamContent.js'
 import {
     Target, Sparkles, Users, MonitorSmartphone, Map as MapIcon,
     Send, MessageCircle, Globe, Rocket, Zap, ShieldCheck,
     CheckCircle2, Circle, Loader
 } from 'lucide-react'
-
-// ─── Данные команды ──────────────────────────────────────────────────────────
-const TEAM = [
-    {
-        initial: 'А', name: 'Артём', color: 'linear-gradient(135deg,#3d87c0,#5aa9e0)',
-        contribution: 'Frontend, архитектура и бизнес-логика проекта. Строит то, что ты видишь на экране, и то, как это работает под капотом.',
-    },
-    {
-        initial: 'Е', name: 'Евгений', color: 'linear-gradient(135deg,#00c97a,#3ddb9a)',
-        contribution: 'Коммуникация, развитие проекта и связь с сообществом. Отвечает за то, чтобы AXIOMA рос и находил своих людей.',
-    },
-    {
-        initial: 'С', name: 'Слава', color: 'linear-gradient(135deg,#f0a500,#ffc333)',
-        contribution: 'Backend и управление базой данных. Отвечает за движок сканера, сбор данных с бирж и надёжность инфраструктуры.',
-    },
-]
 
 // ─── Дорожная карта (честная: сделано / в работе / будущее) ──────────────────
 const ROADMAP = [
@@ -126,7 +110,8 @@ const style = `
   .ab-team { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
   .ab-member { text-align:center; padding:26px 18px; background:rgba(255,255,255,0.02); border:1px solid var(--glass-border); border-radius:var(--radius-md); transition:all 0.22s; cursor:default; }
   .ab-member:hover { transform:translateY(-5px); border-color:var(--glass-border-hover); background:var(--glass-fill-hover); box-shadow:0 14px 36px rgba(0,0,0,0.4); }
-  .ab-av { width:72px; height:72px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; color:#0a1622; margin:0 auto 14px; box-shadow:0 6px 18px rgba(0,0,0,0.35); transition:transform 0.22s; }
+  .ab-av { width:72px; height:72px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:800; color:#0a1622; margin:0 auto 14px; box-shadow:0 6px 18px rgba(0,0,0,0.35); transition:transform 0.22s; overflow:hidden; }
+  .ab-av img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
   .ab-member:hover .ab-av { transform:scale(1.08); }
   .ab-member-name { font-size:17px; font-weight:800; margin-bottom:10px; }
   .ab-member-contrib { font-size:12.5px; color:var(--text-secondary); line-height:1.6; }
@@ -218,7 +203,7 @@ function Reveal({ children, delay = 0 }) {
 
 const ROAD_ICON = { done: CheckCircle2, active: Loader, future: Circle }
 
-function AboutPage({ onNavigate }) {
+function AboutPage() {
     return (
         <>
             <style>{style}</style>
@@ -311,7 +296,17 @@ function AboutPage({ onNavigate }) {
                             <div className="ab-team">
                                 {TEAM.map((m, i) => (
                                     <div key={i} className="ab-member">
-                                        <div className="ab-av" style={{ background: m.color }}>{m.initial}</div>
+                                        {/* Если в teamContent задано photo — рендерим фото,
+                                            иначе градиентный кружок с инициалом */}
+                                        <div className="ab-av" style={{ background: m.color }}>
+                                            {m.photo
+                                                ? <img
+                                                    src={m.photo}
+                                                    alt={m.name}
+                                                    onError={e => { e.target.style.display = 'none' }}
+                                                  />
+                                                : m.initial}
+                                        </div>
                                         <div className="ab-member-name">{m.name}</div>
                                         <div className="ab-member-contrib">{m.contribution}</div>
                                     </div>
@@ -409,7 +404,6 @@ function AboutPage({ onNavigate }) {
                     </Reveal>
 
                 </div>
-                <Footer onNavigate={onNavigate} />
             </div>
         </>
     )
