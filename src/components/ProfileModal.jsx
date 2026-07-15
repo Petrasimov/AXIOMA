@@ -11,22 +11,21 @@
  *   Мастер  → янтарный + орбита + усиленное свечение + корона
  *
  * Данные:
- *   user     — Telegram (login, photoUrl, userId, isAdmin, isCexCexPaid)
+ *   user     — Telegram (login, username, photoUrl, userId, isAdmin, isCexCexPaid)
  *   progress — из useTrainingProgress (статус, прогресс, уроки, модули)
  *
  * Действия (реализуемые без бэкенда):
- *   - копировать Telegram ID (для обращений в поддержку)
+ *   - копировать никнейм или ID (для обращений в поддержку)
  *   - написать в поддержку (ссылка на бота)
- *   - сбросить прогресс обучения
  *   - выйти из аккаунта
  *
  * Отложено до бэкенда: история подписки, статистика сделок, продление,
  * уведомления, рефералка, ачивки.
  */
 
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import {
-    X, Copy, Check, LogOut, MessageCircle, RotateCcw,
+    X, Check, LogOut, MessageCircle,
     Trophy, Sprout, TrendingUp, Crown, ShieldCheck, ShieldX, Sparkles
 } from 'lucide-react'
 import { clearSession } from '../auth.js'
@@ -136,15 +135,6 @@ const style = `
     margin-bottom:9px;
   }
 
-  .pm-id-row { display:flex; align-items:center; justify-content:center; gap:8px; }
-  .pm-id { font-family:var(--font-mono); font-size:11px; color:var(--text-muted); }
-  .pm-copy {
-    background:none; border:none; color:var(--text-muted); cursor:pointer;
-    display:flex; align-items:center; padding:2px; transition:color .15s;
-  }
-  .pm-copy:hover { color:var(--accent-bright); }
-  .pm-copy.done { color:var(--success); }
-
   /* ─── Полоса статистики ─── */
   .pm-stats {
     display:grid; grid-template-columns:repeat(3,1fr); gap:1px;
@@ -200,28 +190,10 @@ const style = `
   .pm-act.primary:hover { transform:translateY(-1px); background:linear-gradient(135deg, var(--accent-bright), var(--accent)); }
   .pm-act.danger { color:var(--error); border-color:rgba(224,62,62,0.3); }
   .pm-act.danger:hover { background:rgba(224,62,62,0.1); border-color:var(--error); color:var(--error); }
-
-  .pm-reset-confirm {
-    padding:12px 14px; border-radius:var(--radius-md); margin-top:9px;
-    background:rgba(240,165,0,0.07); border:1px solid rgba(240,165,0,0.3);
-  }
-  .pm-reset-txt { font-size:12px; color:var(--text-secondary); line-height:1.5; margin-bottom:10px; }
-  .pm-reset-btns { display:flex; gap:8px; }
-  .pm-reset-btns button {
-    flex:1; padding:9px; border-radius:var(--radius-sm);
-    font-family:var(--font-mono); font-size:10px; font-weight:700;
-    cursor:pointer; transition:all .15s;
-  }
-  .pm-reset-yes { background:rgba(224,62,62,0.15); border:1px solid var(--error); color:var(--error); }
-  .pm-reset-yes:hover { background:rgba(224,62,62,0.25); }
-  .pm-reset-no { background:rgba(255,255,255,0.03); border:1px solid var(--glass-border); color:var(--text-secondary); }
-  .pm-reset-no:hover { border-color:var(--glass-border-hover); color:var(--text-primary); }
 `
 
 function ProfileModal({ user, onClose, onLogout }) {
-    const { progress, resetProgress } = useTrainingProgress(TRAINING_MODULES)
-    const [copied, setCopied] = useState(false)
-    const [confirmReset, setConfirmReset] = useState(false)
+    const { progress } = useTrainingProgress(TRAINING_MODULES)
 
     // Esc закрывает
     useEffect(() => {
@@ -241,27 +213,16 @@ function ProfileModal({ user, onClose, onLogout }) {
     // орбита вокруг аватара — только у Эксперта и Мастера
     const hasOrbit = status.id === 'expert' || status.id === 'master'
 
-    function copyId() {
-        const id = String(user?.userId ?? '')
-        if (!id) return
-        try {
-            navigator.clipboard.writeText(id)
-            setCopied(true)
-            setTimeout(() => setCopied(false), 1800)
-        } catch {
-            // clipboard недоступен (не https / нет прав) — молча игнорируем
-        }
-    }
+    // Основное имя под аватаром: публичный ник Telegram с @, если он есть.
+    // Не у каждого пользователя Telegram задан ник — тогда фолбэк на login
+    // (в нём может лежать тот же ник или, как раньше, числовой идентификатор),
+    // а если и его нет — общая заглушка.
+    const displayName = user?.username ? `@${user.username}` : (user?.login || 'Пользователь')
 
     function handleLogout() {
         clearSession()
         onClose?.()
         onLogout?.()
-    }
-
-    function handleReset() {
-        resetProgress()
-        setConfirmReset(false)
     }
 
     return (
@@ -297,22 +258,11 @@ function ProfileModal({ user, onClose, onLogout }) {
                             <div className="pm-av-pct">{progress.progressPct}% ОБУЧЕНИЯ</div>
                         </div>
 
-                        <div className="pm-name">{user?.login || 'Пользователь'}</div>
+                        <div className="pm-name">{displayName}</div>
 
                         <div className="pm-tier">
                             <TierIcon size={15} />
                             {status.label.toUpperCase()}
-                        </div>
-
-                        <div className="pm-id-row">
-                            <span className="pm-id">ID: {user?.userId ?? '—'}</span>
-                            <button
-                                className={`pm-copy ${copied ? 'done' : ''}`}
-                                onClick={copyId}
-                                title="Скопировать ID"
-                            >
-                                {copied ? <Check size={12} /> : <Copy size={12} />}
-                            </button>
                         </div>
                     </div>
 
@@ -383,27 +333,6 @@ function ProfileModal({ user, onClose, onLogout }) {
                             >
                                 <MessageCircle size={13} /> НАПИСАТЬ В ПОДДЕРЖКУ
                             </a>
-
-                            {!confirmReset ? (
-                                <button className="pm-act" onClick={() => setConfirmReset(true)}>
-                                    <RotateCcw size={13} /> СБРОСИТЬ ПРОГРЕСС ОБУЧЕНИЯ
-                                </button>
-                            ) : (
-                                <div className="pm-reset-confirm">
-                                    <div className="pm-reset-txt">
-                                        Весь прогресс обучения будет удалён, статус вернётся к «Новичок».
-                                        Это действие нельзя отменить.
-                                    </div>
-                                    <div className="pm-reset-btns">
-                                        <button className="pm-reset-yes" onClick={handleReset}>
-                                            ДА, СБРОСИТЬ
-                                        </button>
-                                        <button className="pm-reset-no" onClick={() => setConfirmReset(false)}>
-                                            ОТМЕНА
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
 
                             <button className="pm-act danger" onClick={handleLogout}>
                                 <LogOut size={13} /> ВЫЙТИ ИЗ АККАУНТА

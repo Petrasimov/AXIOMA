@@ -39,6 +39,13 @@ const style = `
         flex-shrink: 0;
         align-items: center;
         position: relative;
+        /* ВАЖНО: backdrop-filter создаёт новый stacking context. Без явного
+           z-index уровень хедера — auto (по факту 0), а у .opp-grid ниже стоит
+           z-index: 1 — сетка карточек рисуется ПОВЕРХ хедера, включая его
+           дропдаун сортировки. Внутренний z-index дропдауна (100) тут не
+           помогает: он действует только внутри контекста хедера и не может
+           выйти наружу. Ставим хедеру z-index выше, чем у сетки. */
+        z-index: 10;
     }
 
     .header::after {

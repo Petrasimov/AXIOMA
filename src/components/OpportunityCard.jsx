@@ -216,7 +216,10 @@ const style = `
 
   .side-row-label {
     font-size: 10px;
-    color: #2e4556;
+    /* Было #2e4556 — темнее даже --text-muted, подписи сливались с фоном.
+       Ставим --text-secondary — тот же токен, что уже используется для
+       второстепенного, но читаемого текста в остальных карточках сайта. */
+    color: var(--text-secondary);
     flex-shrink: 0;
     min-width: 64px;
   }
@@ -231,7 +234,7 @@ const style = `
 
   .side-row-value.green { color: var(--success); }
   .side-row-value.red   { color: var(--error); }
-  .side-row-value.muted { color: #2e4556; }
+  .side-row-value.muted { color: var(--text-secondary); }
 
   /* ─── Панель вариантов ─── */
   .card-variants {

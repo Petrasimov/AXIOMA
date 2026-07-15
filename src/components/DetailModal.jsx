@@ -126,7 +126,7 @@ const style = `
   /* METRICS 2x2 */
   .ex-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
   .ex-m-block {}
-  .ex-m-label { font-size: 8px; letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 3px; }
+  .ex-m-label { font-size: 8px; letter-spacing: 1px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 3px; }
   .ex-m-val { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); font-weight: 500; }
   .ex-m-rate-row { display: flex; align-items: baseline; gap: 6px; }
   .ex-m-rate { font-family: var(--font-mono); font-size: 13px; font-weight: 700; }
@@ -145,7 +145,7 @@ const style = `
     border-radius: var(--radius-md);
   }
   .ss-left { display: flex; align-items: center; gap: 8px; }
-  .ss-label { font-size: 8px; color: var(--text-muted); letter-spacing: 1.5px; }
+  .ss-label { font-size: 8px; color: var(--text-secondary); letter-spacing: 1.5px; }
   .ss-val { font-family: var(--font-mono); font-size: 20px; font-weight: 700; }
   .ss-grade {
     font-size: 9px; font-weight: 700; letter-spacing: 2px;
@@ -226,7 +226,7 @@ const style = `
     color: var(--accent-bright); margin-bottom: 8px; font-weight: 600;
   }
   .exit-calc-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-  .exit-calc-label { font-size: 9px; color: var(--text-muted); letter-spacing: 0.5px; margin-bottom: 3px; }
+  .exit-calc-label { font-size: 9px; color: var(--text-secondary); letter-spacing: 0.5px; margin-bottom: 3px; }
   .exit-calc-input {
     width: 100%; background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);

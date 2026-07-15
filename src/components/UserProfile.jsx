@@ -208,7 +208,12 @@ function TgBadge() {
 function UserProfile({ user, onOpenProfile }) {
     const isAdmin = user?.isAdmin === true
     const hasAccess = user?.isCexCexPaid === true
-    const initial = (user?.login || 'U').charAt(0).toUpperCase()
+
+    // Приоритет отображения, симметрично ProfileModal: явный ник из Telegram,
+    // если его нет — login (может тоже содержать ник или прийти с бэкенда),
+    // если и его нет — общая заглушка.
+    const displayName = user?.username || user?.login || 'Пользователь'
+    const initial = displayName.charAt(0).toUpperCase()
 
     // Определяем бейдж
     let badgeClass, badgeText
@@ -234,7 +239,7 @@ function UserProfile({ user, onOpenProfile }) {
                 {/* Аватар */}
                 <div className="user-avatar">
                     {user?.photoUrl
-                        ? <img src={user.photoUrl} alt={user.login} onError={e => { e.target.style.display = 'none' }} />
+                        ? <img src={user.photoUrl} alt={displayName} onError={e => { e.target.style.display = 'none' }} />
                         : initial
                     }
                     <div className="user-avatar-tg"><TgBadge /></div>
@@ -242,7 +247,7 @@ function UserProfile({ user, onOpenProfile }) {
 
                 {/* Имя и статус */}
                 <div className="user-info">
-                    <div className="user-name">{user?.login || 'Пользователь'}</div>
+                    <div className="user-name">{displayName}</div>
                     <div className={`user-badge ${badgeClass}`}>
                         <div className="user-badge-dot" />
                         {badgeText}

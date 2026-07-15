@@ -12,7 +12,8 @@
 import { useState } from 'react'
 import {
     BookOpen, Settings, Shuffle, Percent, MonitorSmartphone, ShieldCheck,
-    GraduationCap, Play, Lock, Check, ChevronRight, Trophy
+    GraduationCap, Play, Check, ChevronRight, Trophy,
+    SlidersHorizontal, BarChart3, HelpCircle, Gamepad2,
 } from 'lucide-react'
 import { TRAINING_SECTIONS, TRAINING_MODULES } from '../data/trainingContent.js'
 import { useTrainingProgress } from '../hooks/useTrainingProgress.js'
@@ -20,6 +21,35 @@ import LessonModal from './LessonModal.jsx'
 import Footer from './Footer.jsx'
 
 const ICONS = { BookOpen, Settings, Shuffle, Percent, MonitorSmartphone, ShieldCheck }
+
+// ─── Подсчёт интерактивного контента ────────────────────────────────────────
+// Считаем автоматически из реального контента уроков (по полю type у каждого
+// блока), а НЕ хардкодим цифры. Так плашки на hero и карточках модулей никогда
+// не разойдутся с содержимым — добавишь в урок новый квиз, счётчик обновится сам.
+function countBlockTypes(lessons) {
+    const counts = { quiz: 0, game: 0, simulator: 0, diagram: 0 }
+    for (const lesson of lessons ?? []) {
+        for (const block of lesson.blocks ?? []) {
+            if (block?.type in counts) counts[block.type]++
+        }
+    }
+    return counts
+}
+
+// Считается один раз при загрузке модуля — TRAINING_MODULES статичные данные,
+// не меняются в рантайме, пересчитывать на каждый рендер незачем.
+const COURSE_STATS = (() => {
+    const totals = { quiz: 0, game: 0, simulator: 0, diagram: 0, lessons: 0 }
+    for (const mod of TRAINING_MODULES) {
+        const c = countBlockTypes(mod.lessons)
+        totals.quiz += c.quiz
+        totals.game += c.game
+        totals.simulator += c.simulator
+        totals.diagram += c.diagram
+        totals.lessons += mod.lessons?.length ?? 0
+    }
+    return totals
+})()
 
 const style = `
   .tp-wrap { flex: 1; overflow-y: auto; position: relative; }
@@ -41,19 +71,43 @@ const style = `
     background: var(--glass-fill); backdrop-filter: blur(18px) saturate(140%);
     border: 1px solid var(--glass-border); border-radius: var(--radius-xl);
     box-shadow: var(--shadow-glass); padding: 36px 40px; position: relative; overflow: hidden;
+    /* Контент распределяется по всей высоте блока (flex-колонка + space-between
+       на .tp-hero-text): шапка сверху, описание в середине, плашки снизу —
+       пустого места внизу не остаётся. Схема справа убрана. */
+    display: flex; flex-direction: column;
   }
+
   .tp-hero::before { content:''; position:absolute; top:-50%; right:-10%; width:400px; height:400px; background:radial-gradient(circle, rgba(0,201,122,0.1), transparent 70%); pointer-events:none; }
+
+  /* Занимает всю высоту hero и раскидывает три группы сверху вниз. */
+  .tp-hero-text { position: relative; z-index: 1; flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 22px; }
+
+  /* Шапка: eyebrow + заголовок как единый блок сверху. */
+  .tp-hero-head .tp-eyebrow { margin-bottom: 14px; }
+  .tp-hero-head .tp-h1 { margin-bottom: 0; }
+
+  /* Описание — по ширине не больше половины блока, прижато влево. */
+  .tp-hero-desc { max-width: 50%; align-self: flex-start; }
+  @media (max-width: 900px) { .tp-hero-desc { max-width: 100%; } }
   .tp-eyebrow { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:10px; letter-spacing:2px; color:var(--accent-bright); margin-bottom:14px; text-transform:uppercase; }
   .tp-h1 { font-size:34px; font-weight:900; letter-spacing:-1px; line-height:1.15; margin-bottom:14px; }
   .tp-h1 span { color:var(--accent-bright); }
-  .tp-sub { font-size:14px; color:var(--text-secondary); line-height:1.7; max-width:460px; margin-bottom:24px; }
-  .tp-cta {
-    display:inline-flex; align-items:center; gap:8px; padding:13px 26px; border-radius:var(--radius-md);
-    background:linear-gradient(135deg, var(--accent), var(--accent-bright)); color:#fff;
-    font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:1px; cursor:pointer;
-    border:1px solid rgba(255,255,255,0.14); box-shadow:0 4px 20px rgba(47,105,151,0.35); transition:transform 0.15s;
+  .tp-sub { font-size:14px; color:var(--text-secondary); line-height:1.7; margin-bottom:12px; }
+  .tp-sub:last-of-type { margin-bottom:0; }
+
+  /* Плашки форматов обучения — иконки НАМЕРЕННО мелкие (11px), это лёгкий
+     вспомогательный ряд, а не основной акцент блока. */
+  .tp-fmts { display:flex; flex-wrap:wrap; gap:7px; position:relative; z-index:1; }
+  .tp-fmt {
+    display:flex; align-items:center; gap:5px; padding:6px 11px; border-radius:20px;
+    font-size:11px; color:var(--text-secondary);
+    background: color-mix(in srgb, var(--fc) 8%, transparent);
+    border:1px solid color-mix(in srgb, var(--fc) 28%, transparent);
+    transition: all 0.16s;
   }
-  .tp-cta:hover { transform:translateY(-2px); }
+  .tp-fmt:hover { background: color-mix(in srgb, var(--fc) 15%, transparent); color: var(--text-primary); transform: translateY(-2px); }
+  .tp-fmt svg { color: var(--fc); flex-shrink:0; }
+  .tp-fmt b { color: var(--fc); font-weight:800; }
 
   /* ── status panel ── */
   .tp-status {
@@ -106,7 +160,18 @@ const style = `
   }
   .tp-card-num { margin-left:auto; font-family:var(--font-mono); font-size:11px; color:var(--text-muted); }
   .tp-card-title { font-size:16px; font-weight:800; margin-bottom:8px; }
-  .tp-card-desc { font-size:12.5px; color:var(--text-secondary); line-height:1.6; margin-bottom:16px; flex:1; }
+  .tp-card-desc { font-size:12.5px; color:var(--text-secondary); line-height:1.6; margin-bottom:12px; flex:1; }
+
+  /* Состав интерактива модуля — мелкие цветные чипы: «3 квиза · 2 игры».
+     Цифры считаются автоматически из контента (countBlockTypes), не хардкожены. */
+  .tp-card-interactive { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:14px; }
+  .tp-card-int-chip {
+    display:flex; align-items:center; gap:4px; padding:3px 8px; border-radius:10px;
+    font-size:9.5px; color:var(--text-secondary);
+    background: color-mix(in srgb, var(--ic) 9%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ic) 28%, transparent);
+  }
+  .tp-card-int-chip svg { color: var(--ic); flex-shrink:0; }
   .tp-card-foot { display:flex; align-items:center; justify-content:space-between; padding-top:12px; border-top:1px solid var(--glass-border); }
   .tp-card-lessons { font-family:var(--font-mono); font-size:11px; color:var(--text-muted); }
   .tp-card-badge { display:flex; align-items:center; gap:5px; font-size:9px; font-weight:700; letter-spacing:1px; padding:4px 10px; border-radius:20px; color:var(--mc); border:1px solid var(--mc); background: color-mix(in srgb, var(--mc) 10%, transparent); }
@@ -131,16 +196,6 @@ function TrainingPage({ onNavigate }) {
         setOpenModuleId(mod.id)
     }
 
-    function continueLearning() {
-        // найти первый модуль с незавершёнными уроками
-        for (const mod of TRAINING_MODULES) {
-            const idx = mod.lessons.findIndex(l => !isLessonDone(l.id))
-            if (idx >= 0) { setLessonIndex(idx); setOpenModuleId(mod.id); return }
-        }
-        // всё пройдено — открыть первый
-        startModule(TRAINING_MODULES[0])
-    }
-
     return (
         <>
             <style>{style}</style>
@@ -151,15 +206,50 @@ function TrainingPage({ onNavigate }) {
                     {/* top: hero + status */}
                     <div className="tp-top">
                         <div className="tp-hero">
-                            <div className="tp-eyebrow"><GraduationCap size={13} /> ACADEMY</div>
-                            <div className="tp-h1">Академия <span>AXIOMA</span></div>
-                            <div className="tp-sub">
-                                Всё об арбитраже в одном месте — от базовых понятий до тонкой настройки сканера.
-                                Модули, симуляторы, квизы и мини-игры. Учись в своём темпе.
+                            <div className="tp-hero-text">
+                                <div className="tp-hero-head">
+                                    <div className="tp-eyebrow"><GraduationCap size={13} /> ACADEMY</div>
+                                    <div className="tp-h1">Академия <span>AXIOMA</span></div>
+                                </div>
+
+                                <div className="tp-hero-desc">
+                                    <div className="tp-sub">
+                                        Всё об арбитраже в одном месте — от базовых понятий до тонкой настройки сканера.
+                                        Разбираем, как устроен спред между биржами, откуда берётся прибыль во фьючерсном
+                                        и фандинговом арбитраже, как правильно хеджировать позицию и не потерять на комиссиях,
+                                        сетях вывода и проскальзывании.
+                                    </div>
+                                    <div className="tp-sub">
+                                        Каждый механизм показан наглядно — на схемах, симуляторах и разборах реальных
+                                        ситуаций, а не сухими определениями. Проходишь модули по порядку, растёшь в статусе
+                                        от Новичка до Мастера и учишься читать сканер так, чтобы видеть возможность раньше
+                                        остальных.
+                                    </div>
+                                </div>
+
+                                {/* Плашки форматов — цифры считаются автоматически из
+                                    trainingContent.js (COURSE_STATS), не хардкожены */}
+                                <div className="tp-fmts">
+                                    <span className="tp-fmt" style={{ '--fc': '#3d87c0' }}>
+                                        <BookOpen size={11} /> <b>{COURSE_STATS.lessons}</b>&nbsp;уроков
+                                    </span>
+                                    <span className="tp-fmt" style={{ '--fc': '#00c97a' }}>
+                                        <SlidersHorizontal size={11} /> <b>{COURSE_STATS.simulator}</b>&nbsp;симулятора
+                                    </span>
+                                    <span className="tp-fmt" style={{ '--fc': '#5eead4' }}>
+                                        <BarChart3 size={11} /> <b>{COURSE_STATS.diagram}</b>&nbsp;схем
+                                    </span>
+                                    <span className="tp-fmt" style={{ '--fc': '#f0a500' }}>
+                                        <HelpCircle size={11} /> квизы с разбором
+                                    </span>
+                                    <span className="tp-fmt" style={{ '--fc': '#a78bfa' }}>
+                                        <Gamepad2 size={11} /> <b>{COURSE_STATS.game}</b>&nbsp;мини-игры
+                                    </span>
+                                    <span className="tp-fmt" style={{ '--fc': '#f472b6' }}>
+                                        <Trophy size={11} /> статусы
+                                    </span>
+                                </div>
                             </div>
-                            <button className="tp-cta" onClick={continueLearning}>
-                                <Play size={13} /> {progress.completedLessons > 0 ? 'Продолжить обучение' : 'Начать обучение'}
-                            </button>
                         </div>
 
                         <div className="tp-status" style={{ '--st': status.color }}>
@@ -220,6 +310,16 @@ function TrainingPage({ onNavigate }) {
                                                     : { txt: 'Открыт', ic: ChevronRight }
                                             const BadgeIc = badge.ic
 
+                                            // Состав интерактива этого модуля — считается из реального
+                                            // контента уроков (см. countBlockTypes), а не хардкожен.
+                                            const modStats = countBlockTypes(mod.lessons)
+                                            const modInteractive = [
+                                                modStats.quiz      > 0 && { n: modStats.quiz,      lbl: modStats.quiz      === 1 ? 'квиз'      : 'квиза',      ic: HelpCircle,        c: '#f0a500' },
+                                                modStats.game      > 0 && { n: modStats.game,      lbl: modStats.game      === 1 ? 'игра'      : 'игры',       ic: Gamepad2,          c: '#a78bfa' },
+                                                modStats.simulator > 0 && { n: modStats.simulator, lbl: modStats.simulator === 1 ? 'симулятор' : 'симулятора', ic: SlidersHorizontal, c: '#00c97a' },
+                                                modStats.diagram   > 0 && { n: modStats.diagram,   lbl: modStats.diagram   === 1 ? 'схема'     : 'схемы',      ic: BarChart3,         c: '#5eead4' },
+                                            ].filter(Boolean)
+
                                             return (
                                                 <div key={mod.id} className="tp-card" style={{ '--mc': mod.color }} onClick={() => startModule(mod)}>
                                                     <div className="tp-card-top" />
@@ -230,6 +330,17 @@ function TrainingPage({ onNavigate }) {
                                                         </div>
                                                         <div className="tp-card-title">{mod.title}</div>
                                                         <div className="tp-card-desc">{mod.desc}</div>
+
+                                                        {modInteractive.length > 0 && (
+                                                            <div className="tp-card-interactive">
+                                                                {modInteractive.map((it, i) => (
+                                                                    <span key={i} className="tp-card-int-chip" style={{ '--ic': it.c }}>
+                                                                        <it.ic size={10} /> {it.n} {it.lbl}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
+
                                                         <div className="tp-card-foot">
                                                             <span className="tp-card-lessons">{mod.lessons.length} уроков</span>
                                                             <span className="tp-card-badge"><BadgeIc size={11} /> {badge.txt}</span>

@@ -120,6 +120,12 @@ export async function authenticateWithTelegram(tgData) {
             user: {
                 userId:       data.userId,
                 login:        data.login        ?? tgData.username ?? null,
+                // Явное поле username — берём напрямую из Telegram-виджета.
+                // Раньше ник попадал в сессию только неявно через login
+                // (login = data.login ?? tgData.username), и если бэкенд
+                // когда-нибудь вернёт в data.login что-то своё — ник потерялся бы.
+                // Теперь он хранится отдельно и не зависит от того, что придёт с бэкенда.
+                username:     tgData.username    ?? null,
                 isCexCexPaid: data.isCexCexPaid ?? false,
                 isDexCexPaid: data.isDexCexPaid ?? false,
                 isAdmin:      data.isAdmin      ?? false,
@@ -211,6 +217,10 @@ export async function checkAccess(userId) {
             found:        true,
             userId:       fresh?.userId       ?? session.userId,
             login:        fresh?.login        ?? session.login        ?? null,
+            // username не приходит с бэкенда (fresh) — переносим из старой сессии,
+            // чтобы явно сохранить его при обновлении, а не полагаться на то,
+            // что spread в App.jsx не перезатрёт отсутствующим ключом.
+            username:     session.username     ?? null,
             isCexCexPaid: fresh?.isCexCexPaid ?? session.isCexCexPaid ?? false,
             isDexCexPaid: fresh?.isDexCexPaid ?? session.isDexCexPaid ?? false,
             isAdmin:      fresh?.isAdmin      ?? session.isAdmin      ?? false,
