@@ -21,6 +21,7 @@ import { useTickers } from '../hooks/useTickers.js'
 import { TICKER_EXCHANGES } from '../tickers.js'
 import BubbleMap from './topmovers/BubbleMap.jsx'
 import MoversTable from './topmovers/MoversTable.jsx'
+import ExchangeLogo from '../components/ExchangeLogo.jsx'
 import Footer from './Footer.jsx'
 
 const style = `
@@ -83,9 +84,6 @@ const style = `
 
   .tm-meta { margin-left:auto; display:flex; gap:14px; align-items:center; font-size:11px; color:var(--text-muted); font-family:var(--font-mono); flex-wrap:wrap; }
   .tm-meta b { color:var(--text-secondary); font-weight:600; }
-  .tm-live { display:flex; align-items:center; gap:6px; }
-  .tm-dot { width:6px; height:6px; border-radius:50%; background:var(--success); animation:tm-pulse 1.8s infinite; }
-  @keyframes tm-pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
 
   /* ─── Фильтр бирж ─── */
   .tm-ex-panel {
@@ -108,9 +106,20 @@ const style = `
   }
   .tm-ex-chip:hover { border-color:var(--glass-border-hover); }
   .tm-ex-chip.on { background:var(--glass-fill-hover); border-color:var(--glass-border-hover); color:var(--text-primary); }
-  .tm-ex-chip-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-  .tm-ex-chip.off .tm-ex-chip-dot { opacity:0.3; }
+  .tm-ex-chip-logo { display:flex; align-items:center; transition:opacity .15s; }
+  .tm-ex-chip.off .tm-ex-chip-logo { opacity:0.35; filter:grayscale(1); }
   .tm-ex-fail { color:var(--error); font-size:9px; }
+
+  /* ─── Легенда карты ─── */
+  .tm-legend { display:flex; flex-wrap:wrap; align-items:center; gap:6px 16px; font-size:11px; color:var(--text-muted); }
+  .tm-lg-item { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .tm-lg-sw { width:11px; height:11px; border-radius:50%; flex-shrink:0; }
+  .tm-lg-sw.up { background:radial-gradient(circle at 35% 30%, rgba(0,231,143,0.95), rgba(0,150,90,0.85)); }
+  .tm-lg-sw.down { background:radial-gradient(circle at 35% 30%, rgba(255,92,92,0.95), rgba(168,34,34,0.85)); }
+  .tm-lg-size { display:inline-flex; align-items:flex-end; gap:2px; }
+  .tm-lg-size i { display:block; border-radius:50%; background:var(--text-muted); opacity:0.65; }
+  .tm-lg-size i:nth-child(1){ width:6px; height:6px; } .tm-lg-size i:nth-child(2){ width:9px; height:9px; } .tm-lg-size i:nth-child(3){ width:12px; height:12px; }
+  .tm-lg-ring { width:11px; height:11px; border-radius:50%; flex-shrink:0; box-shadow:0 0 0 2px var(--warning); }
 
   /* ─── Панель-контейнер ─── */
   .tm-panel {
@@ -152,7 +161,7 @@ const MIN_VOLUME_OPTIONS = [
     { id: 10_000_000, label: '>$10M' },
 ]
 
-function TopMoversPage({ onNavigate, onOpenArbitrage }) {
+function TopMoversPage({ onNavigate }) {
     const [market, setMarket] = useState('futures')      // futures | spot
     const [dir, setDir] = useState('all')                // all | up | down
     const [query, setQuery] = useState('')
@@ -327,7 +336,6 @@ function TopMoversPage({ onNavigate, onOpenArbitrage }) {
                             <span style={{ color: 'var(--success)' }}>↑{gainers}</span>
                             <span style={{ color: 'var(--error)' }}>↓{losers}</span>
                             <span>Обновлено: <b>{timeStr}</b></span>
-                            <span className="tm-live"><span className="tm-dot" />LIVE</span>
                         </div>
                     </div>
 
@@ -362,10 +370,9 @@ function TopMoversPage({ onNavigate, onOpenArbitrage }) {
                                             className={`tm-ex-chip ${on ? 'on' : 'off'}`}
                                             onClick={() => toggleEx(ex)}
                                         >
-                                            <span
-                                                className="tm-ex-chip-dot"
-                                                style={{ background: info.color }}
-                                            />
+                                            <span className="tm-ex-chip-logo">
+                                                <ExchangeLogo exchange={ex} size={16} color={info.color} />
+                                            </span>
                                             {info.name}
                                             {isFailed && <span className="tm-ex-fail">нет данных</span>}
                                         </button>
@@ -381,9 +388,12 @@ function TopMoversPage({ onNavigate, onOpenArbitrage }) {
                             <span className="tm-panel-title">
                                 Карта движений за 24 часа · {market === 'futures' ? 'Фьючерсы' : 'Спот'}
                             </span>
-                            <span className="tm-panel-hint">
-                                размер пузыря = сила движения · жёлтая рамка = расхождение между биржами
-                            </span>
+                            <div className="tm-legend">
+                                <span className="tm-lg-item"><span className="tm-lg-sw up" />рост</span>
+                                <span className="tm-lg-item"><span className="tm-lg-sw down" />падение</span>
+                                <span className="tm-lg-item"><span className="tm-lg-size"><i /><i /><i /></span>размер — сила движения</span>
+                                <span className="tm-lg-item"><span className="tm-lg-ring" />жёлтая обводка — цены на биржах разошлись (возможен арбитраж)</span>
+                            </div>
                         </div>
 
                         {loading ? (
@@ -393,7 +403,7 @@ function TopMoversPage({ onNavigate, onOpenArbitrage }) {
                                 <span className="tm-loading-sub">это займёт несколько секунд</span>
                             </div>
                         ) : (
-                            <BubbleMap coins={filtered} onSelectCoin={onOpenArbitrage} />
+                            <BubbleMap coins={filtered} />
                         )}
                     </div>
 
@@ -404,7 +414,7 @@ function TopMoversPage({ onNavigate, onOpenArbitrage }) {
                             <span className="tm-panel-hint">клик по заголовку — сортировка</span>
                         </div>
                         {!loading && (
-                            <MoversTable coins={filtered} onOpenArbitrage={onOpenArbitrage} />
+                            <MoversTable coins={filtered} />
                         )}
                     </div>
 

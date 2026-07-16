@@ -10,8 +10,10 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { getExchangeInfo, formatVolume, formatPrice } from '../../utils.js'
 import { coinDivergence } from '../../tickers.js'
+import { openTerminal } from '../../exchangeLinks.js'
 
 const style = `
   .bm-box {
@@ -112,10 +114,11 @@ const style = `
   }
 `
 
-// Порог, с которого расхождение между биржами считаем заметным (п.п.)
-const DIVERGE_THRESHOLD = 15
+// Порог, с которого расхождение ЦЕН между биржами считаем заметным (%).
+// Это уже потенциальная маржа арбитража до комиссий, поэтому порог низкий.
+const DIVERGE_THRESHOLD = 2
 
-function BubbleMap({ coins, onSelectCoin }) {
+function BubbleMap({ coins }) {
     const boxRef = useRef(null)
     const [size, setSize] = useState({ w: 0, h: 0 })
     const [tip, setTip] = useState(null)   // { coin, x, y }
@@ -212,7 +215,7 @@ function BubbleMap({ coins, onSelectCoin }) {
                             onMouseEnter={e => showTip(e, coin)}
                             onMouseMove={moveTip}
                             onMouseLeave={hideTip}
-                            onClick={() => onSelectCoin?.(coin)}
+                            onClick={() => openTerminal(coin.exchange, coin.symbol, coin.market)}
                         >
                             <span className="bm-ex-tag">{exInfo.name}</span>
                             <span className="bm-sym" style={{ fontSize: fsSym }}>{coin.symbol}</span>
@@ -220,19 +223,24 @@ function BubbleMap({ coins, onSelectCoin }) {
                                 {up ? '+' : ''}{coin.pct.toFixed(1)}%
                             </span>
                             {isDiverge && r > 34 && (
-                                <span className="bm-diverge-mark">Δ {div.toFixed(0)}п.п.</span>
+                                <span className="bm-diverge-mark">Δ {div.toFixed(1)}%</span>
                             )}
                         </div>
                     )
                 })}
             </div>
 
-            {tip && (
+            {tip && createPortal(
                 <div
                     className="bm-tip show"
                     style={{
-                        left: Math.min(tip.x + 16, window.innerWidth - 320),
-                        top: Math.min(tip.y + 16, window.innerHeight - 300),
+                        // Тултип рендерится в document.body (портал), поэтому position:fixed
+                        // считается от окна, а не от панели с overflow/backdrop-filter —
+                        // иначе его обрезало и уводило в угол. У краёв экрана — переворот.
+                        left: (tip.x + 18 + 300 > window.innerWidth)
+                            ? Math.max(8, tip.x - 18 - 300) : tip.x + 18,
+                        top: (tip.y + 18 + 340 > window.innerHeight)
+                            ? Math.max(8, tip.y - 18 - 340) : tip.y + 18,
                     }}
                 >
                     <div
@@ -291,15 +299,16 @@ function BubbleMap({ coins, onSelectCoin }) {
 
                             {coinDivergence(tip.coin) >= DIVERGE_THRESHOLD && (
                                 <div className="bm-tip-diverge">
-                                    ⚡ Расхождение между биржами {coinDivergence(tip.coin).toFixed(1)} п.п. —
+                                    ⚡ Цены между биржами расходятся на {coinDivergence(tip.coin).toFixed(2)}% —
                                     возможен арбитраж по этой монете
                                 </div>
                             )}
                         </div>
                     )}
 
-                    <div className="bm-tip-hint">клик → детали монеты</div>
-                </div>
+                    <div className="bm-tip-hint">клик → терминал биржи</div>
+                </div>,
+                document.body
             )}
         </>
     )

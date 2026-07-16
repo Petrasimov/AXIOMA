@@ -2,14 +2,15 @@
  * MoversTable.jsx — детальная таблица «Топ роста и падения»
  *
  * Сортировка по любой колонке (клик по заголовку).
- * Кнопка «Арбитраж →» уводит в сканер по этой монете — связывает инструмент
- * с основным продуктом (увидел резкий рост → проверь спред между биржами).
+ * Кнопка «На биржу →» открывает торговый терминал биржи по этой монете
+ * (спот или фьючерс — по типу рынка монеты), в новой вкладке.
  */
 
 import { useState, useMemo } from 'react'
 import { ArrowUpDown, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react'
 import { getExchangeInfo, formatVolume, formatPrice } from '../../utils.js'
 import { coinDivergence } from '../../tickers.js'
+import { openTerminal } from '../../exchangeLinks.js'
 
 const style = `
   .mt-wrap { overflow-x: auto; }
@@ -88,11 +89,11 @@ const COLUMNS = [
     { id: 'high', label: 'Макс. 24ч', sortable: true },
     { id: 'low', label: 'Мин. 24ч', sortable: true },
     { id: 'volume', label: 'Объём (USDT)', sortable: true },
-    { id: 'divergence', label: 'Расхождение бирж', sortable: true },
+    { id: 'divergence', label: 'Расхождение цен', sortable: true },
     { id: 'action', label: '', sortable: false },
 ]
 
-function MoversTable({ coins, onOpenArbitrage }) {
+function MoversTable({ coins }) {
     const [sortBy, setSortBy] = useState('pct')
     const [sortDir, setSortDir] = useState('desc')
 
@@ -197,13 +198,13 @@ function MoversTable({ coins, onOpenArbitrage }) {
                                     <td className="mt-dim">{c.low > 0 ? formatPrice(c.low) : '—'}</td>
                                     <td className="mt-mono">{formatVolume(c.volume)}</td>
                                     <td>
-                                        {c.divergence >= 15 ? (
+                                        {c.divergence >= 2 ? (
                                             <span className="mt-div-badge">
-                                                Δ {c.divergence.toFixed(1)} п.п.
+                                                Δ {c.divergence.toFixed(2)}%
                                             </span>
                                         ) : c.others?.length ? (
                                             <span className="mt-div-none">
-                                                {c.divergence.toFixed(1)} п.п.
+                                                {c.divergence.toFixed(2)}%
                                             </span>
                                         ) : (
                                             <span className="mt-div-none">только 1 биржа</span>
@@ -212,10 +213,10 @@ function MoversTable({ coins, onOpenArbitrage }) {
                                     <td>
                                         <button
                                             className="mt-arb-btn"
-                                            onClick={() => onOpenArbitrage?.(c)}
-                                            title="Проверить арбитражные возможности по этой монете"
+                                            onClick={() => openTerminal(c.exchange, c.symbol, c.market)}
+                                            title="Открыть терминал биржи по этой монете"
                                         >
-                                            Арбитраж <ExternalLink size={11} />
+                                            На биржу <ExternalLink size={11} />
                                         </button>
                                     </td>
                                 </tr>

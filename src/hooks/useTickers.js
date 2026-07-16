@@ -1,7 +1,7 @@
 /**
  * useTickers.js — загрузка данных «Топ роста и падения»
  *
- * - Автообновление раз в 5 минут (согласовано)
+ * - Автообновление раз в 1 минуту (согласовано)
  * - Ручное обновление кнопкой
  * - Пауза опроса, когда вкладка браузера неактивна (не жжём лимиты бирж впустую),
  *   с догрузкой при возвращении, если данные устарели
@@ -15,8 +15,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { fetchAllTickers, aggregateByCoin } from '../tickers.js'
 import { aLog } from '../api.js'
 
-const REFRESH_MS = 5 * 60 * 1000   // 5 минут
-const STALE_MS = 5 * 60 * 1000     // данные старше 5 мин считаем устаревшими
+const REFRESH_MS = 1 * 60 * 1000   // 1 минута
+const STALE_MS = 1 * 60 * 1000     // данные старше 1 мин считаем устаревшими
 
 export function useTickers(market = 'futures', { minVolume = 0 } = {}) {
     const [raw, setRaw] = useState([])          // сырые тикеры со всех бирж
@@ -77,7 +77,7 @@ export function useTickers(market = 'futures', { minVolume = 0 } = {}) {
         return () => { mountedRef.current = false }
     }, [load])
 
-    // автообновление раз в 5 минут, только когда вкладка активна
+    // автообновление раз в 1 минуту, только когда вкладка активна
     useEffect(() => {
         function tick() {
             if (document.hidden) {

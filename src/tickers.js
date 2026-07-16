@@ -39,7 +39,7 @@ import { rlFetch } from './rateLimiter.js'
 import { aLog } from './api.js'
 
 // ─── Минимальный интервал между запросами к одной бирже (мс) ────────────────
-// Тикеры запрашиваем редко (раз в 5 мин), поэтому лимиты щадящие.
+// Тикеры запрашиваем нечасто (раз в 1 мин), поэтому лимиты щадящие.
 const RL_MS = 350
 
 // ─── Хелперы ────────────────────────────────────────────────────────────────
@@ -414,6 +414,33 @@ export async function fetchAllTickers(market = 'futures') {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ФИЛЬТР МУСОРА (согласовано с Петром)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Минимальный объём за 24ч (USDT) — держим даже на пресете «ВСЕ».
+const MIN_VOLUME_FLOOR = 50_000
+// Потолок |% изменения| — выше почти всегда битый референс цены, а не реальный памп.
+const MAX_ABS_PCT = 2000
+
+/**
+ * Мусорные инструменты, которым не место в крипто-арбитраже:
+ *   - Плечевые токены (3L/3S/5L/5S) — двигаются в 3–5× базового актива,
+ *     забивают топ и к арбитражу непригодны (пара уникальна для биржи).
+ *   - Синтетика BingX (NCSK/NCFX/NCCO/NCSI…): токенизированные акции, форекс,
+ *     товары, индексы. Не крипта; дают ложные +млрд% из-за нулевой базовой цены.
+ *
+ * Матчинг по БАЗОВОМУ символу (уже без /USDT): плечевые — по окончанию,
+ * синтетика — по префиксу и только на BingX (чтобы не задеть настоящие монеты).
+ * Если появится новое семейство мусора — правится тут.
+ */
+function isJunkSymbol(symbol, exchange) {
+    if (!symbol) return true
+    if (/(?:3|5)[LS]$/.test(symbol)) return true                 // …3L/3S/5L/5S
+    if (exchange === 'bingx' && /^NC[A-Z]{2}/.test(symbol)) return true
+    return false
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // АГРЕГАЦИЯ ДЛЯ ПУЗЫРЬКОВОЙ КАРТЫ
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -433,10 +460,16 @@ export async function fetchAllTickers(market = 'futures') {
  * @returns {AggregatedCoin[]} — [{ ...leaderTicker, others: Ticker[] }]
  */
 export function aggregateByCoin(tickers, { minVolume = 0 } = {}) {
+    // Порог объёма: даже на пресете «ВСЕ» (minVolume=0) держим floor от пыли —
+    // рост на монете с оборотом в пару тысяч $ нарисован одной сделкой.
+    const volFloor = Math.max(minVolume, MIN_VOLUME_FLOOR)
+
     const byCoin = new Map()
 
     for (const t of tickers) {
         if (!t?.symbol) continue
+        if (isJunkSymbol(t.symbol, t.exchange)) continue   // синтетика BingX / плечевые
+        if (Math.abs(t.pct) > MAX_ABS_PCT) continue         // аномалия — битый референс цены
         if (!byCoin.has(t.symbol)) byCoin.set(t.symbol, [])
         byCoin.get(t.symbol).push(t)
     }
@@ -451,7 +484,7 @@ export function aggregateByCoin(tickers, { minVolume = 0 } = {}) {
         }
 
         // фильтр неликвида — по объёму биржи-лидера
-        if (minVolume > 0 && leader.volume < minVolume) continue
+        if (leader.volume < volFloor) continue
 
         const others = list
             .filter(t => t !== leader)
@@ -469,13 +502,24 @@ export function aggregateByCoin(tickers, { minVolume = 0 } = {}) {
 }
 
 /**
- * Спред между биржами по одной монете — косвенный признак арбитражной возможности.
- * Если на одной бирже монета +40%, а на другой +12% — цены разошлись.
+ * Разброс ТЕКУЩИХ цен по монете между биржами, в процентах — прямой признак
+ * арбитражной возможности. Например, если цена на самой дорогой бирже на 3.5%
+ * выше, чем на самой дешёвой, вернёт 3.5.
  *
- * @returns {number} разброс процентов между биржами (макс − мин), в п.п.
+ *   divergence = (maxPrice − minPrice) / minPrice × 100
+ *
+ * Требуется минимум 2 биржи с валидной (положительной) ценой, иначе 0.
+ *
+ * @returns {number} разброс цен между биржами, в % (0, если сравнивать не с чем)
  */
 export function coinDivergence(coin) {
     if (!coin?.others?.length) return 0
-    const all = [coin.pct, ...coin.others.map(o => o.pct)]
-    return Math.max(...all) - Math.min(...all)
+    const prices = [coin.price, ...coin.others.map(o => o.price)]
+        .map(Number)
+        .filter(p => Number.isFinite(p) && p > 0)
+    if (prices.length < 2) return 0
+    const min = Math.min(...prices)
+    const max = Math.max(...prices)
+    if (min <= 0) return 0
+    return ((max - min) / min) * 100
 }
