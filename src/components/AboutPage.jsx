@@ -10,7 +10,7 @@
  * Данные команды и их навыки с цветными иконками — в data/teamContent.js.
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react'
 import { TEAM } from '../data/teamContent.js'
 import {
     Target, Sparkles, Users, MonitorSmartphone, Map as MapIcon,
@@ -575,11 +575,53 @@ const style = `
   .ab-contact-t { font-size:15px; font-weight:800; color:var(--text-primary); position:relative; margin-bottom:5px; white-space:nowrap; }
   .ab-contact-d { font-size:12px; color:var(--text-secondary); position:relative; line-height:1.5; }
 
-  @media (max-width: 900px) {
+  @media (max-width: 1024px) {
     .ab-grid, .ab-prod-grid { grid-template-columns: 1fr; }
     .ab-contacts { flex-direction: column; }
     .ab-contact:hover { flex: 1; }
     .ab-mcard { flex: 0 0 88vw; }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 1, MOBILE_PLAN.md п.2.4)
+     ══════════════════════════════════════════════════════════════
+     Чистое дополнение — правила выше не изменены (кроме порога
+     900px→1024px у соседнего блока, для единообразия с Sidebar.jsx
+     и HomePage.jsx, где мобильный режим тоже начинается с 1024px).
+  */
+  @media (max-width: 1024px) {
+    .ab-inner { padding: 32px 20px 56px; }
+
+    .ab-hero { padding: 36px 26px; }
+    .ab-h1 { font-size: 30px; }
+    .ab-hero-sub { font-size: 14px; }
+
+    .ab-panel { padding: 20px; }
+    .ab-panel-h { font-size: 18px; }
+
+    .ab-cta { padding: 28px 24px; }
+    .ab-cta-h { font-size: 22px; }
+
+    /* Дорожная карта: чуть уже отступ под точки-маркеры */
+    .ab-road { padding-left: 28px; }
+    .ab-road-dot { left: -28px; }
+    .ab-road-phase-dot { left: -24px; }
+  }
+
+  /* ── Более тесные экраны: обычные телефоны ── */
+  @media (max-width: 480px) {
+    .ab-inner { padding: 24px 14px 48px; }
+    .ab-hero { padding: 28px 20px; }
+    .ab-h1 { font-size: 25px; letter-spacing: -1px; }
+    .ab-panel { padding: 16px; }
+    .ab-cta { padding: 22px 18px; }
+    .ab-cta-h { font-size: 19px; }
+    .ab-cta-roles { gap: 6px; }
+
+    .ab-prod-grid { gap: 10px; }
+    .ab-road { padding-left: 24px; }
+    .ab-road-dot { left: -24px; width: 22px; height: 22px; }
+    .ab-road-phase-dot { left: -21px; }
   }
 `
 
@@ -624,9 +666,36 @@ const AUTOPLAY_MS = 6000
 function TeamCarousel({ onJoinClick }) {
     const [idx, setIdx] = useState(0)
     const [paused, setPaused] = useState(false)
+    const trackRef = useRef(null)
 
     // всего слайдов: участники + карточка приглашения
     const total = TEAM.length + 1
+
+    // ─── Реальный шаг слайда (ширина карточки + gap), в пикселях ───
+    // На десктопе карточка фиксированной ширины CARD_W=480px — но на ≤1024px
+    // CSS переключает её на flex: 0 0 88vw (см. style выше). Раньше сдвиг
+    // трека всегда считался от константы CARD_W, из-за чего на мобиле
+    // translateX не совпадал с реальной шириной карточки и слайды
+    // «уезжали» не в такт с CSS. Теперь ширина меряется у настоящего
+    // DOM-элемента первой карточки — работает на любой ширине экрана
+    // без привязки к конкретным breakpoint'ам.
+    const [step, setStep] = useState(CARD_W + GAP)
+
+    useLayoutEffect(() => {
+        const track = trackRef.current
+        const firstCard = track?.firstElementChild
+        if (!firstCard) return
+
+        const measure = () => {
+            const w = firstCard.getBoundingClientRect().width
+            if (w > 0) setStep(w + GAP)
+        }
+        measure()
+
+        const ro = new ResizeObserver(measure)
+        ro.observe(firstCard)
+        return () => ro.disconnect()
+    }, [])
 
     const go = useCallback((d) => {
         setIdx(prev => (prev + d + total) % total)
@@ -647,11 +716,18 @@ function TeamCarousel({ onJoinClick }) {
         <div
             onMouseEnter={() => setPaused(true)}
             onMouseLeave={() => setPaused(false)}
+            /* На тач-экранах нет mouseenter — без этого автопрокрутка продолжала
+               бы листать карточку прямо во время чтения на телефоне. Явного
+               «touch leave» не существует, поэтому пауза здесь необратима
+               (как у большинства каруселей — это ожидаемо: раз человек начал
+               взаимодействовать, автопрокрутка ему больше не нужна). */
+            onTouchStart={() => setPaused(true)}
         >
             <div className="ab-carousel-vp">
                 <div
+                    ref={trackRef}
                     className="ab-carousel-track"
-                    style={{ transform: `translateX(${-idx * (CARD_W + GAP)}px)` }}
+                    style={{ transform: `translateX(${-idx * step}px)` }}
                 >
                     {TEAM.map((m, i) => (
                         <div key={i} className={`ab-mcard ${i === idx ? 'active' : ''}`}>

@@ -1309,8 +1309,14 @@ const style = `
     transform: translateY(-2px);
   }
 
-  /* на узких экранах раздвигание отключаем — карточки становятся столбиком */
-  @media (max-width: 900px) {
+  /* на узких экранах раздвигание отключаем — карточки становятся столбиком.
+     Порог поднят с 900px до 1024px (Партия 1, MOBILE_PLAN.md): начиная
+     с этой ширины навигация тоже переходит в мобильный режим (Sidebar.jsx),
+     где :hover недоступен — карточки команды должны стать столбиком
+     синхронно с переходом на мобильную навигацию, иначе на 901–1024px
+     раскрытая по тапу карточка (см. onClick ниже) заезжала бы за пределы
+     ряда. */
+  @media (max-width: 1024px) {
     .hp-team-grid,
     .hp-team-grid.hov-0,
     .hp-team-grid.hov-1,
@@ -1371,11 +1377,108 @@ const style = `
 
   /* Адаптив витрины Академии: на узких экранах колонки в столбик.
      (Правила для .hp-team-grid здесь НЕ нужны — у команды свой медиа-запрос
-      выше, под flex-механику. Раньше тут был осколок от grid-версии.) */
-  @media (max-width: 900px) {
+      выше, под flex-механику. Раньше тут был осколок от grid-версии.)
+     Порог поднят с 900px до 1024px — см. комментарий у .hp-team-grid выше. */
+  @media (max-width: 1024px) {
     .hp-ac-wrap { grid-template-columns: 1fr; }
     .hp-mock { order: 2; }
     .hp-ac-side { order: 1; }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 1, MOBILE_PLAN.md п.2.3)
+     ══════════════════════════════════════════════════════════════
+     Правила ниже — чистое дополнение: ни одно существующее правило
+     выше не изменено (кроме двух порогов 900px→1024px рядом, отмеченных
+     отдельно). На десктопе (>1024px) страница выглядит и ведёт себя
+     ровно как раньше.
+
+     Брейкпоинты — по системе из MOBILE_PLAN.md (Часть 0.1):
+       ≤1024px — общий порог мобильного режима (тот же, что у Sidebar.jsx)
+       ≤768px  — телефоны и планшеты-портрет
+       ≤480px  — обычные телефоны, более плотная упаковка
+  */
+  @media (max-width: 1024px) {
+    /* ── HERO ── */
+    .hp-hero {
+      min-height: 100dvh;
+      padding: 64px 24px 48px;
+    }
+    .hp-h1 { font-size: 44px; letter-spacing: -1.2px; }
+    .hp-sub { font-size: 15.5px; }
+    .hp-actions {
+      flex-direction: column;
+      width: 100%;
+      max-width: 360px;
+      gap: 12px;
+    }
+    .hp-btn-primary,
+    .hp-btn-secondary {
+      width: 100%;
+      justify-content: center;
+      text-align: center;
+    }
+    .hp-ex-logos { flex-wrap: wrap; }
+
+    /* ── HOW IT WORKS: колонки в столбик, панель-визуализация под таймлайном ── */
+    .hp-howto {
+      grid-template-columns: 1fr;
+      min-height: 0;
+    }
+    .hp-timeline-col { padding: 48px 24px 24px; }
+    .hp-panel-col { margin: 0 24px 56px; }
+    .hp-howto-title { font-size: 22px; }
+
+    /* ── FUNDING TUTORIAL ── */
+    .hp-funding { padding: 56px 24px 64px; }
+    .hp-funding-card { padding: 26px 22px; }
+    .hp-funding-title { font-size: 22px; }
+
+    /* ── ACADEMY / TEAM / FAQ: общая шапка секции ── */
+    .hp-academy,
+    .hp-team,
+    .hp-faq { padding: 56px 24px 64px; }
+    .hp-sec-title { font-size: 26px; }
+    .hp-sec-sub { font-size: 13.5px; }
+
+    /* ── FAQ: сохраняем крупный тач-таргет вопроса ── */
+    .hp-faq-q { padding: 18px 20px; }
+    .hp-faq-a { padding: 0 20px 20px 20px; }
+  }
+
+  /* ── Более тесные экраны: обычные телефоны ── */
+  @media (max-width: 480px) {
+    .hp-hero { padding: 56px 18px 40px; }
+    .hp-h1 { font-size: 34px; }
+    .hp-sub { font-size: 14.5px; margin-bottom: 32px; }
+    .hp-ex-logos { gap: 8px; }
+    .hp-favicon-wrap { width: 36px; height: 36px; }
+
+    .hp-timeline-col { padding: 40px 18px 20px; }
+    .hp-panel-col { margin: 0 18px 48px; }
+
+    .hp-funding { padding: 48px 18px 56px; }
+    .hp-funding-card { padding: 22px 16px; }
+
+    /* Диаграмма фандинга: две стороны + стрелка в ряд не помещаются —
+       складываем в столбик, стрелку разворачиваем вниз. */
+    .fc-diagram {
+      grid-template-columns: 1fr;
+      row-gap: 12px;
+    }
+    .fc-diagram-arrow { flex-direction: row; }
+    .fc-diagram-arrow svg { transform: rotate(90deg); }
+
+    .hp-academy,
+    .hp-team,
+    .hp-faq { padding: 48px 18px 56px; }
+    .hp-sec-title { font-size: 22px; }
+
+    /* Витрина Академии: 3 колонки мини-карточек модулей тесно на узком экране */
+    .hp-mock-grid { grid-template-columns: repeat(2, 1fr); }
+
+    .hp-faq-q { padding: 16px 18px; font-size: 14.5px; }
+    .hp-faq-a { padding: 0 18px 18px 18px; }
   }
 `
 
@@ -2513,7 +2616,7 @@ export default function HomePage({ onOpenScanner, onNavigate }) {
               <div className="hp-sec-title">Три человека <span>за проектом</span></div>
               <div className="hp-sec-sub">
                 Мы бывшие арбитражники, которые устали от неудобных сканеров и решили
-                сделать свой. Наведи на карточку, чтобы узнать больше.
+                сделать свой. Нажми на карточку, чтобы узнать больше.
               </div>
             </div>
           </Reveal>
@@ -2543,6 +2646,12 @@ export default function HomePage({ onOpenScanner, onNavigate }) {
                      Анимация появления и переходы hover — независимы. */
                   style={{ animationDelay: `${i * 130}ms` }}
                   onMouseEnter={() => setHoveredMember(i)}
+                  /* Тап — для тач-экранов, где mouseenter не срабатывает никогда
+                     (Партия 1, MOBILE_PLAN.md п.2.3): повторный тап по уже
+                     раскрытой карточке сворачивает её обратно. На десктопе
+                     это не мешает ховеру — событие клика на уже наведённой
+                     карточке случается редко и просто закрывает её раньше. */
+                  onClick={() => setHoveredMember(prev => (prev === i ? null : i))}
                 >
                   {/* Компактное состояние — сворачивается при раскрытии.
                       Обёрнуто в grid-контейнер, чтобы высота анимировалась

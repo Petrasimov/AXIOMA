@@ -105,3 +105,22 @@ body {
   from { background-position: 0 0; }
   to   { background-position: 320px 320px; }
 }
+
+/* Глобальный фоновый дрейф крутится на каждой странице всегда —
+   самый заметный кандидат на уважение prefers-reduced-motion
+   (Партия 7, MOBILE_PLAN.md) */
+@media (prefers-reduced-motion: reduce) {
+  .main-area {
+    animation: none;
+  }
+}
+
+/* ----------------- Мобильная навигация (Партия 1, MOBILE_PLAN.md) ----------------- */
+/* На ≤1024px Sidebar.jsx рендерит вместо бокового сайдбара фиксированный
+   верхний бар высотой 56px (.sb-topbar). Подвигаем контент вниз, чтобы
+   первая секция страницы не пряталась под ним. */
+@media (max-width: 1024px) {
+  .main-area {
+    padding-top: 56px;
+  }
+}

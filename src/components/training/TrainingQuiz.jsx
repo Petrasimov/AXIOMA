@@ -46,6 +46,17 @@ const style = `
     cursor: pointer; padding: 4px 0;
   }
   .tq-retry:hover { text-decoration: underline; }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 5, MOBILE_PLAN.md)
+     ══════════════════════════════════════════════════════════════
+     Варианты ответа уже кнопки на onClick (не завязаны на hover) —
+     тач-совместимость была заложена изначально. Только отступы.
+  */
+  @media (max-width: 480px) {
+    .tq-wrap { padding: 16px 16px; }
+    .tq-q { font-size: 15px; }
+  }
 `
 
 function TrainingQuiz({ question, options, explain }) {

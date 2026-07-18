@@ -54,6 +54,25 @@ const style = `
   .ts-bar { flex: 1; border-radius: 6px 6px 0 0; transition: height 0.2s, background 0.2s; display: flex; align-items: flex-start; justify-content: center; }
   .ts-bar-lbl { font-family: var(--font-mono); font-size: 9px; color: var(--text-primary); padding-top: 4px; }
   .ts-note { font-size: 11px; color: var(--text-muted); line-height: 1.5; margin-top: 12px; font-style: italic; }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 5, MOBILE_PLAN.md)
+     ══════════════════════════════════════════════════════════════
+     Range-слайдеры — нативный HTML-контрол, тач-драг уже работает
+     из коробки в любом мобильном браузере, JS не трогаем. Только
+     увеличиваем визуальный/тактильный размер ползунка и чиним
+     единственную структурную проблему — .ts-diagram (панели
+     Short/Long по бокам от стрелки, 3 колонки) в FundingDirectionSim:
+     на телефоне складываем в столбик, стрелку разворачиваем вниз —
+     тот же приём, что и в fc-diagram на главной странице.
+  */
+  @media (max-width: 480px) {
+    .ts-wrap { padding: 18px 16px; }
+    .ts-slider::-webkit-slider-thumb { width: 22px; height: 22px; }
+
+    .ts-diagram { grid-template-columns: 1fr; gap: 8px; }
+    .ts-arrow { transform: rotate(90deg); }
+  }
 `
 
 function LeverageSim() {

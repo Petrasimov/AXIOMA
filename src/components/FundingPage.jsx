@@ -15,10 +15,41 @@
  */
 
 import { useState, useEffect, useRef } from "react"
-import { Percent, SlidersHorizontal, Star, Trash2, ArrowRight } from "lucide-react"
+import { Percent, SlidersHorizontal, Star, Trash2, ArrowRight, ChevronDown } from "lucide-react"
+import ExchangeLogo from './ExchangeLogo.jsx'
 import SpotPickerModal    from './SpotPickerModal.jsx'
 import FundingDetailModal from './FundingDetailModal.jsx'
 import FundingActiveBar   from './FundingActiveBar.jsx'
+
+// Порог мобильного режима — тот же, что у Sidebar.jsx (Партия 1) и
+// остальных файлов Партии 2/3.
+const MOBILE_BREAKPOINT = 1024
+
+/**
+ * На мобиле список funding-возможностей может доходить до 1200+ карточек —
+ * рендерить их все сразу ощутимо нагружает слабый мобильный GPU/CPU
+ * (см. MOBILE_PLAN.md, Партия 4, решение — пагинация «Показать ещё»,
+ * без виртуализации и новых зависимостей). На десктопе поведение не
+ * меняется — там по-прежнему рендерится весь список сразу.
+ */
+function useIsMobileViewport() {
+    const [isMobile, setIsMobile] = useState(() =>
+        typeof window !== 'undefined' ? window.innerWidth <= MOBILE_BREAKPOINT : false
+    )
+
+    useEffect(() => {
+        const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`)
+        const handler = e => setIsMobile(e.matches)
+        if (mq.addEventListener) mq.addEventListener('change', handler)
+        else mq.addListener(handler)
+        return () => {
+            if (mq.removeEventListener) mq.removeEventListener('change', handler)
+            else mq.removeListener(handler)
+        }
+    }, [])
+
+    return isMobile
+}
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
@@ -477,7 +508,12 @@ const style = `
         display: flex;
         flex-direction: column;
         transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease, transform 0.18s ease;
-        height: 100%;
+        /* Жёсткий пол высоты: гарантирует, что карточка (и, значит, строка грида)
+           не схлопнется в линию, даже если родительская цепочка высоты отдаёт
+           неопределённую высоту и строка резолвится в 0. Раньше здесь стоял
+           height:100% — он, наоборот, схлопывался при indefinite-высоте.
+           Контент карточки ~185-210px, так что этот пол его не обрезает. */
+        min-height: 185px;
         min-width: 0;
         position: relative;
     }
@@ -607,6 +643,12 @@ const style = `
         font-size: 16px;
         font-weight: 700;
         color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+    }
+    .fp-side-ex span.fp-ex-name {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -771,6 +813,77 @@ const style = `
         font-size: 11px;
         color: var(--text-muted);
     }
+
+    /* ─── Пагинация «Показать ещё» (только мобилка, см. JS) ─── */
+    .fp-load-more-wrap {
+        grid-column: 1 / -1;
+        display: flex;
+        justify-content: center;
+        padding: 6px 0 4px;
+    }
+
+    .fp-load-more-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 22px;
+        border-radius: var(--radius-md);
+        background: var(--glass-fill);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--glass-border);
+        color: var(--text-secondary);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+
+    .fp-load-more-btn:hover {
+        border-color: var(--glass-border-hover);
+        color: var(--text-primary);
+        background: var(--glass-fill-hover);
+    }
+
+    .fp-load-more-count {
+        color: var(--accent-bright);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 4, MOBILE_PLAN.md)
+       ══════════════════════════════════════════════════════════════
+       Сетка карточек (.fp-content) уже доходит до 1 колонки на
+       ≤699px через существующую лесенку — не трогаем, она рабочая.
+
+       БАГ: .fp-tabbar — три вкладки с полными названиями
+       (FUTURES-FUTURES, SPOT-FUTURES) в один ряд без overflow/wrap.
+       На телефоне это физически не помещается — вкладка SPOT-FUTURES
+       становится недостижимой. Горизонтальный скролл — тот же паттерн,
+       что уже используется в ActiveTradesBar/FundingActiveBar.
+    */
+    @media (max-width: 1024px) {
+        .fp-header { height: 60px; padding: 0 14px; gap: 8px; }
+        .fp-title { font-size: 14px; letter-spacing: 1px; }
+        .fp-title span { display: none; }
+
+        .fp-hidden-dropdown { max-width: calc(100vw - 24px); }
+
+        .fp-tabbar {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .fp-tabbar::-webkit-scrollbar { display: none; }
+        .fp-tab { padding: 0 18px; white-space: nowrap; flex-shrink: 0; }
+
+        .fp-content { padding: 12px; gap: 10px; }
+
+        /* Тач-таргет избранное/скрыть — расширяем только по вертикали.
+           Горизонтально кнопки разделяет всего несколько px — вбок
+           их зоны тапа пересеклись бы (та же логика, что в
+           OpportunityCard.jsx: не перепутать "избранное" со "скрыть"). */
+        .fp-icon-btn { padding-top: 8px; padding-bottom: 8px; margin-top: -8px; margin-bottom: -8px; }
+    }
 `
 
 // ─── Таймер до начисления funding ──────────────────────────────────────────────
@@ -865,7 +978,10 @@ function FFCard({ opp, tradeAmount, isFavorite, isHidden, onToggleFavorite, onTo
             <div className="fp-card-mid">
                 <div className="fp-side">
                     <div className="fp-side-type sell">Short ({formatRate(opp.funding_rate_bid)})</div>
-                    <div className="fp-side-ex">{opp.exchange_bid}</div>
+                    <div className="fp-side-ex">
+                        <ExchangeLogo exchange={opp.exchange_bid} size={16} />
+                        <span className="fp-ex-name">{opp.exchange_bid}</span>
+                    </div>
                     <div className="fp-side-rate">Futures</div>
                     <MiniCountdown nextFundingTime={opp.next_funding_time_bid} />
                 </div>
@@ -874,7 +990,10 @@ function FFCard({ opp, tradeAmount, isFavorite, isHidden, onToggleFavorite, onTo
                     <div className="fp-side-type buy" style={{ textAlign: 'right' }}>
                         Long ({formatRate(opp.funding_rate_ask)})
                     </div>
-                    <div className="fp-side-ex">{opp.exchange_ask}</div>
+                    <div className="fp-side-ex">
+                        <ExchangeLogo exchange={opp.exchange_ask} size={16} />
+                        <span className="fp-ex-name">{opp.exchange_ask}</span>
+                    </div>
                     <div className="fp-side-rate">Futures</div>
                     <MiniCountdown nextFundingTime={opp.next_funding_time_ask} />
                 </div>
@@ -932,7 +1051,10 @@ function SFCard({ opp, tradeAmount, isFavorite, isHidden, onToggleFavorite, onTo
             <div className="fp-card-mid">
                 <div className="fp-side">
                     <div className="fp-side-type sell">Short Futures</div>
-                    <div className="fp-side-ex">{opp.exchange_bid}</div>
+                    <div className="fp-side-ex">
+                        <ExchangeLogo exchange={opp.exchange_bid} size={16} />
+                        <span className="fp-ex-name">{opp.exchange_bid}</span>
+                    </div>
                     <div className="fp-side-rate">rate {formatRate(opp.funding_rate)}</div>
                 </div>
                 <div className="fp-mid-sep"></div>
@@ -1030,6 +1152,18 @@ function FundingPage({
     const [data, setData] = useState([])
     const [strategy, setStrategy] = useState('all')
     const [loading, setLoading] = useState(true)
+    const isMobile = useIsMobileViewport()
+
+    // Пагинация «Показать ещё» — активна только на мобиле (isMobile).
+    // На десктопе PAGE_SIZE игнорируется, рендерится весь список сразу,
+    // как и было раньше.
+    const PAGE_SIZE = 30
+    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+
+    // Смена вкладки или фильтров — новый список, пагинация начинается заново.
+    useEffect(() => {
+        setVisibleCount(PAGE_SIZE)
+    }, [strategy, exchanges, minSpread])
 
     // Логирование только для админа — аналог aLog из futures-сканера
     // isAdminRef нужен потому что useEffect с [] захватывает isAdmin=false
@@ -1224,6 +1358,10 @@ function FundingPage({
         return (b.spread ?? 0) - (a.spread ?? 0)
     })
 
+    // На десктопе — весь список сразу, как и раньше. На мобиле — постранично.
+    const displayList = isMobile ? sorted.slice(0, visibleCount) : sorted
+    const hasMore = isMobile && visibleCount < sorted.length
+
     // Лог фильтрации — однократно после сортировки, только для админа.
     // Используем ref чтобы не логировать одно и то же дважды подряд.
     const lastFilterLogRef = useRef('')
@@ -1297,7 +1435,7 @@ function FundingPage({
                     </div>
                 )}
 
-                {!loading && !error && sorted.map(opp => {
+                {!loading && !error && displayList.map(opp => {
                     const key = oppKey(opp)
                     const cardProps = {
                         opp,
@@ -1317,6 +1455,21 @@ function FundingPage({
                         ? <FFCard key={key} {...cardProps} />
                         : <SFCard key={key} {...cardProps} />
                 })}
+
+                {hasMore && (
+                    <div className="fp-load-more-wrap">
+                        <button
+                            className="fp-load-more-btn"
+                            onClick={() => setVisibleCount(v => v + PAGE_SIZE)}
+                        >
+                            <ChevronDown size={14} />
+                            ПОКАЗАТЬ ЕЩЁ
+                            <span className="fp-load-more-count">
+                                ({displayList.length} / {sorted.length})
+                            </span>
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* ── Промежуточная модалка выбора спот-биржи (SF с несколькими спотами) ── */}
@@ -1340,6 +1493,17 @@ function FundingPage({
                     selectedSpotEx={selectedSpotEx}
                     tradeAmount={tradeAmount}
                     onClose={closeModals}
+                    isFavorite={favorites.has(oppKey(selectedOpp))}
+                    onToggleFavorite={() => toggleFavorite(oppKey(selectedOpp))}
+                    onBlacklist={() => {
+                        hideOpp(oppKey(selectedOpp), {
+                            symbol:       selectedOpp.symbol,
+                            strategy:     selectedOpp.strategy,
+                            exchange_bid: selectedOpp.exchange_bid,
+                            exchange_ask: selectedOpp.exchange_ask || null,
+                        })
+                        closeModals()
+                    }}
                     onTrade={(opp, avgBid, avgAsk, spotEx) => {
                         onFundingTrade?.(opp, avgBid, avgAsk, spotEx)
                     }}

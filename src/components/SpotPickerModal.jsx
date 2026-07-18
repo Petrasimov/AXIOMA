@@ -7,8 +7,8 @@
  * После выбора — родитель открывает FundingDetailModal.
  */
 
-import { useState } from 'react'
 import { X } from 'lucide-react'
+import ExchangeLogo from './ExchangeLogo.jsx'
 
 const style = `
   .spm-overlay {
@@ -26,6 +26,11 @@ const style = `
     border: 1px solid var(--glass-border-hover);
     border-radius: var(--radius-lg);
     width: 380px;
+    /* БАГ: тут не было max-width вообще — единственный модал в проекте
+       без него. На телефоне уже 380px не влезает в доступную ширину
+       (после padding:20px у оверлея), а сжаться было нечем — модалку
+       обрезало горизонтальным оверфлоу. */
+    max-width: calc(100vw - 40px);
     box-shadow: 0 32px 96px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
     display: flex; flex-direction: column;
     overflow: hidden;
@@ -97,16 +102,6 @@ const style = `
     background: rgba(93,163,214,0.08);
   }
 
-  .spm-ex-logo {
-    width: 22px; height: 22px; border-radius: 50%;
-    object-fit: contain; flex-shrink: 0;
-  }
-  .spm-ex-fallback {
-    width: 22px; height: 22px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 8px; font-weight: 800; color: #000; flex-shrink: 0;
-  }
-
   .spm-ex-name {
     font-size: 14px; font-weight: 700;
     color: var(--text-primary);
@@ -123,33 +118,20 @@ const style = `
     transition: transform 0.15s;
   }
   .spm-row:hover .spm-arrow { transform: translateX(3px); }
-`
 
-function ExLogo({ info }) {
-  const [err, setErr] = useState(false)
-  if (!err && info.logo) {
-    return (
-      <img
-        className="spm-ex-logo"
-        src={info.logo}
-        alt={info.name}
-        onError={() => setErr(true)}
-      />
-    )
+  @media (max-width: 1024px) {
+    .spm-modal {
+      backdrop-filter: blur(14px) saturate(150%);
+      -webkit-backdrop-filter: blur(14px) saturate(150%);
+    }
   }
-  return (
-    <div className="spm-ex-fallback" style={{ background: info.color }}>
-      {info.short}
-    </div>
-  )
-}
 
-// Маппинг названий бирж funding-API → getExchangeInfo id
-const FUNDING_EX_MAP = {
-  'Binance': 'binance', 'BingX': 'bingx', 'Bitget': 'bitget',
-  'Bybit': 'bybit', 'Gate.io': 'gate', 'KuCoin': 'kucoin',
-  'MEXC': 'mexc', 'OKX': 'okx',
-}
+  @media (max-width: 480px) {
+    .spm-overlay { padding: 12px; }
+    .spm-close { width: 40px; height: 40px; }
+    .spm-row { padding: 13px 14px; }
+  }
+`
 
 function SpotPickerModal({ opp, allSpotExchanges, onSelect, onClose }) {
   // allSpotExchanges — массив строк вида ["BingX","KuCoin","MEXC"]
@@ -176,30 +158,18 @@ function SpotPickerModal({ opp, allSpotExchanges, onSelect, onClose }) {
           <div className="spm-title">Выберите спотовую биржу</div>
 
           <div className="spm-list">
-            {allSpotExchanges.map(ex => {
-              const wsId = FUNDING_EX_MAP[ex] ?? ex.toLowerCase()
-              // Получаем иконку через getExchangeInfo если доступна,
-              // иначе рисуем заглушку с первыми буквами
-              const info = {
-                name: ex,
-                short: ex.slice(0, 2).toUpperCase(),
-                color: '#2F6997',
-                logo: '',
-              }
-
-              return (
-                <div
-                  key={ex}
-                  className="spm-row"
-                  onClick={() => onSelect(ex)}
-                >
-                  <ExLogo info={info} />
-                  <div className="spm-ex-name">{ex}</div>
-                  <div className="spm-ex-tag">SPOT</div>
-                  <div className="spm-arrow">→</div>
-                </div>
-              )
-            })}
+            {allSpotExchanges.map(ex => (
+              <div
+                key={ex}
+                className="spm-row"
+                onClick={() => onSelect(ex)}
+              >
+                <ExchangeLogo exchange={ex} size={22} />
+                <div className="spm-ex-name">{ex}</div>
+                <div className="spm-ex-tag">SPOT</div>
+                <div className="spm-arrow">→</div>
+              </div>
+            ))}
           </div>
 
         </div>

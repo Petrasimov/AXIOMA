@@ -195,6 +195,58 @@ const style = `
     .sort-option.selected {
         color: var(--accent-bright);
     }
+
+    /* ══════════════════════════════════════════════════════════════
+       МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 2, MOBILE_PLAN.md)
+       ══════════════════════════════════════════════════════════════
+       Header.jsx НЕ position:fixed — это обычный flex-элемент внутри
+       .main-area, под глобальным мобильным топбаром из Sidebar.jsx
+       (Партия 1). Поэтому уменьшение высоты здесь не конфликтует
+       с ним — оба тулбара просто идут подряд.
+
+       Дропдауны (сортировка, скрытые) уже переключаются по onClick,
+       а не по hover — тач-совместимость была заложена изначально,
+       трогать JS не потребовалось.
+    */
+    @media (max-width: 1024px) {
+        .header {
+            height: 60px;
+            padding: 0 14px;
+            gap: 8px;
+        }
+        .header-btn {
+            padding: 7px 10px;
+            font-size: 12px;
+        }
+        .sort-dropdown {
+            max-width: calc(100vw - 24px);
+        }
+        /* Продуктовое решение: на мобиле доступен только режим карточек —
+           переключатель "таблица" убираем полностью, он ничего не
+           переключает, потому что выбирать больше не из чего. Заодно
+           освобождает место в и без того тесном мобильном хедере.
+           Принудительный grid-режим (даже если viewMode='table' сохранён
+           в localStorage с десктопной сессии) обеспечивает OpportunityGrid.jsx. */
+        .header-view-toggle {
+            display: none;
+        }
+    }
+
+    @media (max-width: 480px) {
+        /* Заголовок и часы — декоративные при таком дефиците места,
+           убираем только текст, иконки/функциональность не трогаем */
+        .header-title { font-size: 14px; letter-spacing: 1px; margin-right: 8px; }
+        .header-title span { display: none; }
+        .header-clock { display: none; }
+
+        /* Текстовые подписи кнопок скрываем — остаются иконки, сами
+           кнопки не меняют ни функцию, ни обработчики */
+        .header-btn-label { display: none; }
+        .header-btn {
+            padding: 8px;
+            gap: 0;
+        }
+    }
 `
 
 function SortDropdown({ sortMode, onSort }) {
@@ -209,7 +261,7 @@ function SortDropdown({ sortMode, onSort }) {
                 onClick={() => setOpen(o => !o)}
             >
                 <CurrentIcon size={14} />
-                {current?.label ?? 'Сортировка'}
+                <span className="header-btn-label">{current?.label ?? 'Сортировка'}</span>
             </button>
 
             {open && (
@@ -329,7 +381,7 @@ function Header({ total, sortMode, onSort, viewMode, onViewMode, onOpenFilters, 
 
                 <button className="header-btn" onClick={onOpenFilters}>
                     <SlidersHorizontal size={14} />
-                    Фильтры
+                    <span className="header-btn-label">Фильтры</span>
                 </button>
 
             </div>

@@ -79,13 +79,37 @@ const style = `
   .footer-bottom-link { font-size:11.5px; color:var(--text-muted); text-decoration:none; transition:color 0.15s; background:none; border:none; cursor:pointer; font-family:var(--font-sans); }
   .footer-bottom-link:hover { color:var(--accent-bright); }
 
-  @media (max-width: 820px) {
-    .footer-cols { grid-template-columns: 1fr 1fr; gap:28px; }
-    .footer-bottom { flex-direction:column; align-items:flex-start; }
+  @media (max-width: 1024px) {
+    .footer-inner { padding: 36px 24px 0; }
+    .footer-cols { grid-template-columns: 1fr 1fr; gap: 24px; }
+    .footer-bottom { flex-direction: column; align-items: flex-start; }
   }
 
   /* иконки соцсетей (inline svg) */
   .footer svg { display:block; }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 1, MOBILE_PLAN.md п.2.5)
+     ══════════════════════════════════════════════════════════════
+     Чистое дополнение — правила выше не изменены (кроме порога
+     820px→1024px у соседнего блока, для единообразия с остальными
+     файлами Партии 1).
+  */
+  @media (max-width: 480px) {
+    .footer-inner { padding: 28px 16px 0; }
+    .footer-cols { grid-template-columns: 1fr; gap: 28px; }
+
+    /* Текстовые ссылки — тач-таргет побольше (было 6px вертикальный паддинг) */
+    .footer-link { padding: 10px 0; font-size: 13.5px; }
+    .footer-bottom-link { padding: 6px 0; }
+
+    .footer-brand-desc { max-width: 100%; }
+
+    .footer-disclaimer { padding: 14px 16px; }
+
+    .footer-bottom { padding: 16px 0 20px; }
+    .footer-bottom-links { flex-wrap: wrap; gap: 14px 20px; }
+  }
 `
 
 const YEAR = new Date().getFullYear()

@@ -72,6 +72,20 @@ const style = `
   .tg-bt-chip.short { color: var(--error); border-color: rgba(224,62,62,0.4); background: rgba(224,62,62,0.08); }
   .tg-bt-chip.placed { opacity: 0.3; pointer-events: none; }
   .tg-bt-slot-badge { font-family: var(--font-mono); font-size: 13px; font-weight: 800; letter-spacing: 1px; }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 5, MOBILE_PLAN.md)
+     ══════════════════════════════════════════════════════════════
+     Обе игры уже построены на тапах, а не на drag-and-drop:
+     find-spread — обычный клик по карточке; build-trade — выбрать
+     LONG/SHORT тапом по чипу, затем тапом поставить в слот. Ничего
+     в JS не переделывалось — только отступы и, на самых узких
+     экранах, дополнительная подстраховка сетки карточек.
+  */
+  @media (max-width: 480px) {
+    .tg-wrap { padding: 18px 16px; }
+    .tg-cards { grid-template-columns: 1fr; }
+  }
 `
 
 // ─── find-spread ────────────────────────────────────────────────────────────

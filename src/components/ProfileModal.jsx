@@ -21,6 +21,20 @@
  *
  * Отложено до бэкенда: история подписки, статистика сделок, продление,
  * уведомления, рефералка, ачивки.
+ *
+ * Мобильная адаптация (Партия 1, MOBILE_PLAN.md п.2.2):
+ * - На ≤768px модалка превращается в bottom-sheet: прижата к низу экрана,
+ *   на всю ширину, скругление только сверху, выезжает снизу вверх.
+ * - Контент (аватар/статистика/действия) обёрнут в .pm-scroll — отдельный
+ *   скролл-контейнер внутри .pm-modal. Это сделано намеренно: если бы
+ *   скроллился сам .pm-modal, кнопка закрытия (position:absolute) поехала
+ *   бы вместе с контентом при скролле. Так она и «ручка» сверху остаются
+ *   на месте всегда.
+ * - max-height: 90dvh — чтобы в альбомной ориентации/на низких экранах
+ *   контент не обрезался, а скроллился внутри.
+ * - env(safe-area-inset-bottom) — отступ под жест-бар/чёлку снизу.
+ * - Свайп-вниз для закрытия сознательно не реализован в этом блоке —
+ *   вынесен в бэклог как необязательное улучшение (см. отчёт).
  */
 
 import { useEffect } from 'react'
@@ -84,6 +98,11 @@ const style = `
   }
   .pm-close:hover { border-color:var(--error); color:var(--error); }
 
+  /* ─── Ручка bottom-sheet — видна только на мобиле ─── */
+  .pm-handle {
+    display: none;
+  }
+
   /* ─── Верх: аватар + ранг ─── */
   .pm-top { position:relative; z-index:1; padding:34px 28px 22px; text-align:center; }
 
@@ -114,6 +133,12 @@ const style = `
     animation: pm-spin 16s linear infinite;
   }
   @keyframes pm-spin { to { transform: rotate(360deg) } }
+
+  /* Декоративная бесконечная орбита — уважаем prefers-reduced-motion
+     (Партия 7, MOBILE_PLAN.md) */
+  @media (prefers-reduced-motion: reduce) {
+    .pm-av-hex.orbit::after { animation: none; }
+  }
 
   .pm-av-pct {
     position:absolute; bottom:-5px; left:50%; transform:translateX(-50%);
@@ -190,6 +215,61 @@ const style = `
   .pm-act.primary:hover { transform:translateY(-1px); background:linear-gradient(135deg, var(--accent-bright), var(--accent)); }
   .pm-act.danger { color:var(--error); border-color:rgba(224,62,62,0.3); }
   .pm-act.danger:hover { background:rgba(224,62,62,0.1); border-color:var(--error); color:var(--error); }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛКА (≤768px) — модалка как bottom-sheet
+     ══════════════════════════════════════════════════════════════ */
+  @keyframes pm-sheet-up {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+
+  @media (max-width: 768px) {
+    .pm-overlay {
+      align-items: flex-end;
+      padding: 0;
+    }
+
+    .pm-modal {
+      width: 100%;
+      max-width: 100%;
+      max-height: 90dvh;
+      border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+      display: flex;
+      flex-direction: column;
+      animation: pm-sheet-up 0.28s cubic-bezier(0.22,1,0.36,1);
+      padding-bottom: env(safe-area-inset-bottom);
+      /* блюр полегче — на мобильном GPU 30px ощутимо просаживает FPS */
+      backdrop-filter: blur(16px) saturate(150%);
+      -webkit-backdrop-filter: blur(16px) saturate(150%);
+    }
+
+    .pm-handle {
+      display: block;
+      width: 36px;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.22);
+      margin: 10px auto 2px;
+      flex-shrink: 0;
+    }
+
+    .pm-close {
+      width: 40px;
+      height: 40px;
+    }
+
+    /* Скроллится только контент — .pm-close и .pm-handle остаются на месте */
+    .pm-scroll {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .pm-top { padding-left: 20px; padding-right: 20px; }
+    .pm-bottom { padding-left: 20px; padding-right: 20px; }
+  }
 `
 
 function ProfileModal({ user, onClose, onLogout }) {
@@ -234,111 +314,120 @@ function ProfileModal({ user, onClose, onLogout }) {
                     style={{ '--st': status.color }}
                     onClick={e => e.stopPropagation()}
                 >
+                    {/* Ручка bottom-sheet — только на мобиле (display:none на десктопе) */}
+                    <div className="pm-handle" aria-hidden="true" />
+
                     <button className="pm-close" onClick={onClose}><X size={16} /></button>
 
-                    {/* ─── Верх: аватар в кольце-прогрессе ─── */}
-                    <div className="pm-top">
-                        <div className={`pm-av-hex ${hasOrbit ? 'orbit' : ''}`}>
-                            <div
-                                className="pm-av-ring"
-                                style={{ '--pct': `${progress.progressPct}%` }}
-                            >
-                                <div className="pm-av-inner">
-                                    <div className="pm-av">
-                                        {user?.photoUrl
-                                            ? <img
-                                                src={user.photoUrl}
-                                                alt={user.login}
-                                                onError={e => { e.target.style.display = 'none' }}
-                                              />
-                                            : initial}
+                    {/* На десктопе .pm-scroll — обычный блок без скролла (см. style).
+                        На мобиле — единственный скролл-контейнер, чтобы ручка
+                        и кнопка закрытия оставались на месте при прокрутке. */}
+                    <div className="pm-scroll">
+
+                        {/* ─── Верх: аватар в кольце-прогрессе ─── */}
+                        <div className="pm-top">
+                            <div className={`pm-av-hex ${hasOrbit ? 'orbit' : ''}`}>
+                                <div
+                                    className="pm-av-ring"
+                                    style={{ '--pct': `${progress.progressPct}%` }}
+                                >
+                                    <div className="pm-av-inner">
+                                        <div className="pm-av">
+                                            {user?.photoUrl
+                                                ? <img
+                                                    src={user.photoUrl}
+                                                    alt={user.login}
+                                                    onError={e => { e.target.style.display = 'none' }}
+                                                  />
+                                                : initial}
+                                        </div>
                                     </div>
                                 </div>
+                                <div className="pm-av-pct">{progress.progressPct}% ОБУЧЕНИЯ</div>
                             </div>
-                            <div className="pm-av-pct">{progress.progressPct}% ОБУЧЕНИЯ</div>
+
+                            <div className="pm-name">{displayName}</div>
+
+                            <div className="pm-tier">
+                                <TierIcon size={15} />
+                                {status.label.toUpperCase()}
+                            </div>
                         </div>
 
-                        <div className="pm-name">{displayName}</div>
-
-                        <div className="pm-tier">
-                            <TierIcon size={15} />
-                            {status.label.toUpperCase()}
-                        </div>
-                    </div>
-
-                    {/* ─── Статистика обучения ─── */}
-                    <div className="pm-stats">
-                        <div className="pm-stat">
-                            <div className="pm-stat-v">{progress.completedLessons}</div>
-                            <div className="pm-stat-l">уроков</div>
-                        </div>
-                        <div className="pm-stat">
-                            <div className="pm-stat-v">{progress.completedModules}</div>
-                            <div className="pm-stat-l">модулей</div>
-                        </div>
-                        <div className="pm-stat">
-                            <div className="pm-stat-v">{progress.totalLessons}</div>
-                            <div className="pm-stat-l">всего уроков</div>
-                        </div>
-                    </div>
-
-                    {/* ─── Низ ─── */}
-                    <div className="pm-bottom">
-
-                        {/* Мотивация к следующему рангу */}
-                        <div className="pm-next">
-                            <span className="pm-next-ic">
-                                {next ? <Sparkles size={18} /> : <Crown size={18} />}
-                            </span>
-                            <span className="pm-next-t">
-                                {next
-                                    ? <>Ещё <b>{progress.modulesToNext} модуля</b> — и ты получишь статус <b>{next.label}</b>.</>
-                                    : <>Ты прошёл весь курс. <b>Максимальный статус — Мастер</b>. Поздравляем!</>}
-                            </span>
+                        {/* ─── Статистика обучения ─── */}
+                        <div className="pm-stats">
+                            <div className="pm-stat">
+                                <div className="pm-stat-v">{progress.completedLessons}</div>
+                                <div className="pm-stat-l">уроков</div>
+                            </div>
+                            <div className="pm-stat">
+                                <div className="pm-stat-v">{progress.completedModules}</div>
+                                <div className="pm-stat-l">модулей</div>
+                            </div>
+                            <div className="pm-stat">
+                                <div className="pm-stat-v">{progress.totalLessons}</div>
+                                <div className="pm-stat-l">всего уроков</div>
+                            </div>
                         </div>
 
-                        {/* Доступ к сканеру */}
-                        <div className="pm-row">
-                            <span className="pm-row-l">
-                                {hasAccess ? <ShieldCheck size={15} /> : <ShieldX size={15} />}
-                                Доступ к сканеру
-                            </span>
-                            {isAdmin ? (
-                                <span className="pm-badge adm">Админ</span>
-                            ) : hasAccess ? (
-                                <span className="pm-badge ok"><Check size={11} /> Активен</span>
-                            ) : (
-                                <span className="pm-badge no">Не активирован</span>
-                            )}
-                        </div>
+                        {/* ─── Низ ─── */}
+                        <div className="pm-bottom">
 
-                        {/* Действия */}
-                        <div className="pm-actions">
-                            {!hasAccess && !isAdmin && (
+                            {/* Мотивация к следующему рангу */}
+                            <div className="pm-next">
+                                <span className="pm-next-ic">
+                                    {next ? <Sparkles size={18} /> : <Crown size={18} />}
+                                </span>
+                                <span className="pm-next-t">
+                                    {next
+                                        ? <>Ещё <b>{progress.modulesToNext} модуля</b> — и ты получишь статус <b>{next.label}</b>.</>
+                                        : <>Ты прошёл весь курс. <b>Максимальный статус — Мастер</b>. Поздравляем!</>}
+                                </span>
+                            </div>
+
+                            {/* Доступ к сканеру */}
+                            <div className="pm-row">
+                                <span className="pm-row-l">
+                                    {hasAccess ? <ShieldCheck size={15} /> : <ShieldX size={15} />}
+                                    Доступ к сканеру
+                                </span>
+                                {isAdmin ? (
+                                    <span className="pm-badge adm">Админ</span>
+                                ) : hasAccess ? (
+                                    <span className="pm-badge ok"><Check size={11} /> Активен</span>
+                                ) : (
+                                    <span className="pm-badge no">Не активирован</span>
+                                )}
+                            </div>
+
+                            {/* Действия */}
+                            <div className="pm-actions">
+                                {!hasAccess && !isAdmin && (
+                                    <a
+                                        className="pm-act primary"
+                                        href="https://t.me/axioma_manager_bot"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        <MessageCircle size={13} /> ПОЛУЧИТЬ ДОСТУП
+                                    </a>
+                                )}
+
                                 <a
-                                    className="pm-act primary"
+                                    className="pm-act"
                                     href="https://t.me/axioma_manager_bot"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                 >
-                                    <MessageCircle size={13} /> ПОЛУЧИТЬ ДОСТУП
+                                    <MessageCircle size={13} /> НАПИСАТЬ В ПОДДЕРЖКУ
                                 </a>
-                            )}
 
-                            <a
-                                className="pm-act"
-                                href="https://t.me/axioma_manager_bot"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                <MessageCircle size={13} /> НАПИСАТЬ В ПОДДЕРЖКУ
-                            </a>
+                                <button className="pm-act danger" onClick={handleLogout}>
+                                    <LogOut size={13} /> ВЫЙТИ ИЗ АККАУНТА
+                                </button>
+                            </div>
 
-                            <button className="pm-act danger" onClick={handleLogout}>
-                                <LogOut size={13} /> ВЫЙТИ ИЗ АККАУНТА
-                            </button>
                         </div>
-
                     </div>
                 </div>
             </div>

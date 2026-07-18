@@ -28,6 +28,34 @@ const wrapStyle = `
   .td-lbl { font: 700 12px var(--font-mono, monospace); fill: var(--text-secondary); }
   .td-lbl-sm { font: 600 10px var(--font-mono, monospace); fill: var(--text-muted); }
   .td-val { font: 800 15px var(--font-mono, monospace); }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 5, MOBILE_PLAN.md)
+     ══════════════════════════════════════════════════════════════
+     Схемы рисуются как единый SVG на viewBox шириной 640 — вместе
+     с ним масштабируется и весь впечатанный в разметку текст
+     (10-15px в координатах viewBox). На узком телефоне 640px схема
+     сжалась бы до ~300px, и подписи стали бы нечитаемыми — это не
+     лечится media query, текст часть самого SVG.
+
+     Вместо сжатия — не даём схеме сжиматься ниже читаемого размера
+     и позволяем прокрутить её по горизонтали. Тот же приём уже
+     используется в проекте (ActiveTradesBar, табы FundingPage,
+     табы DetailModal) для контента, который не может ужаться.
+  */
+  @media (max-width: 768px) {
+    .td-wrap {
+      padding: 14px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .td-wrap::-webkit-scrollbar { height: 4px; }
+    .td-svg {
+      width: auto;
+      min-width: 480px;
+      max-width: none;
+    }
+  }
 `
 
 // ─── Отдельные схемы ────────────────────────────────────────────────────────

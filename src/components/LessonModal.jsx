@@ -102,6 +102,61 @@ const style = `
   }
   .lm-done-btn:hover { transform: translateY(-1px); }
   .lm-done-btn.done { background: linear-gradient(135deg, rgba(0,231,143,0.25), rgba(0,168,102,0.12)); border-color: rgba(0,201,122,0.4); color: var(--success); box-shadow: 0 0 16px rgba(0,201,122,0.15); }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 5, MOBILE_PLAN.md)
+     ══════════════════════════════════════════════════════════════
+     Урок — текстоёмкий контент (плюс интерактивные блоки), поэтому
+     на мобиле выбран fullscreen, а не bottom-sheet как у ProfileModal:
+     нужна максимальная высота под чтение, а не быстрый предпросмотр.
+
+     Футер с тремя элементами (Назад / Завершить урок / Далее) —
+     на самых узких телефонах (~360px) может не влезать в один ряд
+     впритык (длинная надпись "Завершить урок" + два nav-btn).
+     flex-wrap — подстраховка, чтобы при нехватке места кнопки
+     переносились, а не обрезались/наезжали друг на друга.
+  */
+  @media (max-width: 768px) {
+    .lm-overlay { padding: 0; align-items: stretch; }
+
+    .lm-modal {
+      width: 100%;
+      max-width: 100%;
+      height: 100%;
+      max-height: 100dvh;
+      border-radius: 0;
+      backdrop-filter: blur(16px) saturate(160%);
+      -webkit-backdrop-filter: blur(16px) saturate(160%);
+    }
+
+    .lm-head {
+      padding: 14px 16px;
+      padding-top: calc(14px + env(safe-area-inset-top));
+      gap: 10px;
+    }
+    .lm-close { width: 40px; height: 40px; }
+
+    .lm-body {
+      padding: 20px 18px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Фиксированная колонка термина (130px) на узком экране слишком
+       тесно соседствует с определением — стек читабельнее */
+    .lm-term {
+      grid-template-columns: 1fr;
+      gap: 4px;
+    }
+
+    .lm-foot {
+      padding: 12px 14px;
+      padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .lm-nav-btn { padding: 10px 14px; }
+    .lm-done-btn { padding: 10px 18px; flex: 1; justify-content: center; }
+  }
 `
 
 const CALLOUT_ICON = { info: Info, warn: AlertTriangle, tip: Lightbulb }

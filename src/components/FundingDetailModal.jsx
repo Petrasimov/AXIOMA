@@ -15,9 +15,10 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
-import { X, ExternalLink } from 'lucide-react'
+import { X, ExternalLink, Star, Trash2 } from 'lucide-react'
 import { connectOrderBook } from '../ws.js'
 import { calcVwap, calcMaxVolume, formatPrice, formatVolume } from '../utils.js'
+import ExchangeLogo from './ExchangeLogo.jsx'
 
 // ─── Маппинг: название биржи в funding-API → id для connectOrderBook ─────────
 const WS_EX_ID = {
@@ -143,7 +144,7 @@ const style = `
 
   .fdm-spacer { flex: 1; }
 
-  .fdm-spread-wrap { text-align: right; }
+  .fdm-spread-wrap { text-align: center; }
   .fdm-spread-val {
     font-family: var(--font-mono);
     font-size: 22px; font-weight: 700;
@@ -151,7 +152,7 @@ const style = `
   }
   .fdm-spread-label {
     font-size: 8px; letter-spacing: 1.5px;
-    color: rgba(255,255,255,0.3);
+    color: rgba(255,255,255,0.5);
   }
 
   .fdm-btn {
@@ -161,9 +162,12 @@ const style = `
     color: rgba(255,255,255,0.6);
     cursor: pointer; width: 32px; height: 32px;
     display: flex; align-items: center; justify-content: center;
-    transition: all 0.15s;
+    transition: all 0.15s; flex-shrink: 0;
   }
   .fdm-btn:hover { background: rgba(255,255,255,0.15); color: #fff; }
+  .fdm-btn.fav.active { color: #f0a500; border-color: rgba(240,165,0,0.4); background: rgba(240,165,0,0.12); }
+  .fdm-btn.fav:hover { color: #f0a500; }
+  .fdm-btn.trash:hover,
   .fdm-btn.close:hover {
     background: rgba(224,62,62,0.2);
     border-color: var(--error); color: var(--error);
@@ -215,6 +219,7 @@ const style = `
   .fdm-ex-name {
     font-size: 15px; font-weight: 700;
     color: var(--text-primary); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 7px;
   }
 
   .fdm-ex-row {
@@ -233,8 +238,8 @@ const style = `
     display: flex; justify-content: space-between; align-items: flex-end;
   }
   .fdm-ex-funding-label {
-    font-size: 8px; letter-spacing: 1px;
-    color: var(--text-muted); text-transform: uppercase;
+    font-size: 9px; font-weight: 700; letter-spacing: 1px;
+    color: var(--text-secondary); text-transform: uppercase;
     margin-bottom: 3px;
   }
   .fdm-ex-funding-rate {
@@ -261,8 +266,8 @@ const style = `
     margin-bottom: 8px;
   }
   .fdm-ob-label {
-    font-size: 8px; font-weight: 700;
-    letter-spacing: 1.5px; color: var(--text-muted);
+    font-size: 9px; font-weight: 700;
+    letter-spacing: 1.5px; color: var(--text-secondary);
     text-transform: uppercase;
   }
   .fdm-ob-live {
@@ -282,8 +287,8 @@ const style = `
 
   .fdm-ob-head {
     display: grid; grid-template-columns: 1fr 1fr 1fr;
-    font-size: 8px; letter-spacing: 1px;
-    color: var(--text-muted); text-transform: uppercase;
+    font-size: 9px; font-weight: 700; letter-spacing: 1px;
+    color: var(--text-secondary); text-transform: uppercase;
     padding: 0 0 4px; border-bottom: 1px solid var(--glass-border);
     margin-bottom: 3px;
   }
@@ -307,8 +312,8 @@ const style = `
   .fdm-ob-row.bid .fdm-ob-bar { background: rgba(0,201,122,.07); }
 
   .fdm-ob-mid {
-    text-align: center; font-size: 9px;
-    color: var(--text-muted);
+    text-align: center; font-size: 10px; font-weight: 600;
+    color: var(--text-secondary);
     padding: 5px 0;
     border-top: 1px solid var(--glass-border);
     border-bottom: 1px solid var(--glass-border);
@@ -318,7 +323,7 @@ const style = `
 
   .fdm-ob-empty {
     text-align: center; padding: 20px;
-    font-size: 11px; color: var(--text-muted);
+    font-size: 11px; color: var(--text-secondary);
   }
 
   /* VWAP strip */
@@ -329,8 +334,8 @@ const style = `
   }
   .fdm-vwap-item { flex: 1; }
   .fdm-vwap-label {
-    font-size: 8px; letter-spacing: 1px;
-    color: var(--text-muted); text-transform: uppercase;
+    font-size: 9px; font-weight: 700; letter-spacing: 1px;
+    color: var(--text-secondary); text-transform: uppercase;
     margin-bottom: 3px;
   }
   .fdm-vwap-val {
@@ -385,8 +390,8 @@ const style = `
     padding: 9px 12px;
   }
   .fdm-stat-label {
-    font-size: 8px; letter-spacing: 1px;
-    color: var(--text-muted); text-transform: uppercase;
+    font-size: 9px; font-weight: 700; letter-spacing: 1px;
+    color: var(--text-secondary); text-transform: uppercase;
     margin-bottom: 4px;
   }
   .fdm-stat-val {
@@ -405,7 +410,7 @@ const style = `
   }
   .fdm-calc-field { flex: 1; display: flex; flex-direction: column; gap: 4px; }
   .fdm-calc-label {
-    font-size: 9px; color: var(--text-muted);
+    font-size: 10px; font-weight: 600; color: var(--text-secondary);
     letter-spacing: 0.5px;
   }
   .fdm-calc-input {
@@ -431,7 +436,7 @@ const style = `
     display: flex; justify-content: space-between; align-items: center;
   }
   .fdm-calc-result-label {
-    font-size: 9px; color: var(--text-muted);
+    font-size: 10px; font-weight: 600; color: var(--text-secondary);
     letter-spacing: 0.8px;
   }
   .fdm-calc-result-val {
@@ -505,6 +510,70 @@ const style = `
     border: 1px solid rgba(224,62,62,0.25);
     border-radius: var(--radius-sm);
     padding: 5px 10px; line-height: 1.4;
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 4, MOBILE_PLAN.md)
+     ══════════════════════════════════════════════════════════════
+     Та же логика, что в DetailModal.jsx (Партия 2): .fdm-body — два
+     столбца (1.3fr | 1fr), на телефоне это невозможно сохранить —
+     modal → fullscreen sheet, столбцы друг под другом.
+
+     Здесь есть дополнительная сложность: .fdm-ex-pair — ВЛОЖЕННАЯ
+     двухколоночная сетка внутри левого столбца (short/buy панели
+     рядом). Если просто растянуть внешний .fdm-body в одну колонку,
+     эта внутренняя сетка всё равно останется двухколоночной и будет
+     сдавлена на всю ширину телефона — тоже разворачиваем в столбик.
+
+     .fdm-left/.fdm-right теряют собственный overflow-y по той же
+     причине, что и в DetailModal: скроллится вся .fdm-body одним
+     потоком, а не два независимых скролла друг под другом.
+  */
+  @media (max-width: 768px) {
+    .fdm-overlay { padding: 0; align-items: stretch; }
+
+    .fdm {
+      width: 100%;
+      max-width: 100%;
+      height: 100%;
+      max-height: 100dvh;
+      border-radius: 0;
+      backdrop-filter: blur(16px) saturate(160%);
+      -webkit-backdrop-filter: blur(16px) saturate(160%);
+    }
+
+    .fdm-head {
+      flex-wrap: wrap;
+      padding: 12px 14px;
+      padding-top: calc(12px + env(safe-area-inset-top));
+    }
+    .fdm-btn { width: 40px; height: 40px; }
+
+    .fdm-body {
+      grid-template-columns: 1fr;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .fdm-left {
+      border-right: none;
+      border-bottom: 1px solid var(--glass-border);
+      overflow-y: visible;
+    }
+    .fdm-right {
+      overflow-y: visible;
+    }
+
+    /* Вложенная сетка short/buy панелей — тоже в столбик */
+    .fdm-ex-pair { grid-template-columns: 1fr; }
+    .fdm-ex-panel.short {
+      border-right: none;
+      border-bottom: 1px solid var(--glass-border);
+    }
+
+    /* Калькулятор: два инпута рядом с длинными подписями
+       ("Avg Short — {биржа}") тесно на узком экране */
+    .fdm-calc-row { flex-direction: column; }
   }
 `
 
@@ -583,6 +652,9 @@ function FundingDetailModal({
   initialAvgBid,
   initialAvgAsk,
   tradeError,
+  isFavorite,      // bool — в избранном ли
+  onToggleFavorite,// () => void
+  onBlacklist,     // () => void — скрыть пару (чёрный список) и закрыть модалку
 }) {
   const [bidBook, setBidBook] = useState(null)
   const [askBook, setAskBook] = useState(null)
@@ -763,11 +835,28 @@ function FundingDetailModal({
               {base}<span>/{suffix}</span>
             </div>
             <div className="fdm-badge">{strategyLabel}</div>
+
             <div className="fdm-spacer" />
             <div className="fdm-spread-wrap">
               <div className="fdm-spread-val">{opp.spread?.toFixed(4)}%</div>
               <div className="fdm-spread-label">SPREAD</div>
             </div>
+            <div className="fdm-spacer" />
+
+            <button
+              className={`fdm-btn fav ${isFavorite ? 'active' : ''}`}
+              onClick={() => onToggleFavorite?.()}
+              title={isFavorite ? 'Убрать из избранного' : 'В избранное'}
+            >
+              <Star size={14} fill={isFavorite ? 'currentColor' : 'none'} />
+            </button>
+            <button
+              className="fdm-btn trash"
+              onClick={() => onBlacklist?.()}
+              title="В чёрный список (скрыть пару)"
+            >
+              <Trash2 size={14} />
+            </button>
             <button className="fdm-btn close" onClick={onClose}>
               <X size={14} />
             </button>
@@ -791,7 +880,10 @@ function FundingDetailModal({
                   }}
                 >
                   <div className="fdm-ex-tag short">SHORT FUTURES</div>
-                  <div className="fdm-ex-name">{bidExName}</div>
+                  <div className="fdm-ex-name">
+                    <ExchangeLogo exchange={bidExName} size={18} />
+                    {bidExName}
+                  </div>
                   <div className="fdm-ex-row">
                     <span>VWAP Bid</span>
                     <b>{vwapBid ? formatPrice(vwapBid) : '—'}</b>
@@ -826,7 +918,10 @@ function FundingDetailModal({
                   <div className="fdm-ex-tag buy">
                     {isFF ? 'LONG FUTURES' : 'BUY SPOT'}
                   </div>
-                  <div className="fdm-ex-name">{askExName}</div>
+                  <div className="fdm-ex-name">
+                    <ExchangeLogo exchange={askExName} size={18} />
+                    {askExName}
+                  </div>
                   <div className="fdm-ex-row">
                     <span>VWAP Ask</span>
                     <b>{vwapAsk ? formatPrice(vwapAsk) : '—'}</b>

@@ -382,6 +382,36 @@ const style = `
     color: var(--error);
   }
 
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 2, MOBILE_PLAN.md)
+     ══════════════════════════════════════════════════════════════
+     Панель фиксированной ширины: 320px в обычном режиме, 420px в
+     режиме funding. 420px САМА ПО СЕБЕ шире большинства телефонов —
+     на узком экране, будучи position:fixed;right:0, она вылезала бы
+     за левый край экрана и часть контента была бы недостижима.
+     На мобиле панель растягивается на всю ширину экрана.
+  */
+  @media (max-width: 768px) {
+    .drawer,
+    .drawer.mode-funding {
+      width: 100%;
+      backdrop-filter: blur(16px) saturate(150%);
+      -webkit-backdrop-filter: blur(16px) saturate(150%);
+    }
+
+    .drawer-header {
+      padding-top: calc(20px + env(safe-area-inset-top));
+    }
+
+    .drawer-close {
+      width: 40px;
+      height: 40px;
+    }
+
+    .drawer-footer {
+      padding-bottom: calc(20px + env(safe-area-inset-bottom));
+    }
+  }
 `
 
 function FilterDrawer({ open, onClose, filters, onFilters, defaultFilters, onSaveSettings, canSave, saveStatus, mode = 'futures', activeNotifications, onToggleNotifications }) {

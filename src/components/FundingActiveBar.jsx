@@ -11,7 +11,7 @@
  */
 
 import { X } from 'lucide-react'
-import { useState } from 'react'
+import ExchangeLogo from './ExchangeLogo.jsx'
 
 const style = `
   .fab {
@@ -181,9 +181,9 @@ function FundingActiveBar({ trades, onSelect, onRemove }) {
               <div className="fab-divider" />
 
               <div className="fab-exchanges">
-                <span className="fab-ex-badge">{trade.opp.exchange_bid}</span>
+                <ExchangeLogo exchange={trade.opp.exchange_bid} size={16} />
                 <span style={{ color: 'var(--border)' }}>→</span>
-                <span className="fab-ex-badge">{askEx}</span>
+                <ExchangeLogo exchange={askEx} size={16} />
               </div>
 
               <div className="fab-divider" />

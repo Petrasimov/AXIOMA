@@ -61,11 +61,20 @@ const style = `
   .tp-bg-glow::after { content:''; position:absolute; width:480px; height:480px; bottom:40px; right:6%; background: radial-gradient(circle, rgba(0,201,122,0.08), transparent 70%); animation: tp-float 26s ease-in-out infinite reverse; }
   @keyframes tp-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(26px)} }
 
+  /* Декоративный бесконечный дрейф фонового свечения — уважаем
+     prefers-reduced-motion (Партия 7, MOBILE_PLAN.md) */
+  @media (prefers-reduced-motion: reduce) {
+    .tp-bg-glow::before,
+    .tp-bg-glow::after {
+      animation: none;
+    }
+  }
+
   .tp-inner { position: relative; z-index: 1; }
 
   /* ── top grid: hero + status ── */
   .tp-top { display: grid; grid-template-columns: 1fr 320px; gap: 24px; padding: 40px 48px 8px; }
-  @media (max-width: 900px) { .tp-top { grid-template-columns: 1fr; } }
+  @media (max-width: 1024px) { .tp-top { grid-template-columns: 1fr; } }
 
   .tp-hero {
     background: var(--glass-fill); backdrop-filter: blur(18px) saturate(140%);
@@ -88,7 +97,7 @@ const style = `
 
   /* Описание — по ширине не больше половины блока, прижато влево. */
   .tp-hero-desc { max-width: 50%; align-self: flex-start; }
-  @media (max-width: 900px) { .tp-hero-desc { max-width: 100%; } }
+  @media (max-width: 1024px) { .tp-hero-desc { max-width: 100%; } }
   .tp-eyebrow { display:flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:10px; letter-spacing:2px; color:var(--accent-bright); margin-bottom:14px; text-transform:uppercase; }
   .tp-h1 { font-size:34px; font-weight:900; letter-spacing:-1px; line-height:1.15; margin-bottom:14px; }
   .tp-h1 span { color:var(--accent-bright); }
@@ -177,6 +186,38 @@ const style = `
   .tp-card-badge { display:flex; align-items:center; gap:5px; font-size:9px; font-weight:700; letter-spacing:1px; padding:4px 10px; border-radius:20px; color:var(--mc); border:1px solid var(--mc); background: color-mix(in srgb, var(--mc) 10%, transparent); }
   .tp-card-progress { height:4px; background:rgba(255,255,255,0.06); }
   .tp-card-progress-fill { height:100%; background:var(--mc); transition:width 0.4s ease; }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 5, MOBILE_PLAN.md)
+     ══════════════════════════════════════════════════════════════
+     БАГ: .tp-modules имел padding 48px с каждой стороны, а .tp-grid
+     задан как minmax(290px,1fr). На экране 360px доступно всего
+     360-96=264px — меньше 290px минимума карточки. Тот же класс
+     ошибки, что уже встречался в OpportunityGrid.jsx (Партия 2) и
+     TrainingPage здесь не исключение. Главный фикс — снизить паддинг;
+     на самых узких экранах дополнительно снижаем сам минимум сетки.
+  */
+  @media (max-width: 1024px) {
+    .tp-top { padding: 24px 20px 8px; gap: 16px; }
+    .tp-hero { padding: 24px 22px; }
+    .tp-h1 { font-size: 24px; }
+    .tp-sub { font-size: 13px; }
+    .tp-status { padding: 18px; }
+
+    .tp-modules { padding: 16px 20px 48px; }
+    .tp-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  }
+
+  @media (max-width: 480px) {
+    .tp-top { padding: 20px 14px 8px; }
+    .tp-hero { padding: 20px 16px; }
+    .tp-h1 { font-size: 21px; }
+
+    .tp-modules { padding: 14px 14px 40px; }
+    /* Совсем узкие экраны — минимум сетки снижаем ещё раз до полной
+       уверенности, что карточка не упрётся в свою собственную колонку */
+    .tp-grid { grid-template-columns: 1fr; }
+  }
 `
 
 function TrainingPage({ onNavigate }) {

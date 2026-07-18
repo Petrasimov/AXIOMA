@@ -152,6 +152,27 @@ const style = `
   }
   .tm-warn-ic { color:var(--warning); flex-shrink:0; }
   .tm-warn b { color:var(--warning); }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 3, MOBILE_PLAN.md)
+     ══════════════════════════════════════════════════════════════
+     .tm-ctrl и .tm-legend уже были flex-wrap — на мобиле корректно
+     переносятся в несколько строк без доп. правок. Здесь в основном
+     отступы и типографика: главный резерв места — .tm-inner padding
+     32px с боков (почти 18% ширины экрана на телефоне).
+  */
+  @media (max-width: 1024px) {
+    .tm-inner { padding: 24px 16px 40px; }
+    .tm-h1 { font-size: 24px; }
+    .tm-sub { font-size: 13px; }
+
+    .tm-ctrl { padding: 12px; gap: 8px; }
+    .tm-search { min-width: 140px; }
+    .tm-meta { margin-left: 0; width: 100%; gap: 10px; }
+
+    .tm-panel-head { padding: 12px 14px; }
+    .tm-legend { gap: 5px 12px; font-size: 10px; }
+  }
 `
 
 const MIN_VOLUME_OPTIONS = [

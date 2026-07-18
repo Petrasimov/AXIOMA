@@ -243,6 +243,82 @@ const style = `
   }
   .exit-calc-result-label { font-size: 8px; color: #3d6680; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px; }
   .exit-calc-result-val { font-family: var(--font-mono); font-size: 16px; font-weight: 700; }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 2, MOBILE_PLAN.md)
+     ══════════════════════════════════════════════════════════════
+     .dm-body — жёсткая сетка "370px | 1fr". На телефоне 370px левая
+     колонка ОДНА уже шире всего экрана — двухколоночную раскладку
+     сохранить невозможно ни при каком ужимании пропорций, нужна
+     принципиально другая структура: modal → fullscreen sheet,
+     колонки → одна под другой.
+
+     .dm-col-l/.dm-col-r теряют собственный overflow-y (на десктопе
+     каждая колонка скроллится независимо — на мобиле это стало бы
+     двумя вложенными скроллбарами друг под другом, неудобно). Вместо
+     этого скроллится вся .dm-body целиком, единым потоком.
+
+     .chart-area{flex:1} на десктопе тянется на всю высоту строки
+     грида — при grid-template-columns:1fr колонки становятся двумя
+     авто-высокими строками, и .dm-col-r больше не имеет фиксированной
+     высоты, относительно которой можно "flex:1". Без явного min-height
+     график схлопнулся бы почти до нуля — задаём минимальную высоту.
+  */
+  @media (max-width: 768px) {
+    .modal-overlay { padding: 0; align-items: stretch; }
+
+    .modal {
+      width: 100%;
+      max-width: 100%;
+      height: 100%;
+      max-height: 100dvh;
+      border-radius: 0;
+      /* 30px blur ощутимо просаживает FPS на мобильном GPU — как и в ProfileModal.jsx */
+      backdrop-filter: blur(16px) saturate(160%);
+      -webkit-backdrop-filter: blur(16px) saturate(160%);
+    }
+
+    .dm-header {
+      padding: 12px 14px;
+      padding-top: calc(12px + env(safe-area-inset-top));
+    }
+    .dm-btn { width: 40px; height: 40px; }
+
+    .dm-body {
+      grid-template-columns: 1fr;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .dm-col-l {
+      border-right: none;
+      border-bottom: 1px solid var(--glass-border);
+      overflow-y: visible;
+    }
+    .dm-col-r {
+      overflow: visible;
+    }
+
+    /* 4 таба заголовками не влезают в ширину телефона — превращаем
+       в горизонтально скроллящуюся полосу вместо переноса/обрезки */
+    .chart-tabs {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .chart-tabs::-webkit-scrollbar { display: none; }
+    .chart-tab { padding: 12px 13px; }
+
+    .chart-area { min-height: 220px; }
+
+    .exit-calc-inputs { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 480px) {
+    .dm-symbol { font-size: 16px; }
+    .dm-strategy { font-size: 9px; padding: 3px 9px; }
+    /* Возраст возможности — второстепенная деталь при таком дефиците места */
+    .dm-age-badge { display: none; }
+  }
 `
 
 import { useState, useEffect, useRef } from 'react'

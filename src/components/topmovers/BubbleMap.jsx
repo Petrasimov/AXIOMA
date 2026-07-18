@@ -107,16 +107,69 @@ const style = `
     font-family: var(--font-mono); text-align: center;
   }
 
+  /* Явная кнопка внутри тултипа — основной путь для тач-экранов.
+     Раньше был просто текст-подсказка «клик → терминал», но на тач-экране
+     первый тап по пузырю ТОЛЬКО открывает тултип (см. JS), открыть биржу
+     нужно отдельным осознанным действием — кнопка вместо текста. */
+  .bm-tip-open-btn {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    padding: 9px 10px;
+    border-radius: var(--radius-sm);
+    background: rgba(93,163,214,0.1);
+    border: 1px solid var(--glass-border-hover);
+    color: var(--accent-bright);
+    font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+    letter-spacing: 0.3px;
+    cursor: pointer; text-align: center;
+    transition: background .15s;
+  }
+  .bm-tip-open-btn:hover { background: rgba(93,163,214,0.18); }
+
+  /* Невидимый оверлей — закрыть тултип тапом мимо. Только на мобиле:
+     на десктопе тултип и так закрывается по mouseleave, доп. слой,
+     ловящий клики по всему экрану, там не нужен и может помешать. */
+  .bm-tip-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    z-index: 499; /* на 1 меньше .bm-tip (500) — тултип поверх оверлея */
+    background: transparent;
+  }
+
   .bm-empty {
     height: 100%; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 10px;
     color: var(--text-muted); font-size: 13px;
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 3, MOBILE_PLAN.md)
+     ══════════════════════════════════════════════════════════════
+     На тач-экранах :hover/mouseenter не срабатывает — тултип
+     переведён на тап (логика в JS, см. showTip/handleBubbleClick).
+     Здесь только сопутствующие стили: тултип становится interactive
+     (pointer-events:auto — иначе кнопка внутри нетапабельна),
+     появляется оверлей для закрытия тапом мимо, карта чуть ниже
+     (460px на телефоне — четверть экрана впустую).
+  */
+  @media (max-width: 1024px) {
+    .bm-box { height: 360px; }
+    .bm-tip { pointer-events: auto; }
+    .bm-tip-overlay { display: block; }
   }
 `
 
 // Порог, с которого расхождение ЦЕН между биржами считаем заметным (%).
 // Это уже потенциальная маржа арбитража до комиссий, поэтому порог низкий.
 const DIVERGE_THRESHOLD = 2
+
+// Стабильный ключ монеты — сравнивать объекты по ссылке ненадёжно
+// (массив coins может пересобираться), а по этому ключу уже верстается
+// React key у пузырей и строк таблицы.
+function coinKey(coin) {
+    return `${coin.symbol}_${coin.exchange}`
+}
 
 function BubbleMap({ coins }) {
     const boxRef = useRef(null)
@@ -178,6 +231,20 @@ function BubbleMap({ coins }) {
     }
     function hideTip() { setTip(null) }
 
+    // Тач-экраны: mouseenter не срабатывает, поэтому к моменту клика
+    // тултип ещё не показан — первый тап только открывает его. На
+    // десктопе tip уже выставлен через onMouseEnter к моменту клика,
+    // так что условие сразу true и клик ведёт на биржу как раньше —
+    // поведение десктопа не меняется ни на шаг.
+    function handleBubbleClick(e, coin) {
+        const alreadyShowing = tip && coinKey(tip.coin) === coinKey(coin)
+        if (alreadyShowing) {
+            openTerminal(coin.exchange, coin.symbol, coin.market)
+        } else {
+            showTip(e, coin)
+        }
+    }
+
     if (!coins?.length) {
         return (
             <>
@@ -215,7 +282,7 @@ function BubbleMap({ coins }) {
                             onMouseEnter={e => showTip(e, coin)}
                             onMouseMove={moveTip}
                             onMouseLeave={hideTip}
-                            onClick={() => openTerminal(coin.exchange, coin.symbol, coin.market)}
+                            onClick={e => handleBubbleClick(e, coin)}
                         >
                             <span className="bm-ex-tag">{exInfo.name}</span>
                             <span className="bm-sym" style={{ fontSize: fsSym }}>{coin.symbol}</span>
@@ -231,9 +298,12 @@ function BubbleMap({ coins }) {
             </div>
 
             {tip && createPortal(
-                <div
-                    className="bm-tip show"
-                    style={{
+                <>
+                    {/* Закрыть тултип тапом мимо — активен только на мобиле (см. CSS) */}
+                    <div className="bm-tip-overlay" onClick={hideTip} />
+                    <div
+                        className="bm-tip show"
+                        style={{
                         // Тултип рендерится в document.body (портал), поэтому position:fixed
                         // считается от окна, а не от панели с overflow/backdrop-filter —
                         // иначе его обрезало и уводило в угол. У краёв экрана — переворот.
@@ -306,8 +376,17 @@ function BubbleMap({ coins }) {
                         </div>
                     )}
 
-                    <div className="bm-tip-hint">клик → терминал биржи</div>
-                </div>,
+                    <button
+                        className="bm-tip-open-btn"
+                        onClick={e => {
+                            e.stopPropagation()
+                            openTerminal(tip.coin.exchange, tip.coin.symbol, tip.coin.market)
+                        }}
+                    >
+                        Открыть терминал биржи →
+                    </button>
+                    </div>
+                </>,
                 document.body
             )}
         </>

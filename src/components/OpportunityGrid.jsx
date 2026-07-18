@@ -1,5 +1,37 @@
+import { useState, useEffect } from "react"
 import OpportunityCard from "./OpportunityCard.jsx"
 import { getExchangeInfo, getSpreadColor, calcProfit, formatVolume, formatAge, formatPrice, formatTimeRemaining, getAgeIcon } from "../utils"
+
+// Порог мобильного режима — тот же, что у Sidebar.jsx (Партия 1) и
+// остальных файлов Партии 2.
+const MOBILE_BREAKPOINT = 1024
+
+// Продуктовое решение: на мобиле доступен только режим карточек.
+// Кнопка переключения в Header.jsx уже скрыта на этой ширине, но это
+// не единственная защита — viewMode='table' может прийти из localStorage
+// с прошлой десктопной сессии (человек открыл сайт на телефоне после
+// того, как переключал вид на компьютере). Поэтому здесь отдельная,
+// не зависящая от Header, проверка реальной ширины экрана.
+function useIsMobileViewport() {
+    const [isMobile, setIsMobile] = useState(() =>
+        typeof window !== 'undefined' ? window.innerWidth <= MOBILE_BREAKPOINT : false
+    )
+
+    useEffect(() => {
+        const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`)
+        const handler = e => setIsMobile(e.matches)
+        // addEventListener на MediaQueryList поддерживают все актуальные браузеры;
+        // addListener — устаревший, но более широко совместимый фолбэк.
+        if (mq.addEventListener) mq.addEventListener('change', handler)
+        else mq.addListener(handler)
+        return () => {
+            if (mq.removeEventListener) mq.removeEventListener('change', handler)
+            else mq.removeListener(handler)
+        }
+    }, [])
+
+    return isMobile
+}
 
 const style = `
     .grid-container {
@@ -23,6 +55,25 @@ const style = `
         box-shadow: var(--shadow-glass);
         overflow: hidden;
         margin: 20px;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 2, MOBILE_PLAN.md)
+       ══════════════════════════════════════════════════════════════
+       БАГ: minmax(360px, 1fr) требует минимум 360px на карточку.
+       На телефоне после padding:16px с обеих сторон доступно
+       заметно меньше 360px (например ~330px на экране 360px шириной) —
+       колонка физически не помещается, сетка вылезала бы за край
+       экрана горизонтальным скроллом или обрезкой. Одна колонка
+       снимает проблему полностью при любой ширине экрана.
+
+       Режим таблицы на мобиле не рендерится вообще (см. JS ниже,
+       effectiveViewMode) — .table-wrapper/.table-view media-правила
+       здесь не нужны.
+    */
+    @media (max-width: 1024px) {
+        .grid-container { padding: 12px; }
+        .grid-view { grid-template-columns: 1fr; }
     }
 
     .table-view {
@@ -147,6 +198,10 @@ const style = `
 `
 
 function OpportunityGrid({ opportunities, viewMode, tradeAmount, onSelect, favorites, onFavorite, onHide}) {
+    const isMobile = useIsMobileViewport()
+    // На мобиле режим карточек — единственный доступный, независимо от
+    // того, что сохранено в viewMode (см. комментарий у useIsMobileViewport).
+    const effectiveViewMode = isMobile ? 'grid' : viewMode
 
     if (!opportunities.length) {
         return (
@@ -162,7 +217,7 @@ function OpportunityGrid({ opportunities, viewMode, tradeAmount, onSelect, favor
         )
     }
 
-    if (viewMode === 'table') {
+    if (effectiveViewMode === 'table') {
         return (
             <>
                 <style>{style}</style>
