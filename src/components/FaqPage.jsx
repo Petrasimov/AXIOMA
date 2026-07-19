@@ -12,9 +12,10 @@
  * Доступна всем, без проверки подписки.
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { HelpCircle, Search, ChevronDown, X, MessageCircle } from 'lucide-react'
 import { FAQ_ITEMS, FAQ_CATEGORIES } from '../data/faqContent.js'
+import { setJsonLd, removeJsonLd } from '../seo.js'
 import Footer from './Footer.jsx'
 
 const style = `
@@ -203,6 +204,24 @@ function FaqPage({ onNavigate }) {
     const [cat, setCat] = useState('all')
     const [query, setQuery] = useState('')
     const [openId, setOpenId] = useState(null)
+
+    // FAQPage structured data — из faqContent.js.
+    // Google FAQ-сниппеты убрал (май 2026), но разметка полезна Яндексу и AI-выдаче.
+    useEffect(() => {
+        setJsonLd('faq-jsonld', {
+            '@context': 'https://schema.org',
+            '@type': 'FAQPage',
+            mainEntity: FAQ_ITEMS.map(it => ({
+                '@type': 'Question',
+                name: it.q,
+                acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: Array.isArray(it.a) ? it.a.join(' ') : String(it.a),
+                },
+            })),
+        })
+        return () => removeJsonLd('faq-jsonld')
+    }, [])
 
     // Считаем, сколько вопросов в каждой категории (для бейджей)
     const catCounts = useMemo(() => {

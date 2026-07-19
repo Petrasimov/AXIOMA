@@ -250,7 +250,7 @@ function TrainingPage({ onNavigate }) {
                             <div className="tp-hero-text">
                                 <div className="tp-hero-head">
                                     <div className="tp-eyebrow"><GraduationCap size={13} /> ACADEMY</div>
-                                    <div className="tp-h1">Академия <span>AXIOMA</span></div>
+                                    <h1 className="tp-h1">Академия <span>AXIOMA</span></h1>
                                 </div>
 
                                 <div className="tp-hero-desc">
@@ -369,7 +369,7 @@ function TrainingPage({ onNavigate }) {
                                                             <div className="tp-card-icon"><Icon size={20} /></div>
                                                             <span className="tp-card-num">{String(mod.order).padStart(2, '0')}</span>
                                                         </div>
-                                                        <div className="tp-card-title">{mod.title}</div>
+                                                        <h3 className="tp-card-title">{mod.title}</h3>
                                                         <div className="tp-card-desc">{mod.desc}</div>
 
                                                         {modInteractive.length > 0 && (

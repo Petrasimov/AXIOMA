@@ -848,7 +848,7 @@ function AboutPage({ onNavigate }) {
                     <Reveal>
                         <div className="ab-hero">
                             <div className="ab-hero-badge">◆ О ПРОЕКТЕ</div>
-                            <div className="ab-h1">Новый проект<br />от бывших <span>арбитражников</span></div>
+                            <h1 className="ab-h1">Новый проект<br />от бывших <span>арбитражников</span></h1>
                             <div className="ab-hero-sub">
                                 AXIOMA — сканер для всех видов криптоарбитража, который мы строим удобным в первую очередь.
                                 Мы прошли путь от P2P до фьючерсного арбитража, перепробовали десятки чужих сканеров — и решили

@@ -22,6 +22,8 @@ import ProfileModal from "./components/ProfileModal.jsx";
 import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings, toggleNotifications } from "./auth.js";
 import TelegramAuthModal from "./components/TelegramAuthModal.jsx";
 import AccessDenied from "./components/AccessDenied.jsx";
+import { PAGE_TO_TAB, PAGE_TO_PATH, parseLocation, pathForPage } from "./routes.js";
+import { applySeo } from "./seo.js";
 
 const DEFAULT_FILTERS = {
   strategy: { sf: true, ff: true },
@@ -92,36 +94,58 @@ function writeLiveDataCache(enriched) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function App() {
-  const [activeTab, setActiveTab] = useState(() => {
-    try { return localStorage.getItem('activeTab') || 'main' }
-    catch { return 'main' }
-  })
-  const [activePage, setActivePage] = useState(() => {
-    try { return localStorage.getItem('activePage') || 'home' }
-    catch { return 'home' }
-  })
+  // Начальная страница берётся из URL (адрес — источник правды для навигации),
+  // а не из localStorage: прямой заход/краулер на /about должен открыть About,
+  // а корень "/" всегда открывает главную (landing для рекламы).
+  const initialRoute = parseLocation(
+    typeof window !== 'undefined' ? window.location.pathname : '/'
+  )
+
+  const [activeTab, setActiveTab] = useState(() => PAGE_TO_TAB[initialRoute.page] || 'main')
+  const [activePage, setActivePage] = useState(() => initialRoute.page)
   // какой юр-документ открыт (для страницы legal)
-  const [legalDoc, setLegalDoc] = useState('offer')
+  const [legalDoc, setLegalDoc] = useState(() => initialRoute.legalDoc || 'offer')
 
   // модалка профиля пользователя
   const [profileOpen, setProfileOpen] = useState(false)
 
+  // pushPath — синхронизирует адресную строку без перезагрузки страницы.
+  const pushPath = (path) => {
+    try {
+      if (window.location.pathname !== path) {
+        window.history.pushState({}, '', path)
+      }
+    } catch { /* SSR/пререндер — window может отсутствовать */ }
+  }
+
+  // goTo — единый переход: меняет state И синхронизирует URL.
+  // Вся прежняя state-логика сохранена, добавлен только pushState.
+  const goTo = (page, doc) => {
+    if (typeof page !== 'string') return
+    if (page === 'legal') {
+      const d = doc || 'offer'
+      setLegalDoc(d)
+      setActivePage('legal')
+      pushPath(pathForPage('legal', d))
+      return
+    }
+    const tab = PAGE_TO_TAB[page]
+    if (tab) setActiveTab(tab)
+    setActivePage(page)
+    // URL пишем только для известных маршрутов
+    if (PAGE_TO_PATH[page]) pushPath(pathForPage(page))
+  }
+
   // Единый навигатор для футера и внутренних ссылок.
   // Принимает 'futures' | 'funding' | 'training' | 'about' | 'movers' | 'legal:<docId>'
+  // Тонкая обёртка над goTo — сохраняет прежний строковый контракт компонентов.
   const navigateTo = (page) => {
     if (typeof page !== 'string') return
     if (page.startsWith('legal:')) {
-      setLegalDoc(page.split(':')[1] || 'offer')
-      setActivePage('legal')
+      goTo('legal', page.split(':')[1] || 'offer')
       return
     }
-    // faq и legal — страницы без вкладки в сайдбаре (вход через футер)
-    const tabMap = {
-      futures: 'futures', funding: 'funding', training: 'promo',
-      about: 'about', movers: 'movers', home: 'main',
-    }
-    if (tabMap[page]) setActiveTab(tabMap[page])
-    setActivePage(page)
+    goTo(page)
   }
 
   // Переход из «Топ роста» в арбитражный сканер.
@@ -137,8 +161,7 @@ function App() {
     const symbol = coin?.symbol
     if (!symbol) return
     setPendingCoinSearch(symbol)   // задел под будущий поиск в сканере
-    setActiveTab('futures')
-    setActivePage('futures')
+    goTo('futures')
   }
   const [sortMode, setSortMode] = useState(() => {
     try { return localStorage.getItem('sortMode') || 'spread' }
@@ -830,8 +853,27 @@ function App() {
   useEffect(() => { try { localStorage.setItem('sortMode', sortMode) } catch {} }, [sortMode])
   useEffect(() => { try { localStorage.setItem('viewMode', viewMode) } catch {} }, [viewMode])
   useEffect(() => { try { localStorage.setItem('userFilters', JSON.stringify(filters)) } catch {} }, [filters])
-  useEffect(() => { try { localStorage.setItem('activeTab', activeTab) } catch {} }, [activeTab])
-  useEffect(() => { try { localStorage.setItem('activePage', activePage) } catch {} }, [activePage])
+  // Навигация теперь живёт в URL (history), а не в localStorage —
+  // поэтому activeTab/activePage больше не сохраняем туда.
+
+  // Синхронизация с кнопками «назад/вперёд» браузера.
+  useEffect(() => {
+    const onPop = () => {
+      const { page, legalDoc: doc } = parseLocation(window.location.pathname)
+      if (doc) setLegalDoc(doc)
+      const tab = PAGE_TO_TAB[page]
+      if (tab) setActiveTab(tab)
+      setActivePage(page)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  // Обновляем <head> (title/description/canonical/OG) под текущую страницу.
+  // Пререндер запечёт это в статический HTML каждой страницы.
+  useEffect(() => {
+    applySeo(activePage, { legalDoc })
+  }, [activePage, legalDoc])
 
   const handleOpenModal = (opp) => {
     // Проверяем activeTrades — монета уже в позиции?
@@ -1020,7 +1062,7 @@ function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         activePage={activePage}
-        onPageChange={setActivePage}
+        onPageChange={goTo}
         authUser={auth.status === 'ready' ? auth.user : null}
         onLogout={handleLogout}
         onOpenProfile={() => setProfileOpen(true)}
@@ -1029,7 +1071,7 @@ function App() {
       <div className="main-area" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
         {activePage === 'home' ? (
           <HomePage
-            onOpenScanner={() => { setActiveTab('futures'); setActivePage('futures') }}
+            onOpenScanner={() => goTo('futures')}
             onNavigate={navigateTo}
           />
         ) : activePage === 'training' ? (

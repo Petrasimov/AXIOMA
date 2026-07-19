@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /scanner
+Disallow: /funding
+Disallow: /api
+
+# UTM-метки с рекламы не должны плодить дубли в Яндексе
+Clean-param: utm_source&utm_medium&utm_campaign&utm_term&utm_content&etext
+
+Sitemap: https://axioma-scan.ru/sitemap.xml

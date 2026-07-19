@@ -2172,10 +2172,10 @@ export default function HomePage({ onOpenScanner, onNavigate }) {
 
         {/* ══ BLOCK 1: HERO ══ */}
         <div className="hp-hero">
-          <div className="hp-h1">
+          <h1 className="hp-h1">
             Находи спреды.<br />
             Торгуй <span className="hp-h1-grad">без риска</span>.
-          </div>
+          </h1>
 
           <div className="hp-sub">
             AXIOMA мгновенно получает свежие арбитражные возможности с 8 крупнейших бирж и показывает их в реальном времени. Рыночно-нейтральная стратегия — твой заработок не зависит от направления рынка.
@@ -2225,9 +2225,9 @@ export default function HomePage({ onOpenScanner, onNavigate }) {
               <div className="hp-section-label">// как это работает</div>
             </Reveal>
             <Reveal delay={120}>
-              <div className="hp-howto-title">
+              <h2 className="hp-howto-title">
                 4 шага от сигнала<br />до <span>прибыли</span>
-              </div>
+              </h2>
             </Reveal>
 
             <div className="hp-timeline">
@@ -2532,7 +2532,7 @@ export default function HomePage({ onOpenScanner, onNavigate }) {
           <Reveal>
             <div className="hp-sec-head">
               <div className="hp-sec-eyebrow"><GraduationCap size={13} /> АКАДЕМИЯ AXIOMA</div>
-              <div className="hp-sec-title">Собственная <span>Академия арбитража</span></div>
+              <h2 className="hp-sec-title">Собственная <span>Академия арбитража</span></h2>
               <div className="hp-sec-sub">
                 Полноценная обучающая платформа встроена прямо в сканер — не статьи со стороны,
                 а интерактивный курс с симуляторами, схемами и квизами. Вот как она выглядит изнутри.
@@ -2613,7 +2613,7 @@ export default function HomePage({ onOpenScanner, onNavigate }) {
           <Reveal>
             <div className="hp-sec-head">
               <div className="hp-sec-eyebrow"><Users size={13} /> КОМАНДА</div>
-              <div className="hp-sec-title">Три человека <span>за проектом</span></div>
+              <h2 className="hp-sec-title">Три человека <span>за проектом</span></h2>
               <div className="hp-sec-sub">
                 Мы бывшие арбитражники, которые устали от неудобных сканеров и решили
                 сделать свой. Нажми на карточку, чтобы узнать больше.
@@ -2759,7 +2759,7 @@ export default function HomePage({ onOpenScanner, onNavigate }) {
           <Reveal>
             <div className="hp-sec-head">
               <div className="hp-sec-eyebrow"><HelpCircle size={13} /> ВОПРОСЫ</div>
-              <div className="hp-sec-title">Частые <span>вопросы</span></div>
+              <h2 className="hp-sec-title">Частые <span>вопросы</span></h2>
               <div className="hp-sec-sub">
                 Всё, что обычно спрашивают перед началом работы со сканером.
               </div>

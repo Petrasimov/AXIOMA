@@ -236,7 +236,7 @@ function TopMoversPage({ onNavigate }) {
                     {/* Шапка */}
                     <div className="tm-head">
                         <div className="tm-eyebrow"><Flame size={13} /> ЛИДЕРЫ РЫНКА</div>
-                        <div className="tm-h1">Топ <span>роста и падения</span></div>
+                        <h1 className="tm-h1">Топ <span>роста и падения</span></h1>
                         <div className="tm-sub">
                             Монеты с наибольшим изменением цены за 24 часа на 8 биржах.
                             Размер пузыря — сила движения. Показывается биржа с самым сильным движением

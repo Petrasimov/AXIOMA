@@ -123,7 +123,7 @@ function LegalPage({ initialDoc, onNavigate }) {
 
                     <div className="lg-head">
                         <div className="lg-eyebrow"><FileText size={13} /> ДОКУМЕНТЫ</div>
-                        <div className="lg-h1">Правовая информация</div>
+                        <h1 className="lg-h1">Правовая информация</h1>
                         <div className="lg-sub">Условия использования сервиса AXIOMA и обработки данных</div>
                     </div>
 
@@ -156,7 +156,7 @@ function LegalPage({ initialDoc, onNavigate }) {
                         </div>
 
                         <div className="lg-doc">
-                            <div className="lg-doc-title">{doc.title}</div>
+                            <h2 className="lg-doc-title">{doc.title}</h2>
                             <div className="lg-doc-sub">{doc.subtitle}</div>
                             <div className="lg-doc-date">
                                 Редакция от {LEGAL_ENTITY.effectiveDate} · {LEGAL_READY ? 'действует' : 'проект документа'}
@@ -164,7 +164,7 @@ function LegalPage({ initialDoc, onNavigate }) {
 
                             {doc.sections.map((sec, i) => (
                                 <div key={i} className="lg-section">
-                                    <div className="lg-section-h">{sec.heading}</div>
+                                    <h3 className="lg-section-h">{sec.heading}</h3>
                                     {sec.blocks.map(renderBlock)}
                                 </div>
                             ))}
