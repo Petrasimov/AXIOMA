@@ -40,6 +40,8 @@ export const PAGE_SEO = {
   futures: { title: 'Сканер арбитража — AXIOMA SCAN', description: DEFAULT.description, noindex: true },
   funding: { title: 'Арбитраж фандинга — AXIOMA SCAN', description: DEFAULT.description, noindex: true },
   api:     { title: 'API — AXIOMA SCAN',                description: DEFAULT.description, noindex: true },
+  pay_success: { title: 'Оплата — AXIOMA SCAN', description: DEFAULT.description, noindex: true },
+  pay_cancel:  { title: 'Оплата отменена — AXIOMA SCAN', description: DEFAULT.description, noindex: true },
 }
 
 // Человекочитаемые названия для хлебных крошек (Главная → …)

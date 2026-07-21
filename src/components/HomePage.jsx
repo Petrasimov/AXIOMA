@@ -13,6 +13,7 @@ import { TRAINING_MODULES } from "../data/trainingContent.js"
 import { useTrainingProgress, resolveStatus } from "../hooks/useTrainingProgress.js"
 import { TEAM } from "../data/teamContent.js"
 import { FAQ_HOMEPAGE } from "../data/faqContent.js"
+import { PLAN, NETWORKS, BENEFITS } from "../subscriptionInfo.js"
 
 // Иконки модулей Академии (резолвим по имени из данных)
 const MODULE_ICONS = {
@@ -1480,6 +1481,150 @@ const style = `
     .hp-faq-q { padding: 16px 18px; font-size: 14.5px; }
     .hp-faq-a { padding: 0 18px 18px 18px; }
   }
+
+  /* ══════════ ТАРИФ / ПОДПИСКА (hp-plan) ══════════ */
+  .hp-plan {
+    padding: 80px 48px;
+    border-top: 1px solid var(--glass-border);
+    position: relative;
+  }
+
+  .hp-plan-card {
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    margin: 40px auto 0;
+    padding: 36px 32px;
+    background: var(--glass-fill);
+    backdrop-filter: blur(28px) saturate(150%);
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    border: 1px solid var(--glass-border-hover);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 24px 64px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+    text-align: center;
+  }
+
+  .hp-plan-badge {
+    display: inline-block;
+    padding: 5px 14px;
+    margin-bottom: 18px;
+    border-radius: 20px;
+    background: rgba(47,105,151,0.16);
+    border: 1px solid var(--glass-border-hover);
+    color: var(--accent-bright);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .hp-plan-price {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .hp-plan-price-num {
+    font-size: 56px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    color: var(--text-primary);
+    line-height: 1;
+  }
+
+  .hp-plan-price-per {
+    font-size: 17px;
+    color: var(--text-secondary);
+  }
+
+  .hp-plan-price-note {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    letter-spacing: 0.2px;
+  }
+
+  .hp-plan-list {
+    list-style: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 18px;
+    margin: 28px 0;
+    text-align: left;
+  }
+
+  .hp-plan-li {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+
+  .hp-plan-li svg {
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: var(--success);
+  }
+
+  .hp-plan-li span {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  .hp-plan-nets {
+    padding-top: 22px;
+    margin-bottom: 26px;
+    border-top: 1px solid var(--glass-border);
+  }
+
+  .hp-plan-nets-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+  }
+
+  .hp-plan-nets-label b {
+    color: var(--text-primary);
+  }
+
+  .hp-plan-nets-pills {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .hp-plan-net {
+    padding: 4px 11px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--glass-border);
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    letter-spacing: 0.3px;
+  }
+
+  .hp-plan-cta {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+  }
+
+  @media (max-width: 768px) {
+    .hp-plan { padding: 56px 24px 64px; }
+  }
+
+  @media (max-width: 480px) {
+    .hp-plan { padding: 48px 18px 56px; }
+    .hp-plan-card { padding: 28px 20px; }
+    .hp-plan-price-num { font-size: 46px; }
+    .hp-plan-list { grid-template-columns: 1fr; }
+  }
 `
 
 const EXCHANGES_LIST = [
@@ -2006,7 +2151,7 @@ function Typewriter({ text, active, speed = 12 }) {
   )
 }
 
-export default function HomePage({ onOpenScanner, onNavigate }) {
+export default function HomePage({ onOpenScanner, onNavigate, onSubscribe }) {
   const [step, setStep] = useState(0)
   const [fundingRate, setFundingRate] = useState(4) // -10..10 → -0.10%..+0.10%
   const timerRef = useRef(null)
@@ -2745,6 +2890,66 @@ export default function HomePage({ onOpenScanner, onNavigate }) {
             <div className="hp-ac-cta">
               <button className="hp-sec-btn" onClick={() => onNavigate?.('about')}>
                 ПОДРОБНЕЕ О ПРОЕКТЕ
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          </Reveal>
+        </div>
+
+        {/* ══ ТАРИФ / ПОДПИСКА ══ */}
+        {/* Заголовок → карточка тарифа (цена, преимущества, сети, CTA).
+            Данные из subscriptionInfo.js (общие с paywall). CTA дергает
+            onSubscribe (в P1a — заглушка, живая оплата подключается в P2). */}
+        <div className="hp-plan">
+          <Reveal>
+            <div className="hp-sec-head">
+              <div className="hp-sec-eyebrow"><Crown size={13} /> ПОДПИСКА</div>
+              <h2 className="hp-sec-title">Один тариф — <span>всё включено</span></h2>
+              <div className="hp-sec-sub">
+                Без скрытых уровней и доплат: полный доступ к обоим сканерам, Академии и
+                уведомлениям за фиксированную цену. Оплата криптой — комиссии сети берём на себя.
+              </div>
+            </div>
+          </Reveal>
+
+          <Reveal variant="scale" delay={140}>
+            <div className="hp-plan-card">
+              <div className="hp-plan-badge">PRO-доступ</div>
+
+              <div className="hp-plan-price">
+                <span className="hp-plan-price-num">${PLAN.priceUsd}</span>
+                <span className="hp-plan-price-per">/ {PLAN.period}</span>
+              </div>
+              <div className="hp-plan-price-note">
+                оплата в {PLAN.currency} · комиссии на нас · доступ сразу после оплаты
+              </div>
+
+              <ul className="hp-plan-list">
+                {BENEFITS.map((b) => (
+                  <li className="hp-plan-li" key={b.title}>
+                    <Check size={15} /> <span>{b.title}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="hp-plan-nets">
+                <div className="hp-plan-nets-label">
+                  Принимаем <b>USDT</b> в сетях
+                </div>
+                <div className="hp-plan-nets-pills">
+                  {NETWORKS.map((n) => (
+                    <span className="hp-plan-net" key={n.key} title={n.hint}>
+                      {n.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                className="hp-sec-btn primary hp-plan-cta"
+                onClick={() => onSubscribe?.()}
+              >
+                ОФОРМИТЬ ПОДПИСКУ — ${PLAN.priceUsd}
                 <ArrowRight size={14} />
               </button>
             </div>

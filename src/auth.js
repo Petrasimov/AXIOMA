@@ -141,6 +141,225 @@ export async function authenticateWithTelegram(tgData) {
     }
 }
 
+// ─── Билдер объекта сессии из AuthResponse ───────────────────────────────────
+// Единая точка сборки user-объекта для парольного входа и регистрации, чтобы
+// форма сессии совпадала с той, что кладёт authenticateWithTelegram.
+//   вход:  data — тело AuthResponse от бэкенда (может быть null при пустом теле)
+//   выход: объект пользователя для saveSession / sessionStorage
+//   побочных эффектов нет
+function buildUserFromAuthResponse(data) {
+    return {
+        userId:       data?.userId,
+        login:        data?.login        ?? null,
+        // У парольного аккаунта нет Telegram-username — для отображения используем login.
+        username:     data?.login        ?? null,
+        isCexCexPaid: data?.isCexCexPaid ?? false,
+        isDexCexPaid: data?.isDexCexPaid ?? false,
+        isAdmin:      data?.isAdmin      ?? false,
+        isActive:     data?.isActive     ?? true,
+        userSettings: data?.userSettings ?? null,
+        photoUrl:     null,
+    }
+}
+
+// ─── Вход по логину и паролю ──────────────────────────────────────────────────
+// POST /api/auth/login { login, password } → cookie AxionScan.Auth + AuthResponse.
+// Возвращает ту же форму, что authenticateWithTelegram, чтобы модалка обрабатывала
+// оба пути входа одинаково.
+//   вход:  login, password — строки из формы
+//   выход: { ok: true,  user }                        — вход выполнен, сессия готова
+//          { ok: false, reason: 'invalid_credentials'}— 401: неверные данные / доступ отключён
+//          { ok: false, reason: 'error' }             — 5xx / некорректный ответ
+//          { ok: false, reason: 'network_error' }     — сеть недоступна
+// ⚠️ Пароль НИКОГДА не логируется — ни в console, ни в aLog.
+export async function loginWithPassword(login, password) {
+    aLog('log', `[AUTH] loginWithPassword → login=${login}`) // пароль сознательно не логируем
+    try {
+        const res = await fetch(`${API_BASE}/api/auth/login`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ login, password }),
+        })
+
+        if (res.status === 401) {
+            aLog('warn', `[AUTH] loginWithPassword → 401 неверные данные / доступ отключён`)
+            return { ok: false, reason: 'invalid_credentials' }
+        }
+        if (!res.ok) {
+            aLog('error', `[AUTH] loginWithPassword → HTTP ${res.status}`)
+            return { ok: false, reason: 'error' }
+        }
+
+        const data = await res.json()
+        aLog('success', `[AUTH] loginWithPassword ✅ userId=${data?.userId} login=${data?.login}`)
+        return { ok: true, user: buildUserFromAuthResponse(data) }
+    } catch (err) {
+        aLog('error', `[AUTH] loginWithPassword ❌ сетевая ошибка: ${err.message}`)
+        return { ok: false, reason: 'network_error' }
+    }
+}
+
+// ─── Регистрация по логину и паролю ───────────────────────────────────────────
+// POST /api/auth/register { login, password } → cookie + AuthResponse (self-serve).
+// ⚠️ КОНТРАКТ ФАЗЫ 2: текущий бэк ещё требует userId и whitelist и вернёт 403,
+//    пока Слава не откроет регистрацию (создание аккаунта без заранее известного
+//    Telegram-id) и не начнёт возвращать AuthResponse (обязательно с userId —
+//    иначе фронт не построит сессию). До этого функция рабочая, но на проде даст
+//    'forbidden'.
+//   вход:  login, password — строки из формы
+//   выход: { ok: true,  user }                      — аккаунт создан, сессия готова
+//          { ok: false, reason: 'bad_request' }     — 400: не передан логин/пароль
+//          { ok: false, reason: 'forbidden' }       — 403: регистрация закрыта (whitelist)
+//          { ok: false, reason: 'conflict' }        — 409: логин уже занят
+//          { ok: false, reason: 'error' }           — 5xx / некорректный ответ
+//          { ok: false, reason: 'network_error' }   — сеть недоступна
+// ⚠️ Пароль НИКОГДА не логируется.
+export async function registerAccount(login, password) {
+    aLog('log', `[AUTH] registerAccount → login=${login}`) // пароль сознательно не логируем
+    try {
+        const res = await fetch(`${API_BASE}/api/auth/register`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ login, password }),
+        })
+
+        if (res.status === 400) return regFail('bad_request', 400)
+        if (res.status === 403) return regFail('forbidden', 403)
+        if (res.status === 409) return regFail('conflict', 409)
+        if (!res.ok)            return regFail('error', res.status)
+
+        // 200 — аккаунт создан, cookie установлена. Тело может содержать AuthResponse.
+        let data = null
+        try { data = await res.json() } catch { /* бэк может вернуть пустое тело */ }
+        aLog('success', `[AUTH] registerAccount ✅ login=${login}`)
+        return { ok: true, user: buildUserFromAuthResponse(data ?? { login }) }
+    } catch (err) {
+        aLog('error', `[AUTH] registerAccount ❌ сетевая ошибка: ${err.message}`)
+        return { ok: false, reason: 'network_error' }
+    }
+}
+
+// Внутренний хелпер: лог неуспеха регистрации без дублирования кода.
+//   вход:  reason — код причины для UI; status — HTTP статус для лога
+//   выход: { ok: false, reason }
+function regFail(reason, status) {
+    aLog('warn', `[AUTH] registerAccount → HTTP ${status} reason=${reason}`)
+    return { ok: false, reason }
+}
+
+// ─── Хелпер: только пришедшие поля AuthResponse ───────────────────────────────
+// Для эндпоинтов линковки/установки пароля возвращаем лишь реально пришедшие поля
+// (undefined App отбросит при merge), чтобы не затирать username/photoUrl/login
+// существующей сессии.
+function pickAuthResponse(data) {
+    const out = {}
+    if (!data) return out
+    const keys = ['userId', 'login', 'isCexCexPaid', 'isDexCexPaid', 'isAdmin', 'isActive', 'userSettings', 'hasTelegram', 'hasPassword']
+    for (const k of keys) {
+        if (data[k] !== undefined) out[k] = data[k]
+    }
+    return out
+}
+
+// ─── Привязка Telegram к текущему аккаунту ────────────────────────────────────
+// POST /api/auth/link-telegram (cookie-auth) — тело = данные Telegram-виджета.
+// Цепляет TelegramUserId к залогиненному аккаунту (включает восстановление
+// пароля через бота).
+//   вход:  tgData — объект от Telegram Login Widget (snake_case)
+//   выход: { ok: true,  user }                    — поля для обновления сессии
+//          { ok: false, reason: 'conflict' }      — 409: Telegram уже привязан к другому аккаунту
+//          { ok: false, reason: 'unauthorized' }  — 401: нет сессии
+//          { ok: false, reason: 'error' }         — 5xx / некорректный ответ
+//          { ok: false, reason: 'network_error' } — сеть недоступна
+export async function linkTelegram(tgData) {
+    const payload = {
+        id:        tgData.id,
+        firstName: tgData.first_name ?? null,
+        lastName:  tgData.last_name  ?? null,
+        username:  tgData.username   ?? null,
+        photoUrl:  tgData.photo_url  ?? null,
+        authDate:  tgData.auth_date,
+        hash:      tgData.hash,
+    }
+    aLog('log', '[AUTH] linkTelegram → POST /api/auth/link-telegram')
+    try {
+        const res = await fetch(`${API_BASE}/api/auth/link-telegram`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        })
+
+        if (res.status === 401) return { ok: false, reason: 'unauthorized' }
+        if (res.status === 409) return { ok: false, reason: 'conflict' }
+        if (!res.ok)            return { ok: false, reason: 'error' }
+
+        let data = null
+        try { data = await res.json() } catch { /* тело может быть пустым */ }
+        aLog('success', '[AUTH] linkTelegram ✅ Telegram привязан')
+        // username/photoUrl в AuthResponse нет — берём из tgData, чтобы после
+        // привязки показать ник и аватар.
+        return {
+            ok: true,
+            user: {
+                ...pickAuthResponse(data),
+                username:    tgData.username  ?? undefined,
+                photoUrl:    tgData.photo_url ?? undefined,
+                hasTelegram: true,
+            },
+        }
+    } catch (err) {
+        aLog('error', `[AUTH] linkTelegram ❌ сетевая ошибка: ${err.message}`)
+        return { ok: false, reason: 'network_error' }
+    }
+}
+
+// ─── Установка логина и пароля текущему аккаунту ──────────────────────────────
+// POST /api/auth/set-credentials (cookie-auth) — добавляет парольный вход
+// (когда пароля ещё нет; смена пароля — через бота).
+//   вход:  login, password — строки из формы профиля
+//   выход: { ok: true,  user }                    — поля для обновления сессии
+//          { ok: false, reason: 'conflict' }      — 409: логин занят
+//          { ok: false, reason: 'bad_request' }   — 400: не передан логин/пароль
+//          { ok: false, reason: 'unauthorized' }  — 401: нет сессии
+//          { ok: false, reason: 'error' }         — 5xx / некорректный ответ
+//          { ok: false, reason: 'network_error' } — сеть недоступна
+// ⚠️ Пароль НИКОГДА не логируется.
+export async function setCredentials(login, password) {
+    aLog('log', `[AUTH] setCredentials → login=${login}`) // пароль сознательно не логируем
+    try {
+        const res = await fetch(`${API_BASE}/api/auth/set-credentials`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ login, password }),
+        })
+
+        if (res.status === 401) return { ok: false, reason: 'unauthorized' }
+        if (res.status === 400) return { ok: false, reason: 'bad_request' }
+        if (res.status === 409) return { ok: false, reason: 'conflict' }
+        if (!res.ok)            return { ok: false, reason: 'error' }
+
+        let data = null
+        try { data = await res.json() } catch { /* тело может быть пустым */ }
+        aLog('success', '[AUTH] setCredentials ✅ логин/пароль заданы')
+        return {
+            ok: true,
+            user: {
+                ...pickAuthResponse(data),
+                // если бэк не вернул login — подставим введённый, чтобы UI обновился
+                login: data?.login ?? login,
+                hasPassword: true,
+            },
+        }
+    } catch (err) {
+        aLog('error', `[AUTH] setCredentials ❌ сетевая ошибка: ${err.message}`)
+        return { ok: false, reason: 'network_error' }
+    }
+}
+
 // ─── Проверка доступа (каждые 60с и при старте) ──────────────────────────────
 // Проверяем cookie через защищённый эндпоинт /order-books-json
 // Telegram hash НЕ отправляем повторно — он валиден только ~60 секунд

@@ -13,6 +13,8 @@ export const PATH_TO_PAGE = {
   '/scanner': 'futures',
   '/funding': 'funding',
   '/api':     'api',
+  '/pay/success': 'pay_success',
+  '/pay/cancel':  'pay_cancel',
 }
 
 // Страница → URL (обратное отображение; legal строится отдельно)
@@ -25,6 +27,8 @@ export const PAGE_TO_PATH = {
   futures:  '/scanner',
   funding:  '/funding',
   api:      '/api',
+  pay_success: '/pay/success',
+  pay_cancel:  '/pay/cancel',
 }
 
 // Страница → вкладка сайдбара (для подсветки). faq/legal/api — без вкладки.

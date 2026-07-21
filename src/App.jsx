@@ -22,6 +22,9 @@ import ProfileModal from "./components/ProfileModal.jsx";
 import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings, toggleNotifications } from "./auth.js";
 import TelegramAuthModal from "./components/TelegramAuthModal.jsx";
 import AccessDenied from "./components/AccessDenied.jsx";
+import PaySuccess from "./components/PaySuccess.jsx";
+import PayCancel from "./components/PayCancel.jsx";
+import { createInvoice } from "./payments.js";
 import { PAGE_TO_TAB, PAGE_TO_PATH, parseLocation, pathForPage } from "./routes.js";
 import { applySeo } from "./seo.js";
 
@@ -241,7 +244,11 @@ function App() {
     return { status: 'unknown', user: null }
   })
 
+  // Текст ошибки инициации оплаты (тост); '' — тост скрыт.
+  const [payError, setPayError] = useState('')
+
   const sigRef = useRef(null)           // текущая подпись статуса
+  const subscribeBusyRef = useRef(false)// защита от повторного клика «Оплатить»
   const scanIntervalRef = useRef(null)  // интервал запросов к биржам
   const accessIntervalRef = useRef(null)// интервал проверки доступа
   const liveOppIntervalRef = useRef(null)
@@ -419,6 +426,56 @@ function App() {
     saveSession(userData)
     // Запускаем проверку доступа перед тем как открыть скринер
     setAuth({ status: 'checking', user: userData })
+  }
+
+  // ── Оплата подписки ──────────────────────────────────────────────────────────
+  // Кнопки на paywall и тариф-секции дергают этот обработчик: создаём инвойс на
+  // бэке и уходим на hosted-страницу NOWPayments. Сумму/сети фронт не передаёт.
+  // Ref-гард не даёт создать два инвойса при быстром двойном клике.
+  async function handleSubscribe() {
+    if (subscribeBusyRef.current) return
+    subscribeBusyRef.current = true
+    setPayError('')
+
+    const res = await createInvoice()
+    if (res.ok && res.invoiceUrl) {
+      // Полный уход со страницы — сбрасывать гард не нужно.
+      window.location.href = res.invoiceUrl
+      return
+    }
+
+    subscribeBusyRef.current = false
+    setPayError(
+      res.reason === 'unauthorized'
+        ? 'Сначала войдите в аккаунт'
+        : 'Не удалось открыть оплату. Попробуйте ещё раз'
+    )
+  }
+
+  // ── Обновление доступа после оплаты ──────────────────────────────────────────
+  // Страница успеха дергает это, когда статус подтвердился: пере-синхронизируем
+  // auth с сервером, чтобы isCexCexPaid стал true во всём приложении.
+  async function refreshAccess() {
+    if (!auth.user?.userId) return
+    const access = await checkAccess(auth.user.userId)
+    if (access?.found) {
+      const updated = { ...auth.user, ...access }
+      saveSession(updated)
+      setAuth({ status: 'ready', user: updated })
+    }
+  }
+
+  // ── Обновление данных пользователя (после линковки Telegram / установки пароля) ──
+  // Мержим только пришедшие поля (undefined пропускаем), чтобы не затереть
+  // username/photoUrl/login текущей сессии.
+  function handleUserUpdate(fresh) {
+    if (!fresh) return
+    const updated = { ...auth.user }
+    for (const k in fresh) {
+      if (fresh[k] !== undefined) updated[k] = fresh[k]
+    }
+    saveSession(updated)
+    setAuth({ status: 'ready', user: updated })
   }
 
   function handleLogout() {
@@ -1050,9 +1107,13 @@ function App() {
     localStorage.setItem('fundingActiveTrades', JSON.stringify(next))
   }
 
-  // ── Что показывать на странице futures ────────────────────────────────────
-  const showAuthModal    = activePage === 'futures' && auth.status === 'unknown'
-  const showAccessDenied = activePage === 'futures' && auth.status === 'ready' && !auth.user?.isCexCexPaid
+  // ── Гейт сканеров (futures + funding) ──────────────────────────────────────
+  // Обе страницы со сканерами закрыты за подпиской (isCexCexPaid).
+  const isScannerPage   = activePage === 'futures' || activePage === 'funding'
+  // Доступ к сканерам открыт только авторизованному пользователю с активной подпиской.
+  const scannerUnlocked = auth.status === 'ready' && auth.user?.isCexCexPaid === true
+  const showAuthModal    = isScannerPage && auth.status === 'unknown'
+  const showAccessDenied = isScannerPage && auth.status === 'ready' && !auth.user?.isCexCexPaid
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -1073,6 +1134,7 @@ function App() {
           <HomePage
             onOpenScanner={() => goTo('futures')}
             onNavigate={navigateTo}
+            onSubscribe={handleSubscribe}
           />
         ) : activePage === 'training' ? (
           <TrainingPage onNavigate={navigateTo} />
@@ -1089,33 +1151,61 @@ function App() {
           <LegalPage initialDoc={legalDoc} onNavigate={navigateTo} />
         ) : activePage === 'api' ? (
           <ApiPage />
+        ) : activePage === 'pay_success' ? (
+          <PaySuccess
+            onGoScanner={() => goTo('futures')}
+            onGoHome={() => goTo('home')}
+            onRefreshAccess={refreshAccess}
+          />
+        ) : activePage === 'pay_cancel' ? (
+          <PayCancel
+            onRetry={handleSubscribe}
+            onGoHome={() => goTo('home')}
+          />
         ) : activePage === 'funding' ? (
-          <>
-            <FundingPage
-              tradeAmount={filters.tradeAmount}
-              exchanges={filters.exchanges}
-              minSpread={filters.minSpread}
-              onOpenFilters={() => setFilterOpen(true)}
-              isAdmin={auth.status === 'ready' && auth.user?.isAdmin === true}
-              fundingActiveTrades={fundingActiveTrades}
-              onFundingTrade={handleFundingTrade}
-              onRemoveFundingTrade={removeFundingTrade}
-              fundingTradeError={fundingTradeError}
-            />
-            <FilterDrawer
-                open={filterOpen}
-                onClose={() => setFilterOpen(false)}
-                filters={filters}
-                onFilters={setFilters}
-                defaultFilters={DEFAULT_FILTERS}
-                onSaveSettings={handleSaveSettings}
-                canSave={auth.status === 'ready' && !!auth.user}
-                saveStatus={saveStatus}
-                mode="funding"
-                activeNotifications={activeNotifications}
-                onToggleNotifications={handleToggleNotifications}
-            />
-          </>
+          <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+            {/* Не авторизован → модалка входа */}
+            {showAuthModal && (
+              <TelegramAuthModal onSuccess={handleAuthSuccess} />
+            )}
+
+            {/* Авторизован, но нет подписки → paywall */}
+            {showAccessDenied && (
+              <AccessDenied onSubscribe={handleSubscribe} />
+            )}
+
+            {/* Доступ есть → сам фандинг-скринер. Пока доступа нет, FundingPage
+                НЕ монтируется — значит не шлёт свои фоновые запросы. */}
+            {scannerUnlocked && (
+              <>
+                <FundingPage
+                  tradeAmount={filters.tradeAmount}
+                  exchanges={filters.exchanges}
+                  minSpread={filters.minSpread}
+                  onOpenFilters={() => setFilterOpen(true)}
+                  isAdmin={auth.status === 'ready' && auth.user?.isAdmin === true}
+                  fundingActiveTrades={fundingActiveTrades}
+                  onFundingTrade={handleFundingTrade}
+                  onRemoveFundingTrade={removeFundingTrade}
+                  fundingTradeError={fundingTradeError}
+                />
+                <FilterDrawer
+                    open={filterOpen}
+                    onClose={() => setFilterOpen(false)}
+                    filters={filters}
+                    onFilters={setFilters}
+                    defaultFilters={DEFAULT_FILTERS}
+                    onSaveSettings={handleSaveSettings}
+                    canSave={auth.status === 'ready' && !!auth.user}
+                    saveStatus={saveStatus}
+                    mode="funding"
+                    activeNotifications={activeNotifications}
+                    onToggleNotifications={handleToggleNotifications}
+                />
+              </>
+            )}
+          </div>
         ) : (
           <>
             <Header
@@ -1140,7 +1230,7 @@ function App() {
 
               {/* Авторизован, проверка завершена, нет доступа → AccessDenied */}
               {showAccessDenied && (
-                <AccessDenied />
+                <AccessDenied onSubscribe={handleSubscribe} />
               )}
 
               <ActiveTradesBar
@@ -1208,12 +1298,30 @@ function App() {
         )}
       </div>
 
+      {/* Тост ошибки инициации оплаты — клик закрывает */}
+      {payError && (
+        <div
+          onClick={() => setPayError('')}
+          style={{
+            position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+            zIndex: 2000, maxWidth: 'calc(100vw - 32px)', padding: '12px 18px',
+            background: 'var(--bg-card)', border: '1px solid var(--error)',
+            borderRadius: 'var(--radius-md)', color: 'var(--text-primary)',
+            fontSize: 13, fontFamily: 'var(--font-sans)', cursor: 'pointer',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+          }}
+        >
+          {payError}
+        </div>
+      )}
+
       {/* Модалка профиля — поверх всего, доступна с любой страницы */}
       {profileOpen && auth.status === 'ready' && auth.user && (
         <ProfileModal
           user={auth.user}
           onClose={() => setProfileOpen(false)}
           onLogout={handleLogout}
+          onUserUpdate={handleUserUpdate}
         />
       )}
     </div>

@@ -1,10 +1,25 @@
 /**
- * AccessDenied.jsx — Оверлей "У вас нет доступа"
+ * AccessDenied.jsx — Paywall-оверлей «Доступ по подписке».
  *
- * Рендерится поверх грида скринера когда isCexCexPaid === false.
- * Sidebar и Header остаются видны — блокируется только контентная область.
- * Никакие запросы к биржам при этом не отправляются (логика в App.jsx).
+ * Рендерится поверх контентной области сканеров (futures и funding), когда
+ * пользователь авторизован, но isCexCexPaid === false. Sidebar/Header остаются
+ * видимыми — блокируется только область скринера. Никаких запросов к биржам при
+ * этом не отправляется (логика в App.jsx: futures гейтится canScan, funding —
+ * не монтируется, пока нет доступа).
+ *
+ * props:
+ *   onSubscribe() — старт оплаты подписки. В P1a это заглушка из App.jsx;
+ *                   живая инициация инвойса NOWPayments подключается в P2.
+ *
+ * Данные тарифа/сетей/преимуществ — из общего subscriptionInfo.js.
  */
+
+import { Zap, TrendingUp, Layers, Bell, SlidersHorizontal, ShieldCheck, Lock } from 'lucide-react'
+import { PLAN, NETWORKS, BENEFITS } from '../subscriptionInfo.js'
+
+// Резолвим имя иконки из subscriptionInfo в компонент lucide через локальный map —
+// так не тянем brand-иконки и не падаем на отсутствующем импорте.
+const ICONS = { Zap, TrendingUp, Layers, Bell, SlidersHorizontal, ShieldCheck }
 
 const style = `
     .access-denied-wrap {
@@ -14,6 +29,8 @@ const style = `
         display: flex;
         align-items: center;
         justify-content: center;
+        overflow-y: auto;
+        padding: 28px 16px;
         background: rgba(6, 6, 6, 0.72);
         backdrop-filter: blur(8px);
         -webkit-backdrop-filter: blur(8px);
@@ -29,10 +46,17 @@ const style = `
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 0;
         text-align: center;
-        max-width: 380px;
-        padding: 0 24px;
+        width: 100%;
+        max-width: 468px;
+        margin: auto;
+        padding: 32px 28px;
+        background: rgba(13,32,51,0.76);
+        backdrop-filter: blur(28px) saturate(150%);
+        -webkit-backdrop-filter: blur(28px) saturate(150%);
+        border: 1px solid var(--glass-border-hover);
+        border-radius: var(--radius-lg);
+        box-shadow: 0 24px 64px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.06);
         animation: ad-up 0.3s ease;
     }
 
@@ -42,8 +66,8 @@ const style = `
     }
 
     .access-denied-icon {
-        width: 72px;
-        height: 72px;
+        width: 60px;
+        height: 60px;
         border-radius: var(--radius-lg);
         background: var(--glass-fill);
         backdrop-filter: blur(14px);
@@ -52,16 +76,16 @@ const style = `
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-bottom: 24px;
+        margin-bottom: 18px;
     }
 
     .access-denied-title {
-        font-size: 22px;
+        font-size: 21px;
         font-weight: 700;
         color: var(--text-primary);
         font-family: var(--font-sans);
         letter-spacing: 0.2px;
-        margin-bottom: 12px;
+        margin-bottom: 8px;
         line-height: 1.3;
     }
 
@@ -69,60 +93,221 @@ const style = `
         font-size: 13px;
         color: var(--text-secondary);
         font-family: var(--font-sans);
-        line-height: 1.65;
-        margin-bottom: 32px;
+        line-height: 1.6;
+        margin-bottom: 22px;
+        max-width: 360px;
     }
 
     .access-denied-sub strong {
         color: var(--text-primary);
     }
 
-    .access-denied-btn {
+    /* ── Цена ── */
+    .access-price {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        width: 100%;
+        padding: 16px;
+        margin-bottom: 22px;
+        background: var(--glass-fill);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-md);
+    }
+
+    .access-price-row {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+    }
+
+    .access-price-num {
+        font-size: 34px;
+        font-weight: 800;
+        color: var(--text-primary);
+        font-family: var(--font-sans);
+        line-height: 1;
+    }
+
+    .access-price-per {
+        font-size: 15px;
+        color: var(--text-secondary);
+        font-family: var(--font-sans);
+    }
+
+    .access-price-note {
+        font-size: 11px;
+        color: var(--text-muted);
+        font-family: var(--font-sans);
+        letter-spacing: 0.2px;
+    }
+
+    /* ── Преимущества ── */
+    .access-benefits {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        width: 100%;
+        margin-bottom: 22px;
+    }
+
+    .access-benefit {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 12px;
+        text-align: left;
+        background: rgba(255,255,255,0.02);
+        border: 1px solid var(--glass-border);
+        border-radius: var(--radius-md);
+        transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .access-benefit:hover {
+        border-color: var(--glass-border-hover);
+        background: rgba(93,163,214,0.06);
+    }
+
+    .access-benefit-ico {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-sm);
+        background: rgba(47,105,151,0.16);
+        border: 1px solid var(--glass-border);
+        color: var(--accent-bright);
+    }
+
+    .access-benefit-title {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--text-primary);
+        font-family: var(--font-sans);
+        line-height: 1.3;
+    }
+
+    .access-benefit-text {
+        font-size: 11.5px;
+        color: var(--text-secondary);
+        font-family: var(--font-sans);
+        line-height: 1.5;
+    }
+
+    /* ── Сети ── */
+    .access-nets {
+        width: 100%;
+        margin-bottom: 24px;
+    }
+
+    .access-nets-label {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-family: var(--font-sans);
+        margin-bottom: 10px;
+    }
+
+    .access-nets-label b {
+        color: var(--text-primary);
+        font-weight: 700;
+    }
+
+    .access-nets-pills {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+    }
+
+    .access-net-pill {
+        padding: 4px 10px;
+        border-radius: 20px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid var(--glass-border);
+        font-size: 11px;
+        color: var(--text-secondary);
+        font-family: var(--font-mono);
+        letter-spacing: 0.3px;
+    }
+
+    /* ── Кнопки ── */
+    .access-cta {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        gap: 10px;
+    }
+
+    .access-btn {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 8px;
-        padding: 0 24px;
-        height: 44px;
+        width: 100%;
+        height: 48px;
         border-radius: var(--radius-md);
-        border: 1px solid rgba(255,255,255,0.14);
         cursor: pointer;
-        background: #2AABEE;
-        color: #fff;
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 600;
         font-family: var(--font-sans);
-        letter-spacing: 0.3px;
-        transition: all 0.15s ease;
+        letter-spacing: 0.2px;
         text-decoration: none;
-        box-shadow: 0 4px 20px rgba(42,171,238,0.25);
+        transition: all 0.15s ease;
     }
 
-    .access-denied-btn:hover {
-        background: #39baf5;
+    .access-btn-primary {
+        background: var(--accent);
+        color: #fff;
+        border: 1px solid rgba(255,255,255,0.14);
+        box-shadow: 0 4px 20px rgba(47,105,151,0.28);
+    }
+
+    .access-btn-primary:hover {
+        background: var(--accent-bright);
         transform: translateY(-1px);
-        box-shadow: 0 8px 20px rgba(42, 171, 238, 0.25);
+        box-shadow: 0 8px 20px rgba(61,135,192,0.32);
     }
 
-    .access-denied-badge {
-        display: inline-flex;
+    .access-btn-secondary {
+        background: rgba(255,255,255,0.02);
+        color: var(--text-secondary);
+        border: 1px solid var(--glass-border);
+    }
+
+    .access-btn-secondary:hover {
+        color: var(--text-primary);
+        border-color: var(--glass-border-hover);
+        background: rgba(93,163,214,0.08);
+    }
+
+    .access-btn:focus-visible {
+        outline: 2px solid var(--accent-bright);
+        outline-offset: 2px;
+    }
+
+    .access-note {
+        display: flex;
         align-items: center;
+        justify-content: center;
         gap: 6px;
-        margin-top: 20px;
-        padding: 6px 12px;
-        border-radius: 20px;
-        background: rgba(224, 62, 62, 0.08);
-        border: 1px solid rgba(224, 62, 62, 0.18);
+        margin-top: 16px;
         font-size: 11px;
-        color: var(--error);
+        color: var(--text-muted);
         font-family: var(--font-mono);
-        letter-spacing: 0.5px;
+        letter-spacing: 0.3px;
     }
 
-    .access-denied-dot {
+    .access-note-dot {
         width: 6px;
         height: 6px;
         border-radius: 50%;
-        background: var(--error);
+        background: var(--success);
         animation: ad-pulse 2s ease-in-out infinite;
     }
 
@@ -132,29 +317,30 @@ const style = `
     }
 
     /* ══════════════════════════════════════════════════════════════
-       МОБИЛЬНАЯ АДАПТАЦИЯ (Партия 2, MOBILE_PLAN.md)
+       МОБИЛЬНАЯ АДАПТАЦИЯ
        ══════════════════════════════════════════════════════════════
-       Компонент уже построен мобильно-дружелюбно: max-width 380px +
-       padding 0 24px сам сжимается на узком экране, кнопка уже 44px
-       высотой (полноценный тач-таргет). Меняем только размер заголовка
-       на самых узких экранах, чтобы не переносился на 4+ строки.
+       Карточка max-width 468px + width:100% сама сжимается. На узких
+       экранах: одна колонка преимуществ, меньше внутренние отступы,
+       уменьшенный заголовок.
     */
+    @media (max-width: 520px) {
+        .access-benefits { grid-template-columns: 1fr; }
+    }
+
     @media (max-width: 480px) {
+        .access-denied-card { padding: 26px 18px; }
         .access-denied-title { font-size: 19px; }
+        .access-price-num { font-size: 30px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .access-denied-wrap,
+        .access-denied-card { animation: none; }
+        .access-note-dot { animation: none; }
     }
 `
 
-// SVG иконка замка
-function LockIcon() {
-    return (
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-        </svg>
-    )
-}
-
-// SVG логотип Telegram (маленький)
+// SVG логотип Telegram (маленький) — для вторичной кнопки «Написать менеджеру».
 function TelegramIcon() {
     return (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -164,34 +350,84 @@ function TelegramIcon() {
     )
 }
 
-function AccessDenied() {
+function AccessDenied({ onSubscribe }) {
     return (
         <>
             <style>{style}</style>
             <div className="access-denied-wrap">
                 <div className="access-denied-card">
                     <div className="access-denied-icon">
-                        <LockIcon />
+                        <Lock size={26} color="var(--accent)" strokeWidth={1.6} />
                     </div>
+
                     <div className="access-denied-title">
-                        У вас пока что нет доступа
+                        Доступ открывается по подписке
                     </div>
                     <div className="access-denied-sub">
-                        Доступ к арбитражному скринеру предоставляется по подписке.<br />
-                        Обратитесь к <strong>менеджеру в Telegram</strong> для получения доступа или активации вашего плана.
+                        Оформи подписку, чтобы пользоваться <strong>арбитражным</strong> и{' '}
+                        <strong>фандинговым</strong> сканерами AXIOMA SCAN без ограничений.
                     </div>
-                    <a
-                        href="https://t.me/axioma_manager_bot"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="access-denied-btn"
-                    >
-                        <TelegramIcon />
-                        Написать менеджеру
-                    </a>
-                    <div className="access-denied-badge">
-                        <div className="access-denied-dot" />
-                        CEX-CEX доступ не активирован
+
+                    <div className="access-price">
+                        <div className="access-price-row">
+                            <span className="access-price-num">${PLAN.priceUsd}</span>
+                            <span className="access-price-per">/ {PLAN.period}</span>
+                        </div>
+                        <div className="access-price-note">
+                            оплата в {PLAN.currency} · комиссии сети берём на себя
+                        </div>
+                    </div>
+
+                    <div className="access-benefits">
+                        {BENEFITS.map((b) => {
+                            const Icon = ICONS[b.icon] || Zap
+                            return (
+                                <div className="access-benefit" key={b.title}>
+                                    <div className="access-benefit-ico">
+                                        <Icon size={16} />
+                                    </div>
+                                    <div className="access-benefit-title">{b.title}</div>
+                                    <div className="access-benefit-text">{b.text}</div>
+                                </div>
+                            )
+                        })}
+                    </div>
+
+                    <div className="access-nets">
+                        <div className="access-nets-label">
+                            Принимаем <b>USDT</b> в сетях:
+                        </div>
+                        <div className="access-nets-pills">
+                            {NETWORKS.map((n) => (
+                                <span className="access-net-pill" key={n.key} title={n.hint}>
+                                    {n.label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="access-cta">
+                        <button
+                            type="button"
+                            className="access-btn access-btn-primary"
+                            onClick={() => onSubscribe?.()}
+                        >
+                            Оплатить подписку — ${PLAN.priceUsd}
+                        </button>
+                        <a
+                            href="https://t.me/axioma_manager_bot"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="access-btn access-btn-secondary"
+                        >
+                            <TelegramIcon />
+                            Написать менеджеру
+                        </a>
+                    </div>
+
+                    <div className="access-note">
+                        <span className="access-note-dot" />
+                        Доступ активируется сразу после оплаты
                     </div>
                 </div>
             </div>
