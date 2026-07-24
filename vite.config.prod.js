@@ -1,29 +1,71 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// Хелпер для test-функций групп чанков. Нормализует путь модуля
+// (на Windows слеши обратные) и проверяет вхождение каталога пакета
+// по ГРАНИЦАМ '/node_modules/имя/', а не по подстроке. Простое
+// id.includes('react') поймало бы и lucide-react, и любой будущий
+// @scope/react-*, и молча утянуло бы их в чужой чанк.
+//
+// Вход:  id — абсолютный путь к модулю; dir — имя каталога пакета.
+// Выход: true, если модуль принадлежит этому пакету.
+// Побочных эффектов нет.
+const inPkg = (id, dir) => id.replace(/\\/g, '/').includes(`/node_modules/${dir}/`)
+
 export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'dist',
     sourcemap: false,
     minify: 'esbuild',
-    rollupOptions: {
+    // Vite 8 работает на Rolldown, а не на Rollup. Ключ output.manualChunks
+    // из Rollup здесь не действует (Rolldown его игнорирует), поэтому
+    // ручное разбиение задаётся через codeSplitting.groups. Каждая группа —
+    // { name, test, priority }; test это функция (id) => boolean, priority
+    // выше = группа выбирается раньше при совпадении нескольких.
+    // (Ключ раньше назывался advancedChunks — переименован в codeSplitting.)
+    rolldownOptions: {
       output: {
-        manualChunks(id) {
-          if (id.includes('react') || id.includes('react-dom')) {
-            return 'react'
-          }
+        codeSplitting: {
+          groups: [
+            // lightweight-charts и его единственная зависимость fancy-canvas.
+            // Отдельный чанк обязателен: без него библиотека попала бы в
+            // общий vendor, который грузится при первой отрисовке, и
+            // lazy-импорт в DetailModal.jsx перестал бы что-либо откладывать.
+            {
+              name: 'lwc',
+              priority: 30,
+              test: id => inPkg(id, 'lightweight-charts') || inPkg(id, 'fancy-canvas'),
+            },
 
-          if (id.includes('lucide-react')) {
-            return 'lucide'
-          }
+            // Иконки отдельно от React: lucide-react меняется при каждом
+            // добавлении иконки в интерфейс, react — раз в несколько месяцев.
+            // Раздельные чанки избавляют пользователя от перекачивания React
+            // из-за одной новой иконки.
+            {
+              name: 'lucide',
+              priority: 20,
+              test: id => inPkg(id, 'lucide-react'),
+            },
 
-          if (id.includes('node_modules')) {
-            return 'vendor'
-          }
-        }
-      }
-    }
+            // React, react-dom и их внутренняя зависимость scheduler — вместе.
+            {
+              name: 'react',
+              priority: 10,
+              test: id => inPkg(id, 'react') || inPkg(id, 'react-dom') || inPkg(id, 'scheduler'),
+            },
+
+            // Всё остальное из node_modules — общий vendor. Самый низкий
+            // приоритет: срабатывает только если модуль не попал в группы выше.
+            {
+              name: 'vendor',
+              priority: 0,
+              test: id => id.replace(/\\/g, '/').includes('/node_modules/'),
+            },
+          ],
+        },
+      },
+    },
   },
   // В production Vite proxy не работает — его роль берёт на себя Nginx.
   // Nginx повторяет все 11 proxy правил из vite.config.js один в один:

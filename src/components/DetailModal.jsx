@@ -321,7 +321,7 @@ const style = `
   }
 `
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { Star, Trash2, X } from 'lucide-react'
 import { connectOrderBook } from '../ws.js'
 import {
@@ -329,8 +329,13 @@ import {
   formatPrice, formatVolume, formatAge, formatTimeRemaining, calcMaxVolume, calcVwap
 } from '../utils.js'
 
+// Библиотека графиков весит заметно больше остального кода модалки,
+// а модалка открывается не сразу — грузим по требованию. В сборке под
+// неё выделен отдельный чанк 'lwc' (vite.config.prod.js), иначе она
+// уехала бы в 'vendor' и приезжала бы на первую отрисовку сайта.
+const TvChart = lazy(() => import('./TvChart.jsx'))
+
 const STRATEGY_NAMES = { ff: 'FUTURES-FUTURES', sf: 'SPOT-FUTURES' }
-const TARGET_EXIT = 0.30
 
 // ─── Logo с fallback ──────────────────────────────────────────────────────────
 function ExLogo({ info }) {
@@ -350,291 +355,6 @@ function ExLogo({ info }) {
       {info.short}
     </div>
   )
-}
-
-// ─── Chart ────────────────────────────────────────────────────────────────────
-function Chart({ mode, history, avgLong, avgShort, entrySpread, liveSpread }) {
-  const W = 500, H = 210
-  const PL = 10, PR = 76, PT = 16, PB = 26
-  const cW = W - PL - PR, cH = H - PT - PB
-
-  const hasData = history.length >= 2
-  const hasAvg = avgLong && avgShort && parseFloat(avgLong) > 0 && parseFloat(avgShort) > 0
-
-  function smooth(pts) {
-    if (pts.length < 2) return `M ${pts[0][0]} ${pts[0][1]}`
-    let d = `M ${pts[0][0]} ${pts[0][1]}`
-    for (let i = 1; i < pts.length; i++) {
-      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]
-      const cx = (x0 + x1) / 2
-      d += ` C ${cx},${y0} ${cx},${y1} ${x1},${y1}`
-    }
-    return d
-  }
-
-  const txFn = len => i => PL + (i / Math.max(len - 1, 1)) * cW
-  const tyFn = (min, max) => v => PT + (1 - (v - min) / Math.max(max - min, 0.0001)) * cH
-  const padRange = (min, max) => {
-    const pad = Math.max((max - min) * 0.10, Math.abs(min) * 0.0001)
-    return [min - pad, max + pad]
-  }
-
-  function YAxis({ ty, min, max, count = 4, fmt, annotations = [] }) {
-    const vals = []
-    for (let i = 0; i <= count; i++) vals.push(min + (max - min) * (i / count))
-    const axX = W - PR
-    return (
-      <g>
-        <line x1={axX} y1={PT} x2={axX} y2={H - PB} stroke="#0e2a42" strokeWidth="1" />
-        {vals.map(v => {
-          const y = ty(v)
-          return (
-            <g key={v}>
-              <line x1={PL} y1={y} x2={axX} y2={y} stroke="#0d1e30" strokeWidth="1" />
-              <line x1={axX} y1={y} x2={axX + 4} y2={y} stroke="#1a3a52" strokeWidth="1" />
-              <text x={axX + 7} y={y + 3.5} fontSize="8" fill="#3d506a" textAnchor="start" fontFamily="monospace">
-                {fmt ? fmt(v) : v.toFixed(v < 10 ? 2 : 0)}
-              </text>
-            </g>
-          )
-        })}
-        {annotations.map((a, i) => {
-          const y = ty(a.val)
-          return (
-            <g key={i}>
-              <line x1={PL} y1={y} x2={axX} y2={y} stroke={a.color} strokeWidth="1" strokeDasharray="4,3" opacity="0.6" />
-              <text x={axX + 7} y={y + 3.5} fontSize="8" fill={a.color} textAnchor="start" fontFamily="monospace" fontWeight="bold">
-                {fmt ? fmt(a.val) : a.val.toFixed(2)}
-              </text>
-            </g>
-          )
-        })}
-      </g>
-    )
-  }
-
-  function PulseDot({ x, y, color }) {
-    return (
-      <g>
-        <circle cx={x} cy={y} r="4" fill={color} stroke="#080c14" strokeWidth="2" />
-        <circle cx={x} cy={y} r="4" fill="none" stroke={color} strokeWidth="1.5">
-          <animate attributeName="r" from="4" to="12" dur="2s" repeatCount="indefinite" />
-          <animate attributeName="opacity" from="0.6" to="0" dur="2s" repeatCount="indefinite" />
-        </circle>
-      </g>
-    )
-  }
-
-  if (!hasData) return <div className="chart-empty">Собираем данные...</div>
-
-  // ── entry-prices ──
-  if (mode === 'entry-prices') {
-    const bids = history.map(p => p.bid)
-    const asks = history.map(p => p.ask)
-    const [min, max] = padRange(Math.min(...bids, ...asks), Math.max(...bids, ...asks))
-    const ty = tyFn(min, max)
-    const tx = txFn(history.length)
-
-    const bidPts = history.map((p, i) => [tx(i), ty(p.bid)])
-    const askPts = history.map((p, i) => [tx(i), ty(p.ask)])
-    const bidPath = smooth(bidPts)
-    const askPath = smooth(askPts)
-    const [lbx, lby] = bidPts[bidPts.length - 1]
-    const [lax, lay] = askPts[askPts.length - 1]
-
-    const range = max - min
-    const dec = range < 0.0005 ? 6 : range < 0.005 ? 5 : range < 0.5 ? 4 : range < 50 ? 3 : range < 500 ? 2 : 0
-    const fmt = v => v.toFixed(dec)
-    const curBid = bids[bids.length - 1]
-    const curAsk = asks[asks.length - 1]
-    const annotations = [
-      { val: curBid, color: '#e03e3e' },
-      { val: curAsk, color: '#00c97a' },
-    ]
-
-    return (
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
-        <defs>
-          <linearGradient id="g-bid" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#e03e3e" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#e03e3e" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <YAxis ty={ty} min={min} max={max} fmt={fmt} annotations={annotations} />
-        <path d={bidPath + ` L ${lbx},${H - PB} L ${PL},${H - PB} Z`} fill="url(#g-bid)" />
-        <path d={bidPath} fill="none" stroke="#e03e3e" strokeWidth="1.8" />
-        <path d={askPath} fill="none" stroke="#00c97a" strokeWidth="1.8" />
-        <PulseDot x={lbx} y={lby} color="#e03e3e" />
-        <PulseDot x={lax} y={lay} color="#00c97a" />
-      </svg>
-    )
-  }
-
-  // ── entry-spread ──
-  if (mode === 'entry-spread') {
-    const spreads = history.map(p => (p.bid - p.ask) / p.bid * 100)
-    const YMAX = Math.max(...spreads, 0.1)
-    const YMIN = Math.min(0, ...spreads)
-    const ty = tyFn(YMIN, YMAX)
-    const tx = txFn(spreads.length)
-
-    const pts = spreads.map((v, i) => [tx(i), ty(v)])
-    const path = smooth(pts)
-    const zeroY = ty(0)
-    const [lx, ly] = pts[pts.length - 1]
-    const fill = path + ` L ${lx},${zeroY} L ${PL},${zeroY} Z`
-    const fmt = v => v.toFixed(2) + '%'
-    const curSpread = spreads[spreads.length - 1]
-    const annotationSpread = liveSpread ?? curSpread
-
-    return (
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
-        <defs>
-          <linearGradient id="g-sp" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#00c97a" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#00c97a" stopOpacity="0.02" />
-          </linearGradient>
-          <filter id="glow-s"><feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-        </defs>
-        <YAxis ty={ty} min={YMIN} max={YMAX} fmt={fmt} annotations={[{ val: annotationSpread, color: '#00c97a' }]} />
-        <path d={fill} fill="url(#g-sp)" />
-        <path d={path} fill="none" stroke="#00c97a" strokeWidth="3" opacity="0.2" filter="url(#glow-s)" />
-        <path d={path} fill="none" stroke="#00c97a" strokeWidth="1.8" />
-        <PulseDot x={lx} y={ly} color="#00c97a" />
-      </svg>
-    )
-  }
-
-  // ── exit-prices ──
-  if (mode === 'exit-prices') {
-    // Цены ВЫХОДА: закрытие SHORT на bid-бирже (→ asks), закрытие LONG на ask-бирже (→ bids)
-    const bids = history.map(p => p.bidExit ?? p.bid)
-    const asks = history.map(p => p.askExit ?? p.ask)
-    const [min, max] = padRange(Math.min(...bids, ...asks), Math.max(...bids, ...asks))
-    const ty = tyFn(min, max)
-    const tx = txFn(history.length)
-
-    const bidPts = history.map((p, i) => [tx(i), ty(p.bidExit ?? p.bid)])
-    const askPts = history.map((p, i) => [tx(i), ty(p.askExit ?? p.ask)])
-    const bidPath = smooth(bidPts)
-    const askPath = smooth(askPts)
-    const [lbx, lby] = bidPts[bidPts.length - 1]
-    const [lax, lay] = askPts[askPts.length - 1]
-    const range = max - min
-    const dec = range < 0.0005 ? 6 : range < 0.005 ? 5 : range < 0.5 ? 4 : range < 50 ? 3 : range < 500 ? 2 : 0
-    const fmt = v => v.toFixed(dec)
-    const curBidEx = bids[bids.length - 1]
-    const curAskEx = asks[asks.length - 1]
-
-    // Заливка между линиями — индикатор схождения цен
-    // Строим path по bid сверху вниз, затем по ask снизу вверх
-    const fillBetween = bidPath
-      + ' ' + askPts.slice().reverse().map(([x, y], i) => `${i === 0 ? 'L' : 'L'} ${x},${y}`).join(' ')
-      + ' Z'
-
-    return (
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
-        <defs>
-          <linearGradient id="g-conv" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#e03e3e" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="#00c97a" stopOpacity="0.18" />
-          </linearGradient>
-          <clipPath id="xp-clip">
-            <rect x={PL} y={PT} width={cW} height={cH} />
-          </clipPath>
-        </defs>
-        <YAxis ty={ty} min={min} max={max} fmt={fmt} annotations={[
-          { val: curBidEx, color: '#e03e3e' },
-          { val: curAskEx, color: '#00c97a' },
-        ]} />
-        {/* Заливка между линиями — визуализирует расстояние до схождения */}
-        <path d={fillBetween} fill="url(#g-conv)" clipPath="url(#xp-clip)" />
-        <path d={bidPath} fill="none" stroke="#e03e3e" strokeWidth="2" />
-        <path d={askPath} fill="none" stroke="#00c97a" strokeWidth="2" />
-        <PulseDot x={lbx} y={lby} color="#e03e3e" />
-        <PulseDot x={lax} y={lay} color="#00c97a" />
-      </svg>
-    )
-  }
-
-  // ── exit-spread ──
-  if (mode === 'exit-spread') {
-    // ref = спред при входе пользователя
-    // captured = ref - текущий_спред:
-    //   > 0 → спред сузился, позиция закрывается в профит
-    //   = 0 → спред на уровне входа
-    //   < 0 → спред ещё шире чем при входе (рано закрывать)
-    const ref = (parseFloat(avgShort) - parseFloat(avgLong)) / parseFloat(avgShort) * 100
-    // Спред выхода считается по ценам выхода (bidExit/askExit)
-    const spreads = history.map(p => {
-      const b = p.bidExit ?? p.bid
-      const a = p.askExit ?? p.ask
-      return (b - a) / b * 100
-    })
-    const captured = spreads.map(s => ref - s)
-
-    const curCaptured = captured[captured.length - 1]
-    const YMAX = Math.max(...captured, ref * 0.3, 0.1)
-    const YMIN = Math.min(...captured, -ref * 0.2, -0.05)
-    const ty = tyFn(YMIN, YMAX)
-    const tx = txFn(captured.length)
-
-    const pts = captured.map((v, i) => [tx(i), ty(v)])
-    const path = smooth(pts)
-    const zeroY = ty(0)
-    const goalY = ty(Math.max(YMIN, ref - TARGET_EXIT))
-    const [lx, ly] = pts[pts.length - 1]
-    const fmt = v => v.toFixed(2) + '%'
-
-    // Заливка: зона выше 0 = профит (синяя), зона ниже 0 = ещё не пора (тёмно-красная)
-    const positiveFill = path + ` L ${lx},${zeroY} L ${PL},${zeroY} Z`
-    const negativeFill = path + ` L ${lx},${zeroY} L ${PL},${zeroY} Z`
-
-    const lineColor = curCaptured >= 0 ? '#3d87c0' : '#e03e3e'
-
-    return (
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
-        <defs>
-          <linearGradient id="g-ex-pos" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3d87c0" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#3d87c0" stopOpacity="0.02" />
-          </linearGradient>
-          <linearGradient id="g-ex-neg" x1="0" y1="1" x2="0" y2="0">
-            <stop offset="0%" stopColor="#e03e3e" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#e03e3e" stopOpacity="0.02" />
-          </linearGradient>
-          <clipPath id="ex-clip-pos">
-            <rect x={PL} y={PT} width={cW} height={Math.max(0, zeroY - PT)} />
-          </clipPath>
-          <clipPath id="ex-clip-neg">
-            <rect x={PL} y={zeroY} width={cW} height={Math.max(0, H - PB - zeroY)} />
-          </clipPath>
-          <filter id="glow-ex"><feGaussianBlur in="SourceGraphic" stdDeviation="2" result="b" /><feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-        </defs>
-        <YAxis ty={ty} min={YMIN} max={YMAX} fmt={fmt} annotations={[{ val: curCaptured, color: lineColor }]} />
-        {/* Нулевая линия — уровень входа */}
-        <line x1={PL} y1={zeroY} x2={W - PR} y2={zeroY} stroke="#3d506a" strokeWidth="1" strokeDasharray="4,3" />
-        <text x={PL + 4} y={zeroY - 4} fontSize="8" fill="#3d506a" fontFamily="monospace">УРОВЕНЬ ВХОДА 0%</text>
-        {/* Цель захвата */}
-        {goalY < zeroY && (
-          <>
-            <line x1={PL} y1={goalY} x2={W - PR} y2={goalY} stroke="#2f6997" strokeWidth="1" strokeDasharray="5,4" />
-            <text x={PL + 4} y={goalY - 4} fontSize="8" fill="#2f6997" fontFamily="monospace">ЦЕЛЬ ЗАХВАТА</text>
-          </>
-        )}
-        {/* Позитивная заливка (выше 0) */}
-        <path d={positiveFill} fill="url(#g-ex-pos)" clipPath="url(#ex-clip-pos)" />
-        {/* Негативная заливка (ниже 0) */}
-        <path d={negativeFill} fill="url(#g-ex-neg)" clipPath="url(#ex-clip-neg)" />
-        {/* Линия с glow */}
-        <path d={path} fill="none" stroke={lineColor} strokeWidth="2.5" opacity="0.2" filter="url(#glow-ex)" />
-        <path d={path} fill="none" stroke={lineColor} strokeWidth="1.8" />
-        <PulseDot x={lx} y={ly} color={lineColor} />
-      </svg>
-    )
-  }
-
-  return null
 }
 
 // ─── Exchange Card ────────────────────────────────────────────────────────────
@@ -785,14 +505,23 @@ function DetailModal({
 
   useEffect(() => {
     const tick = () => {
-      setLiveHistory(prev =>
-        [...prev, {
+      setLiveHistory(prev => {
+        // Библиотека графиков требует строго возрастающее и уникальное
+        // время точки. Интервал реже секунды, но тики могут сойтись в
+        // одну секунду при перезапуске таймера — сдвигаем на секунду
+        // вперёд, иначе точка не добавится, а перезапишет предыдущую.
+        const prevT = prev.length ? prev[prev.length - 1].t : 0
+        let t = Math.floor(Date.now() / 1000)
+        if (t <= prevT) t = prevT + 1
+
+        return [...prev, {
+          t,
           bid:     latestBid.current,
           ask:     latestAsk.current,
           bidExit: latestBidExit.current,
           askExit: latestAskExit.current,
         }].slice(-60)
-      )
+      })
     }
 
     intervalRef.current = setInterval(tick, 5000)
@@ -812,8 +541,15 @@ function DetailModal({
   const curAsk     = vwapAsk     ?? opp.ask_price
   const curBidExit = vwapBidExit ?? opp.bid_price
   const curAskExit = vwapAskExit ?? opp.ask_price
+  // Хвостовая точка — текущие котировки между тиками таймера. Её время
+  // привязано к последней сохранённой точке, а не к Date.now(): иначе
+  // на каждом обновлении стакана она вставала бы на новое место шкалы
+  // и график обрастал бы лишними точками вместо одной живой.
   const chartHistory = liveHistory.length > 0
-    ? [...liveHistory, { bid: curBid, ask: curAsk, bidExit: curBidExit, askExit: curAskExit }]
+    ? [...liveHistory, {
+        t: liveHistory[liveHistory.length - 1].t + 1,
+        bid: curBid, ask: curAsk, bidExit: curBidExit, askExit: curAskExit,
+      }]
     : []
 
   const spreadColor = getSpreadColor(liveSpread)
@@ -860,9 +596,10 @@ function DetailModal({
       { color: 'var(--error)',   label: 'BID (SELL)' },
       { color: 'var(--success)', label: 'ASK (BUY)' },
     ],
+    // Пунктир цели 0.30% убран из графика в п.16.11 — в легенде
+    // оставалась подпись к несуществующей линии.
     'entry-spread': [
       { color: 'var(--success)', label: 'Текущий спред' },
-      { dash: true, color: '#3d506a', label: 'Цель 0.30%' },
     ],
     'exit-prices': [
       { color: 'var(--error)',   label: 'BID (SELL) — верхняя линия' },
@@ -870,7 +607,7 @@ function DetailModal({
     ],
     'exit-spread': [
       { color: 'var(--accent-bright)', label: 'Захваченный профит (> 0 = выходить)' },
-      { dash: true, color: '#3d506a',  label: 'Уровень входа (0%)' },
+      { dash: true, color: 'var(--chart-label)', label: 'Уровень входа (0%)' },
     ],
   }
 
@@ -962,14 +699,14 @@ function DetailModal({
               </div>
 
               <div className="chart-area">
-                <Chart
-                  mode={chartMode}
-                  history={chartHistory}
-                  avgLong={avgLong}
-                  avgShort={avgShort}
-                  entrySpread={opp.spread}
-                  liveSpread={liveSpread}
-                />
+                <Suspense fallback={<div className="chart-empty">Загружаем график...</div>}>
+                  <TvChart
+                    mode={chartMode}
+                    history={chartHistory}
+                    avgLong={avgLong}
+                    avgShort={avgShort}
+                  />
+                </Suspense>
                 {(chartMode === 'exit-prices' || chartMode === 'exit-spread') && exitLocked && (
                   <div className="chart-locked-overlay">
                     <span className="chart-lock-icon">🔒</span>
