@@ -37,12 +37,14 @@
  *   вынесен в бэклог как необязательное улучшение (см. отчёт).
  */
 
-import { useEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
     X, Check, LogOut, MessageCircle,
-    Trophy, Sprout, TrendingUp, Crown, ShieldCheck, ShieldX, Sparkles
+    Trophy, Sprout, TrendingUp, Crown, ShieldCheck, ShieldX, Sparkles,
+    KeyRound, Eye, EyeOff, AlertTriangle
 } from 'lucide-react'
-import { clearSession } from '../auth.js'
+import { clearSession, linkTelegram, setCredentials } from '../auth.js'
 import { TRAINING_MODULES } from '../data/trainingContent.js'
 import { useTrainingProgress } from '../hooks/useTrainingProgress.js'
 
@@ -52,6 +54,16 @@ const TIER_ICON = {
     trader: TrendingUp,
     expert: Trophy,
     master: Crown,
+}
+
+// Мини-логотип Telegram (в lucide брендовых иконок нет)
+function TgIcon() {
+    return (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="12" fill="rgba(93,163,214,0.25)"/>
+            <path d="M5.5 11.5L17 7L14.5 18L10.5 14.5L8 16.5L8.5 13L15 8.5L8 12.5L5.5 11.5Z" fill="var(--accent-bright)"/>
+        </svg>
+    )
 }
 
 const style = `
@@ -270,9 +282,60 @@ const style = `
     .pm-top { padding-left: 20px; padding-right: 20px; }
     .pm-bottom { padding-left: 20px; padding-right: 20px; }
   }
+
+  /* ─── Способы входа (Фаза 4) ─── */
+  .pm-auth-sec { margin-top: 14px; }
+  .pm-auth-head {
+    font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 10px; font-family: var(--font-mono);
+  }
+  .pm-mini {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:6px 14px; border-radius:20px; cursor:pointer;
+    font-family:var(--font-mono); font-size:11px; font-weight:700; letter-spacing:0.4px;
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    border:1px solid var(--glass-border-hover); color: var(--accent-bright);
+    transition: all .15s;
+  }
+  .pm-mini:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--text-primary); }
+  .pm-mini:disabled { opacity:.55; cursor:default; }
+  .pm-mini.ghost { background:transparent; color:var(--text-secondary); border-color:var(--glass-border); }
+  .pm-mini.ghost:hover { color:var(--text-primary); border-color:var(--glass-border-hover); }
+  .pm-mini.solid { background:var(--accent); color:#fff; border-color:rgba(255,255,255,0.14); }
+  .pm-mini.solid:hover:not(:disabled) { background:var(--accent-bright); }
+  .pm-mini:focus-visible { outline:2px solid var(--accent-bright); outline-offset:2px; }
+
+  .pm-linkpanel {
+    display:flex; flex-direction:column; gap:10px; align-items:center;
+    padding:14px; margin:2px 0 10px; border-radius:var(--radius-md);
+    background:rgba(255,255,255,0.02); border:1px solid var(--glass-border);
+  }
+  .pm-linkpanel-t { font-size:12px; color:var(--text-secondary); text-align:center; line-height:1.5; }
+  .pm-tgwidget { display:flex; justify-content:center; min-height:46px; width:100%; }
+
+  .pm-inwrap { position:relative; width:100%; }
+  .pm-input {
+    width:100%; height:44px; padding:0 14px;
+    background:rgba(255,255,255,0.03); border:1px solid var(--glass-border);
+    border-radius:var(--radius-md); color:var(--text-primary);
+    font-size:14px; font-family:var(--font-sans);
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .pm-input.has-toggle { padding-right:44px; }
+  .pm-input::placeholder { color:var(--text-muted); }
+  .pm-input:focus-visible { outline:none; border-color:var(--accent-bright); box-shadow:0 0 0 3px rgba(61,135,192,0.18); }
+  .pm-pwtoggle {
+    position:absolute; top:0; right:0; height:44px; width:44px;
+    display:flex; align-items:center; justify-content:center;
+    background:transparent; border:none; color:var(--text-muted); cursor:pointer; transition:color .15s;
+  }
+  .pm-pwtoggle:hover { color:var(--text-secondary); }
+  .pm-linkerr { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--error); align-self:flex-start; line-height:1.4; }
+  .pm-linkerr svg { flex-shrink:0; }
+  .pm-linkbtns { display:flex; gap:8px; }
 `
 
-function ProfileModal({ user, onClose, onLogout }) {
+function ProfileModal({ user, onClose, onLogout, onUserUpdate }) {
     const { progress } = useTrainingProgress(TRAINING_MODULES)
 
     // Esc закрывает
@@ -299,13 +362,110 @@ function ProfileModal({ user, onClose, onLogout }) {
     // а если и его нет — общая заглушка.
     const displayName = user?.username ? `@${user.username}` : (user?.login || 'Пользователь')
 
+    // Способы входа: флаги из AuthResponse (контракт Фазы 4). Пока бэк их не
+    // отдаёт — провизорный фолбэк по имеющимся полям (уточнится, когда флаги
+    // придут с сервера).
+    const hasTelegram = user?.hasTelegram ?? !!user?.photoUrl
+    const hasPassword = user?.hasPassword ?? false
+
+    // Локальное состояние блока линковки
+    const [linkView, setLinkView] = useState('none')   // 'none' | 'telegram' | 'password'
+    const [linkPending, setLinkPending] = useState(false)
+    const [linkError, setLinkError] = useState('')
+    const [login, setLogin] = useState('')
+    const [password, setPassword] = useState('')
+    const [confirm, setConfirm] = useState('')
+    const [showPw, setShowPw] = useState(false)
+    const linkWidgetRef = useRef(null)
+
     function handleLogout() {
         clearSession()
         onClose?.()
         onLogout?.()
     }
 
-    return (
+    // Открыть/закрыть подпанель линковки (сбрасываем поля и ошибку)
+    function openLink(view) {
+        setLinkView(view)
+        setLinkError('')
+        setLogin(''); setPassword(''); setConfirm(''); setShowPw(false)
+    }
+    function closeLink() {
+        setLinkView('none')
+        setLinkError('')
+    }
+
+    // Telegram Login Widget для привязки — монтируем, когда открыта его подпанель.
+    // Отдельное имя колбэка (onProfileTelegramLink), чтобы не пересечься с входом.
+    useEffect(() => {
+        if (linkView !== 'telegram' || !linkWidgetRef.current) return
+        linkWidgetRef.current.innerHTML = ''
+
+        window.onProfileTelegramLink = async (tgUser) => {
+            setLinkPending(true)
+            setLinkError('')
+            const res = await linkTelegram(tgUser)
+            setLinkPending(false)
+            if (!res.ok) {
+                setLinkError(
+                    res.reason === 'conflict'       ? 'Этот Telegram уже привязан к другому аккаунту'
+                    : res.reason === 'unauthorized' ? 'Сессия истекла — войди заново'
+                    : 'Не удалось привязать. Попробуйте ещё раз'
+                )
+                return
+            }
+            onUserUpdate?.(res.user)
+            setLinkView('none')
+        }
+
+        const script = document.createElement('script')
+        script.src = 'https://telegram.org/js/telegram-widget.js?22'
+        script.setAttribute('data-telegram-login', 'axioma_manager_bot')
+        script.setAttribute('data-size', 'large')
+        script.setAttribute('data-radius', '8')
+        script.setAttribute('data-onauth', 'onProfileTelegramLink(user)')
+        script.setAttribute('data-request-access', 'write')
+        script.async = true
+        linkWidgetRef.current.appendChild(script)
+
+        return () => {
+            delete window.onProfileTelegramLink
+            if (linkWidgetRef.current) linkWidgetRef.current.innerHTML = ''
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [linkView])
+
+    // Задать логин и пароль текущему аккаунту (когда пароля ещё нет)
+    async function handleSetCredentials(e) {
+        e?.preventDefault?.()
+        const l = login.trim()
+        if (l.length < 3)         { setLinkError('Логин минимум 3 символа'); return }
+        if (password.length < 6)  { setLinkError('Пароль минимум 6 символов'); return }
+        if (password !== confirm) { setLinkError('Пароли не совпадают'); return }
+
+        setLinkPending(true)
+        setLinkError('')
+        const res = await setCredentials(l, password)
+        setLinkPending(false)
+        if (!res.ok) {
+            setLinkError(
+                res.reason === 'conflict'       ? 'Такой логин уже занят'
+                : res.reason === 'bad_request'  ? 'Проверьте логин и пароль'
+                : res.reason === 'unauthorized' ? 'Сессия истекла — войди заново'
+                : 'Не удалось сохранить. Попробуйте ещё раз'
+            )
+            return
+        }
+        onUserUpdate?.(res.user)
+        setLinkView('none')
+    }
+
+    // Портал в document.body: иначе position:fixed оверлея ловится containing
+    // block'ом родителя (у сайдбара/шелла есть backdrop-filter) и окно «залипает»
+    // в габаритах сайдбара вместо центра экрана.
+    if (typeof document === 'undefined') return null
+
+    return createPortal(
         <>
             <style>{style}</style>
             <div className="pm-overlay" onClick={onClose}>
@@ -400,6 +560,100 @@ function ProfileModal({ user, onClose, onLogout }) {
                                 )}
                             </div>
 
+                            {/* ─── Способы входа ─── */}
+                            <div className="pm-auth-sec">
+                                <div className="pm-auth-head">Способы входа</div>
+
+                                <div className="pm-row">
+                                    <span className="pm-row-l"><TgIcon /> Telegram</span>
+                                    {hasTelegram ? (
+                                        <span className="pm-badge ok"><Check size={11} /> Привязан</span>
+                                    ) : (
+                                        <button className="pm-mini" onClick={() => openLink('telegram')} disabled={linkPending}>
+                                            Привязать
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="pm-row">
+                                    <span className="pm-row-l"><KeyRound size={15} /> Логин и пароль</span>
+                                    {hasPassword ? (
+                                        <span className="pm-badge ok"><Check size={11} /> Задан</span>
+                                    ) : (
+                                        <button className="pm-mini" onClick={() => openLink('password')} disabled={linkPending}>
+                                            Задать
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Подпанель: привязка Telegram */}
+                                {linkView === 'telegram' && (
+                                    <div className="pm-linkpanel">
+                                        <div className="pm-linkpanel-t">
+                                            Войди через Telegram, чтобы привязать его к этому аккаунту.
+                                        </div>
+                                        <div className="pm-tgwidget" ref={linkWidgetRef} />
+                                        {linkError && (
+                                            <div className="pm-linkerr"><AlertTriangle size={13} /> {linkError}</div>
+                                        )}
+                                        <button className="pm-mini ghost" onClick={closeLink}>Отмена</button>
+                                    </div>
+                                )}
+
+                                {/* Подпанель: задать логин и пароль */}
+                                {linkView === 'password' && (
+                                    <form className="pm-linkpanel" onSubmit={handleSetCredentials}>
+                                        <input
+                                            className="pm-input"
+                                            type="text"
+                                            value={login}
+                                            onChange={e => setLogin(e.target.value)}
+                                            placeholder="Придумайте логин"
+                                            autoComplete="username"
+                                            autoCapitalize="none"
+                                            spellCheck={false}
+                                        />
+                                        <div className="pm-inwrap">
+                                            <input
+                                                className="pm-input has-toggle"
+                                                type={showPw ? 'text' : 'password'}
+                                                value={password}
+                                                onChange={e => setPassword(e.target.value)}
+                                                placeholder="Пароль"
+                                                autoComplete="new-password"
+                                            />
+                                            <button
+                                                type="button"
+                                                className="pm-pwtoggle"
+                                                onClick={() => setShowPw(v => !v)}
+                                                aria-label={showPw ? 'Скрыть пароль' : 'Показать пароль'}
+                                            >
+                                                {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                                            </button>
+                                        </div>
+                                        <input
+                                            className="pm-input"
+                                            type={showPw ? 'text' : 'password'}
+                                            value={confirm}
+                                            onChange={e => setConfirm(e.target.value)}
+                                            placeholder="Повторите пароль"
+                                            autoComplete="new-password"
+                                        />
+                                        {linkError && (
+                                            <div className="pm-linkerr"><AlertTriangle size={13} /> {linkError}</div>
+                                        )}
+                                        <div className="pm-linkbtns">
+                                            <button type="submit" className="pm-mini solid" disabled={linkPending}>
+                                                {linkPending ? 'Сохраняем…' : 'Сохранить'}
+                                            </button>
+                                            <button type="button" className="pm-mini ghost" onClick={closeLink}>
+                                                Отмена
+                                            </button>
+                                        </div>
+                                    </form>
+                                )}
+                            </div>
+
                             {/* Действия */}
                             <div className="pm-actions">
                                 {!hasAccess && !isAdmin && (
@@ -431,7 +685,8 @@ function ProfileModal({ user, onClose, onLogout }) {
                     </div>
                 </div>
             </div>
-        </>
+        </>,
+        document.body
     )
 }
 
