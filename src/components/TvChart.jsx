@@ -135,6 +135,10 @@ const TARGET_EXIT = 0.30
  * Побочных эффектов нет.
  */
 function buildRows(mode, history, theme, avgLong, avgShort) {
+  // Пустая история — до первых точек liveHistory. Math.min(...[]) вернул бы
+  // Infinity и сломал расчёт decimals, поэтому выходим сразу.
+  if (!history?.length) return { decimals: 2, rows: [] }
+
   if (mode === 'exit-spread') {
     // ref — спред при входе пользователя. captured = ref - текущий спред:
     //   > 0 → спред сузился, позиция закрывается в профит
@@ -274,6 +278,9 @@ function buildRows(mode, history, theme, avgLong, avgShort) {
 
   // entry-prices: две цены входа на общей шкале.
   // bid — сторона SELL (дороже), ask — сторона BUY (дешевле).
+  // bids объявляется здесь заново: одноимённая переменная выше живёт внутри
+  // блока exit-prices и в эту ветку не попадает (был ReferenceError).
+  const bids = history.map(p => p.bid)
   const asks = history.map(p => p.ask)
   const min = Math.min(...bids, ...asks)
   const max = Math.max(...bids, ...asks)

@@ -2118,7 +2118,7 @@ function AcademyMockup({ modules, totalLessons, onOpen }) {
 //
 // active — печатать или сбросить (при уходе курсора текст сбрасывается,
 //          чтобы при следующем наведении анимация проигралась снова).
-function Typewriter({ text, active, speed = 12 }) {
+function Typewriter({ text, active, speed = 10, chunk = 5 }) {
   const [shown, setShown] = useState(0)
 
   useEffect(() => {
@@ -2129,17 +2129,18 @@ function Typewriter({ text, active, speed = 12 }) {
     if (reduced) { setShown(text.length); return }
 
     // Печатаем пачками по несколько символов — так плавнее и легче для браузера,
-    // чем перерисовка на каждый отдельный символ
-    const CHUNK = 3
+    // чем перерисовка на каждый отдельный символ.
+    // chunk=5 / speed=10мс → ~500 симв/сек (было 3/12мс = ~250 симв/сек).
+    // Больший chunk заодно снижает число ре-рендеров на ту же длину текста.
     const id = setInterval(() => {
       setShown(prev => {
         if (prev >= text.length) { clearInterval(id); return prev }
-        return Math.min(text.length, prev + CHUNK)
+        return Math.min(text.length, prev + chunk)
       })
     }, speed)
 
     return () => clearInterval(id)
-  }, [active, text, speed])
+  }, [active, text, speed, chunk])
 
   const done = shown >= text.length
 

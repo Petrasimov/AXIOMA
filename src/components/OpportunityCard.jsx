@@ -101,9 +101,14 @@ const style = `
     min-height: 0;
   }
 
-  /* Каждая side-панель тоже растягивается */
+  /* Каждая side-панель тоже растягивается.
+     display:flex + column — чтобы .side-rows внутри могла занять
+     всю оставшуюся высоту (иначе строки прижимались к верху, а снизу
+     оставалась пустота на карточках без блока вариантов). */
   .card-side {
     flex: 1;
+    display: flex;
+    flex-direction: column;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     padding: 10px 11px 9px;
@@ -201,10 +206,25 @@ const style = `
     margin-left: 4px;
   }
 
+  /* Шапка панели (метка / биржа / цена) — фиксированной высоты,
+     сжиматься не должна, всю свободную высоту забирает .side-rows */
+  .side-label,
+  .side-exchange,
+  .side-price {
+    flex-shrink: 0;
+  }
+
+  /* flex:1 + space-between — строки Bid vol / Max size / Funding / Networks
+     равномерно распределяются по всей высоте панели.
+     gap работает как минимальный отступ: на низких карточках строки
+     стоят плотно, на высоких — разъезжаются равномерно. */
   .side-rows {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    justify-content: space-between;
     gap: 4px;
+    min-height: 0;
   }
 
   .side-row {
