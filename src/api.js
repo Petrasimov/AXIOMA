@@ -668,9 +668,33 @@ async function prefetchGateMultipliers() {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
+/**
+ * Маркер прерванного цикла. Бросается когда shouldAbort() вернул true —
+ * App.jsx по нему отличает «пользователь ушёл со страницы» от настоящей
+ * сетевой ошибки и не считает это неудачной попыткой.
+ */
+export const SCAN_ABORTED = 'SCAN_ABORTED'
+
+/**
+ * @param {Array}    rawRecords  — записи от бэкенда
+ * @param {number}   tradeAmount — объём сделки для расчёта VWAP
+ * @param {Function} shouldAbort — опциональный колбэк: вернул true → цикл прерывается.
+ *                                 Проверяется между этапами и между батчами,
+ *                                 чтобы не гонять запросы к биржам после ухода
+ *                                 пользователя со страницы.
+ */
+export async function enrichOpportunities(rawRecords, tradeAmount = 1000, shouldAbort = null) {
     const BATCH_SIZE = 10
     const results = []
+
+    // Единая точка проверки отмены
+    const checkAbort = () => {
+        if (typeof shouldAbort === 'function' && shouldAbort()) {
+            aLog('warn', '[ЦИКЛ] ⛔ Прервано — пользователь ушёл со страницы')
+            logCollector.finish()
+            throw new Error(SCAN_ABORTED)
+        }
+    }
 
     // Запускаем сборщик логов
     logCollector.start()
@@ -679,6 +703,8 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
     // Предзагрузка Gate multipliers (до фильтрации)
     const gateMultipliers = await prefetchGateMultipliers()
     // ════════════════════════════════════════════════════
+
+    checkAbort()
 
     // ════════════════════════════════════════════════════
     // ШАГ 4 — Фильтрация (VWAP + спред + группировка)
@@ -790,9 +816,14 @@ export async function enrichOpportunities(rawRecords, tradeAmount = 1000) {
     // Собираем только лучшие записи для обогащения (без вариантов)
     const allToEnrich = bestPerSymbol.map(({ best }) => ({ ...best, isBest: true }))
 
+    // Самый дорогой этап — здесь уходит 15-25 секунд и десятки запросов к биржам.
+    // Проверяем отмену перед стартом и перед каждым следующим батчем.
+    checkAbort()
+
     // Обогащаем батчами
     const enrichedResults = []
     for (let i = 0; i < allToEnrich.length; i += BATCH_SIZE) {
+        checkAbort()
         const batch = allToEnrich.slice(i, i + BATCH_SIZE)
         const batchResults = await Promise.all(
             batch.map(async ({ rec, sortedBid, sortedAsk, bid_price, ask_price, spread, depth_spread, depth_overlap, isBest }, batchIdx) => {

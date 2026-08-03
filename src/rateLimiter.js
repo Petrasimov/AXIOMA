@@ -86,6 +86,39 @@ function _reconstruct({ ok, status, headers, buffer }) {
     return res
 }
 
+/**
+ * Отменяет всё что запланировано, но ещё не отправлено.
+ *
+ * Очереди _queues живут в модуле, вне React-жизненного цикла: после ухода
+ * со страницы сканера они продолжали разбираться и слать запросы к биржам.
+ * Здесь мы отклоняем всё что стоит в очереди и очищаем карту дедупликации.
+ *
+ * Запросы уже улетевшие в сеть остановить нельзя — их результат просто
+ * будет отброшен вызывающим кодом (enrichOpportunities проверяет флаг отмены).
+ *
+ * @returns {number} сколько запросов было отброшено
+ */
+export function cancelAll() {
+    let dropped = 0
+
+    for (const key of Object.keys(_queues)) {
+        const state = _queues[key]
+        dropped += state.queue.length
+        // reject каждого — вызывающий код получит ошибку 'cancelled' и выйдет
+        state.queue.forEach(item => item.reject(new Error('cancelled')))
+        state.queue = []
+    }
+
+    // Сбрасываем дедупликацию: иначе новый цикл подписался бы на промисы
+    // отменённых запросов вместо создания свежих
+    for (const url of Object.keys(_inFlight)) delete _inFlight[url]
+
+    if (dropped > 0) {
+        aLog('warn', `[RL] cancelAll — отброшено запросов из очереди: ${dropped}`)
+    }
+    return dropped
+}
+
 /** Последовательно выбирает задачи из очереди с соблюдением минимального интервала. */
 async function _drain(state, minMs) {
     state.busy = true

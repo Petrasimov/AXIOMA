@@ -10,7 +10,8 @@ import LoadingScreen from "./components/LoadingScreen.jsx";
 import ActiveTradesBar from "./components/ActiveTradesBar.jsx";
 import ApiPage from "./components/ApiPage.jsx";
 import FundingPage from "./components/FundingPage.jsx"; 
-import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp, setAdminLogging, aLog } from "./api.js";
+import { enrichOpportunities, enrichSingleOpportunity, clearCacheForOpp, setAdminLogging, aLog, SCAN_ABORTED } from "./api.js";
+import { cancelAll as cancelExchangeQueues } from "./rateLimiter.js";
 import { calcVwap } from "./utils.js";
 import HomePage from "./components/HomePage.jsx";
 import TrainingPage from "./components/TrainingPage.jsx";
@@ -18,6 +19,7 @@ import AboutPage from "./components/AboutPage.jsx";
 import LegalPage from "./components/LegalPage.jsx";
 import FaqPage from "./components/FaqPage.jsx";
 import TopMoversPage from "./components/TopMoversPage.jsx";
+import NotFoundPage from "./components/NotFoundPage.jsx";
 import ProfileModal from "./components/ProfileModal.jsx";
 import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings, toggleNotifications } from "./auth.js";
 import TelegramAuthModal from "./components/TelegramAuthModal.jsx";
@@ -254,6 +256,11 @@ function App() {
   const liveOppIntervalRef = useRef(null)
   const liveOppRef = useRef(null)
 
+  // Состояние ошибок цикла сканирования.
+  // null — всё в порядке; { fatal:false } — временный сбой, идёт ретрай;
+  // { fatal:true } — лимит попыток исчерпан, цикл остановлен до перезагрузки.
+  const [scanError, setScanError] = useState(null)
+
   // ── Эффект: первичная проверка доступа при старте ─────────────────────────
   // Запускается один раз когда status === 'checking'
   // Результат определяет — запускать скринер или нет
@@ -480,11 +487,15 @@ function App() {
 
   function handleLogout() {
     clearSession()
-    clearInterval(scanIntervalRef.current)
+    // Цикл сканирования планируется через setTimeout — снимаем clearTimeout.
+    // (в браузере ID таймеров общие, но так корректнее по смыслу)
+    clearTimeout(scanIntervalRef.current)
     clearInterval(accessIntervalRef.current)
+    cancelExchangeQueues()   // выбрасываем очередь запросов к биржам
     scanIntervalRef.current = null
     accessIntervalRef.current = null
     sigRef.current = null
+    setScanError(null)
     setAuth({ status: 'unknown', user: null })
     setLiveData(null)
     setIsLoading(true)
@@ -802,29 +813,52 @@ function App() {
         return
     }
 
+    // cancelled — общий флаг для этого запуска эффекта.
+    // Ставится в true при уходе со страницы, логауте, открытии модалки.
+    // Читается и здесь, и внутри enrichOpportunities через shouldAbort.
     let cancelled = false
 
+    // AbortController обрывает висящий fetch к бэкенду.
+    // Без него запрос доживал до ответа даже после ухода со страницы.
+    let controller = null
+
+    // Счётчик подряд идущих ошибок → экспоненциальный backoff.
+    // Раньше при ошибке повтор шёл жёстко через 5с и долбил сервер бесконечно;
+    // в логах это выглядело как непрерывный поток HTTP 500.
+    let errorCount = 0
+    const MAX_ERRORS = 5
+    const RETRY_BASE = 15000   // 15с → 30 → 60 → 120 → 240, дальше стоп
+
     async function refresh() {
+        if (cancelled) return
+
         const cycleStart = performance.now()
         console.group('%c[ЦИКЛ] ═══════ Новый цикл сканирования ═══════', 'color:#3d87c0;font-weight:bold;font-size:13px')
+
+        controller = new AbortController()
 
         try {
             // ════════════════════════════════════════════════════
             // ШАГ 3 — Запрос к бэкенду
             const t3 = performance.now()
             console.group('%c[ШАГ 3] Запрос к бэкенду', 'color:#3d87c0;font-weight:bold')
-            console.log('[ШАГ 3] GET /backend/api/analysis/order-books-json')
+            console.log('[ШАГ 3] GET /api/analysis/order-books-json')
             // ════════════════════════════════════════════════════
 
-            const res = await fetch('/backend/api/analysis/order-books-json', {
+            // В production Nginx отдаёт /api/ напрямую, префикс /backend только для Vite proxy в dev
+            const res = await fetch((import.meta.env.PROD ? '' : '/backend') + '/api/analysis/order-books-json', {
                 credentials: 'include',
                 cache: 'no-store',
+                signal: controller.signal,
             })
 
             // 401 — cookie истекла, разлогиниваем прямо здесь
             if (res.status === 401) {
                 console.warn('[ЦИКЛ] ❌ 401 — сессия истекла, требуется повторная авторизация')
                 console.groupEnd()
+                console.groupEnd()
+                cancelled = true
+                cancelExchangeQueues()
                 clearSession()
                 clearTimeout(scanIntervalRef.current)
                 scanIntervalRef.current = null
@@ -841,35 +875,68 @@ function App() {
             console.groupEnd()
             // ════════════════════════════════════════════════════
 
-            const enriched = await enrichOpportunities(rawOpps, filters.tradeAmount)
+            // shouldAbort проверяется между этапами обогащения — самая долгая
+            // часть цикла (десятки запросов к биржам) прервётся на ближайшем батче
+            const enriched = await enrichOpportunities(
+                rawOpps,
+                filters.tradeAmount,
+                () => cancelled,
+            )
 
-            if (!cancelled) {
-                setLiveData(enriched)
-                setIsLoading(false)
+            if (cancelled) return
 
-                // Обновляем кэш после каждого цикла — TTL сбрасывается
-                writeLiveDataCache(enriched)
+            errorCount = 0   // успешный цикл сбрасывает счётчик неудач
+            setScanError(null)
+            setLiveData(enriched)
+            setIsLoading(false)
 
-                // ════════════════════════════════════════════════════
-                // ШАГ 6 — Показ карточек
-                console.group('%c[ШАГ 6] Карточки показаны пользователю', 'color:#00c97a;font-weight:bold')
-                console.log(`[ШАГ 6] ✅ Получено от enricher: ${enriched.length} (до фильтров UI)`)
-                console.log(`[ШАГ 6] Монеты: ${enriched.map(o => o.symbol).join(', ')}`)
-                console.log(`[ШАГ 6] ⏱ Полный цикл: ${((performance.now() - cycleStart)/1000).toFixed(2)}с`)
-                console.log(`[ШАГ 6] Следующий цикл через 55с`)
-                console.groupEnd()
-                console.groupEnd() // ЦИКЛ
-                // ════════════════════════════════════════════════════
+            // Обновляем кэш после каждого цикла — TTL сбрасывается
+            writeLiveDataCache(enriched)
 
-                scanIntervalRef.current = setTimeout(refresh, 55000)
-            }
-        } catch (err) {
-            console.error('[ЦИКЛ] ❌ Ошибка:', err.message)
+            // ════════════════════════════════════════════════════
+            // ШАГ 6 — Показ карточек
+            console.group('%c[ШАГ 6] Карточки показаны пользователю', 'color:#00c97a;font-weight:bold')
+            console.log(`[ШАГ 6] ✅ Получено от enricher: ${enriched.length} (до фильтров UI)`)
+            console.log(`[ШАГ 6] Монеты: ${enriched.map(o => o.symbol).join(', ')}`)
+            console.log(`[ШАГ 6] ⏱ Полный цикл: ${((performance.now() - cycleStart)/1000).toFixed(2)}с`)
+            console.log(`[ШАГ 6] Следующий цикл через 55с`)
             console.groupEnd()
-            if (!cancelled) {
-                setIsLoading(false)
-                scanIntervalRef.current = setTimeout(refresh, 5000)
+            console.groupEnd() // ЦИКЛ
+            // ════════════════════════════════════════════════════
+
+            scanIntervalRef.current = setTimeout(refresh, 55000)
+
+        } catch (err) {
+            // Прерывание — не ошибка: пользователь ушёл со страницы.
+            // Ни ретрая, ни счётчика, ни сообщения.
+            const isAbort = err.name === 'AbortError' || err.message === SCAN_ABORTED || err.message === 'cancelled'
+            if (isAbort || cancelled) {
+                console.warn('[ЦИКЛ] ⛔ Цикл прерван')
+                console.groupEnd()
+                return
             }
+
+            errorCount++
+            console.error(`[ЦИКЛ] ❌ Ошибка (${errorCount}/${MAX_ERRORS}):`, err.message)
+            console.groupEnd()
+
+            setIsLoading(false)
+
+            if (errorCount >= MAX_ERRORS) {
+                // Дальше долбить сервер бессмысленно — останавливаемся совсем
+                console.error('[ЦИКЛ] 🛑 Лимит ошибок исчерпан, сканирование остановлено')
+                cancelExchangeQueues()
+                clearTimeout(scanIntervalRef.current)
+                scanIntervalRef.current = null
+                setScanError({ fatal: true, message: err.message })
+                return
+            }
+
+            // Экспоненциальный backoff: 15с → 30 → 60 → 120 → 240
+            const delay = RETRY_BASE * Math.pow(2, errorCount - 1)
+            console.warn(`[ЦИКЛ] ⏳ Повтор через ${(delay / 1000).toFixed(0)}с`)
+            setScanError({ fatal: false, message: err.message, retryIn: delay })
+            scanIntervalRef.current = setTimeout(refresh, delay)
         }
     }
 
@@ -877,6 +944,8 @@ function App() {
 
     return () => {
         cancelled = true
+        controller?.abort()            // рвём висящий запрос к бэкенду
+        cancelExchangeQueues()         // выбрасываем всё что стоит в очереди к биржам
         clearTimeout(scanIntervalRef.current)
         scanIntervalRef.current = null
     }
@@ -1145,6 +1214,8 @@ function App() {
             onNavigate={navigateTo}
             onOpenArbitrage={openArbitrageForCoin}
           />
+        ) : activePage === 'notfound' ? (
+          <NotFoundPage onGoHome={() => goTo('home')} />
         ) : activePage === 'faq' ? (
           <FaqPage onNavigate={navigateTo} />
         ) : activePage === 'legal' ? (
@@ -1247,7 +1318,43 @@ function App() {
                 isLoading={isLoading}
               />
 
-
+              {/* Баннер ошибки цикла. Раньше при сбое пользователь видел просто
+                  пустую сетку без объяснений, а цикл молча долбил сервер. */}
+              {scanError && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  margin: '0 16px 10px',
+                  padding: '11px 15px',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: 12.5,
+                  background: scanError.fatal ? 'rgba(224,62,62,0.08)' : 'rgba(240,165,0,0.07)',
+                  border: `1px solid ${scanError.fatal ? 'rgba(224,62,62,0.3)' : 'rgba(240,165,0,0.28)'}`,
+                  color: scanError.fatal ? 'var(--error)' : 'var(--warning)',
+                }}>
+                  <span style={{ flex: 1 }}>
+                    {scanError.fatal
+                      ? `Сервис недоступен (${scanError.message}). Сканирование остановлено.`
+                      : `Ошибка соединения (${scanError.message}). Повтор через ${Math.round((scanError.retryIn ?? 0) / 1000)}с.`}
+                  </span>
+                  {scanError.fatal && (
+                    <button
+                      onClick={() => window.location.reload()}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: 'var(--radius-sm)',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 10, fontWeight: 700, letterSpacing: 1,
+                        textTransform: 'uppercase', cursor: 'pointer',
+                        background: 'rgba(255,255,255,0.04)',
+                        border: '1px solid var(--glass-border)',
+                        color: 'var(--text-primary)',
+                      }}
+                    >
+                      Обновить
+                    </button>
+                  )}
+                </div>
+              )}
 
               {isLoading
                 ? <LoadingScreen />

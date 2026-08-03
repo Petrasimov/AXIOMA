@@ -42,6 +42,13 @@ export const PAGE_SEO = {
   api:     { title: 'API — AXIOMA SCAN',                description: DEFAULT.description, noindex: true },
   pay_success: { title: 'Оплата — AXIOMA SCAN', description: DEFAULT.description, noindex: true },
   pay_cancel:  { title: 'Оплата отменена — AXIOMA SCAN', description: DEFAULT.description, noindex: true },
+  // 404 — обязательно noindex, иначе поисковик проиндексирует
+  // бесконечное число несуществующих URL как отдельные страницы
+  notfound: {
+    title: 'Страница не найдена — AXIOMA SCAN',
+    description: 'Запрошенная страница не существует. Вернитесь на главную страницу AXIOMA SCAN.',
+    noindex: true,
+  },
 }
 
 // Человекочитаемые названия для хлебных крошек (Главная → …)
@@ -73,6 +80,11 @@ function upsertLink(rel, href) {
   el.setAttribute('href', href)
 }
 
+function removeLink(rel) {
+  const el = document.head.querySelector(`link[rel="${rel}"]`)
+  if (el) el.remove()
+}
+
 function setRobotsNoindex(noindex) {
   const sel = 'meta[name="robots"]'
   let el = document.head.querySelector(sel)
@@ -92,11 +104,21 @@ function setRobotsNoindex(noindex) {
 export function applySeo(page, { legalDoc } = {}) {
   if (typeof document === 'undefined') return
   const meta = PAGE_SEO[page] || DEFAULT
-  const url = ORIGIN + pathForPage(page, legalDoc)
+
+  // 404 не имеет собственного маршрута в PAGE_TO_PATH — pathForPage вернул бы '/',
+  // и canonical указал бы на главную. Для несуществующей страницы это неверный
+  // сигнал поисковику, поэтому canonical не ставим вовсе, а в og:url отдаём
+  // фактический адрес из строки браузера.
+  const isNotFound = page === 'notfound'
+  const url = isNotFound
+    ? ORIGIN + (window.location?.pathname || '/')
+    : ORIGIN + pathForPage(page, legalDoc)
 
   document.title = meta.title
   upsertMeta('meta[name="description"]', 'name', 'description', meta.description)
-  upsertLink('canonical', url)
+
+  if (isNotFound) removeLink('canonical')
+  else upsertLink('canonical', url)
 
   upsertMeta('meta[property="og:title"]', 'property', 'og:title', meta.title)
   upsertMeta('meta[property="og:description"]', 'property', 'og:description', meta.description)
