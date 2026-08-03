@@ -440,6 +440,49 @@ const style = `
     z-index: -1;
   }
 
+  /* ─── Прогресс-кольцо последнего шага ───────────────────────────────
+     Обводка вокруг кружка «04» растёт от 0° до 360° ровно за время показа
+     шага. Когда круг замкнулся — шаг превращается в галочку и цикл
+     стартует заново. Это визуально закрывает цикл: раньше 4-й шаг
+     просто исчезал, не успев стать «пройденным» как первые три.
+
+     ВАЖНО: длительность анимации (4s) должна совпадать со STEP_MS в JS.
+     Меняешь одно — меняй второе. */
+  .hp-tl-ring {
+    position: absolute;
+    inset: -5px;
+    transform: rotate(-90deg);   /* старт обводки с 12 часов, а не с 3 */
+    pointer-events: none;
+    overflow: visible;
+    z-index: 3;
+  }
+  .hp-tl-ring circle {
+    fill: none;
+    stroke-width: 2;
+  }
+  .hp-tl-ring-track {
+    stroke: rgba(61,135,192,0.14);
+  }
+  .hp-tl-ring-progress {
+    stroke: var(--accent-bright);
+    stroke-linecap: round;
+    /* 2πr при r=19 → 119.38 */
+    stroke-dasharray: 119.38;
+    stroke-dashoffset: 119.38;
+    animation: hp-ring-fill 4s linear forwards;
+    filter: drop-shadow(0 0 4px rgba(61,135,192,0.55));
+  }
+  @keyframes hp-ring-fill {
+    to { stroke-dashoffset: 0; }
+  }
+  /* При «меньше движения» кольцо показываем сразу замкнутым */
+  @media (prefers-reduced-motion: reduce) {
+    .hp-tl-ring-progress {
+      animation: none;
+      stroke-dashoffset: 0;
+    }
+  }
+
   /* ─── Вступительная анимация: шаги появляются по очереди ─── */
   .hp-tl-step.intro-hidden .hp-tl-circle {
     opacity: 0;
@@ -2152,8 +2195,21 @@ function Typewriter({ text, active, speed = 10, chunk = 5 }) {
   )
 }
 
+// Длительность показа одного шага таймлайна.
+// ВАЖНО: должна совпадать с animation-duration у .hp-tl-ring-progress (4s).
+const STEP_MS = 4000
+
+// Сколько кружок «04» висит галочкой перед сбросом цикла на первый шаг
+const FINISH_PAUSE_MS = 700
+
 export default function HomePage({ onOpenScanner, onNavigate, onSubscribe }) {
   const [step, setStep] = useState(0)
+  // finishing — 4-й шаг отработал: кольцо замкнулось, показываем галочку
+  // и держим паузу перед сбросом цикла
+  const [finishing, setFinishing] = useState(false)
+  // cycleTick — счётчик проходов цикла. Служит key для SVG-кольца,
+  // чтобы CSS-анимация перезапускалась на каждом новом круге
+  const [cycleTick, setCycleTick] = useState(0)
   const [fundingRate, setFundingRate] = useState(4) // -10..10 → -0.10%..+0.10%
   const timerRef = useRef(null)
 
@@ -2284,22 +2340,42 @@ export default function HomePage({ onOpenScanner, onNavigate, onSubscribe }) {
     }
   }, [])
 
-  // Обычный цикл подсветки — стартует только ПОСЛЕ вступления
+  // Обычный цикл подсветки — стартует только ПОСЛЕ вступления.
+  //
+  // Планировщик пересобирается на каждую смену step, а не крутится одним
+  // setInterval: последнему шагу нужна дополнительная пауза, чтобы кружок
+  // успел превратиться в галочку перед сбросом цикла.
+  //
+  //   step 0 → 1 → 2 → 3 ─(4с, кольцо обвелось)→ finishing=true (④ → ✓)
+  //                         ─(пауза)→ step=0, finishing=false, цикл заново
   useEffect(() => {
     if (!introDone) return
-    timerRef.current = setInterval(() => {
-      setStep(prev => (prev + 1) % 4)
-    }, 4000)
-    return () => clearInterval(timerRef.current)
-  }, [introDone])
+
+    // Фаза «галочка»: 4-й шаг отработал, держим паузу и сбрасываем цикл
+    if (finishing) {
+      timerRef.current = setTimeout(() => {
+        setFinishing(false)
+        setStep(0)
+        setCycleTick(t => t + 1)
+      }, FINISH_PAUSE_MS)
+      return () => clearTimeout(timerRef.current)
+    }
+
+    timerRef.current = setTimeout(() => {
+      if (step === STEPS.length - 1) setFinishing(true)
+      else setStep(step + 1)
+    }, STEP_MS)
+
+    return () => clearTimeout(timerRef.current)
+  }, [introDone, step, finishing])
 
   const goToStep = (n) => {
     if (!introDone) return   // во время вступления клики игнорируем
+    setFinishing(false)
     setStep(n)
-    clearInterval(timerRef.current)
-    timerRef.current = setInterval(() => {
-      setStep(prev => (prev + 1) % 4)
-    }, 4000)
+    // cycleTick меняет key у SVG-кольца → CSS-анимация запускается заново.
+    // Без этого повторный клик по 4-му шагу оставил бы кольцо замкнутым.
+    setCycleTick(t => t + 1)
   }
 
   // ── Слайд 3: фандинг — производные значения от слайдера ставки ──
@@ -2381,8 +2457,18 @@ export default function HomePage({ onOpenScanner, onNavigate, onSubscribe }) {
                 // Во время вступления шаги проявляются по очереди и все
                 // «пройденные» горят зелёным. После вступления — обычный цикл.
                 const introVisible = introRevealed > i
-                const isDone = introDone ? i < step : introVisible
-                const isActive = introDone ? step === i : false
+                // Последний шаг тоже становится «пройденным» — в фазе finishing,
+                // когда его кольцо замкнулось. Раньше он единственный никогда
+                // не получал галочку, потому что step сбрасывался в 0 сразу.
+                const isLast = i === STEPS.length - 1
+                const isDone = introDone
+                  ? (i < step || (isLast && finishing))
+                  : introVisible
+                // В фазе finishing шаг уже не «активный», а «пройденный» —
+                // иначе он получил бы оба класса разом
+                const isActive = introDone
+                  ? (step === i && !(isLast && finishing))
+                  : false
 
                 // ЛИНИЯ под шагом. Логика:
                 //   во время вступления — протягивается сразу после появления кружка
@@ -2406,6 +2492,21 @@ export default function HomePage({ onOpenScanner, onNavigate, onSubscribe }) {
                     <div className="hp-tl-left">
                       <div className="hp-tl-circle">
                         {isDone ? '✓' : `0${i + 1}`}
+
+                        {/* Кольцо прогресса — только у последнего шага.
+                            key завязан на cycleTick: при новом проходе цикла
+                            SVG перемонтируется и CSS-анимация стартует с нуля. */}
+                        {isLast && isActive && (
+                          <svg
+                            key={`ring-${cycleTick}`}
+                            className="hp-tl-ring"
+                            viewBox="0 0 42 42"
+                            aria-hidden="true"
+                          >
+                            <circle className="hp-tl-ring-track" cx="21" cy="21" r="19" />
+                            <circle className="hp-tl-ring-progress" cx="21" cy="21" r="19" />
+                          </svg>
+                        )}
                       </div>
 
                       {/* Линия к следующему шагу (у последнего её нет).
