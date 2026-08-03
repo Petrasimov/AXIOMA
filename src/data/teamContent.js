@@ -49,9 +49,10 @@ export const TEAM = [
             { label: 'Бизнес-логика сканеров', icon: 'Binary', color: '#00c97a' },
             { label: 'Продукт и дизайн', icon: 'Palette', color: '#a78bfa' },
         ],
-        socials: [
-            { type: 'telegram', url: 'https://t.me/Eeighth', label: '@Eeighth' },
-        ],
+        // Контакты убраны из карточек команды по решению продукта.
+        // Вернуть = раскомментировать строку ниже.
+        // { type: 'telegram', url: 'https://t.me/Eeighth', label: '@Eeighth' },
+        socials: [],
     },
     {
         initial: 'Е',
@@ -68,13 +69,12 @@ export const TEAM = [
             { label: 'Сообщество', icon: 'Users', color: '#f472b6' },
             { label: 'Работа с людьми', icon: 'MessageCircle', color: '#5eead4' },
         ],
-        socials: [
-            { type: 'telegram', url: 'https://t.me/Axioma_Scan', label: 'Telegram' },
-        ],
+        // { type: 'telegram', url: 'https://t.me/Axioma_Scan', label: 'Telegram' },
+        socials: [],
     },
     {
-        initial: 'С',
-        name: 'Слава',
+        initial: 'В',
+        name: 'Вячеслав',
         photo: null,
         color: 'linear-gradient(135deg,#f0a500,#ffc333)',
         role: 'Backend и база данных',
@@ -87,8 +87,7 @@ export const TEAM = [
             { label: 'База данных', icon: 'Database', color: '#3d87c0' },
             { label: 'Сбор данных с бирж', icon: 'Activity', color: '#fb923c' },
         ],
-        socials: [
-            { type: 'telegram', url: 'https://t.me/Axioma_Scan', label: 'Telegram' },
-        ],
+        // { type: 'telegram', url: 'https://t.me/Axioma_Scan', label: 'Telegram' },
+        socials: [],
     },
 ]
