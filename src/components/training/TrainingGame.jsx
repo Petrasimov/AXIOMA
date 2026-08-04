@@ -103,13 +103,20 @@ function pctSpread(p) {
     return ((hi - lo) / lo) * 100
 }
 
-function FindSpreadGame() {
+function FindSpreadGame({ onComplete }) {
     const round = ROUNDS[0]
     const spreads = round.map(pctSpread)
     const bestIdx = spreads.indexOf(Math.max(...spreads))
     const [picked, setPicked] = useState(null)
     const answered = picked !== null
     const win = picked === bestIdx
+
+    // Игра считается пройденной при верном ответе.
+    // Ошибся — доступна кнопка «Ещё раз», попытки не ограничены.
+    const handlePick = (i) => {
+        setPicked(i)
+        if (i === bestIdx) onComplete?.()
+    }
 
     return (
         <div className="tg-wrap">
@@ -125,7 +132,7 @@ function FindSpreadGame() {
                         else if (i === picked) cls += ' wrong'
                     }
                     return (
-                        <button key={i} className={cls} disabled={answered} onClick={() => setPicked(i)}>
+                        <button key={i} className={cls} disabled={answered} onClick={() => handlePick(i)}>
                             <div className="tg-card-sym">{p.sym}/USDT</div>
                             <div className="tg-card-prices">
                                 <span className="tg-card-ex">{p.exA} ${p.pA}</span>
@@ -153,14 +160,19 @@ function FindSpreadGame() {
 }
 
 // ─── build-trade ──────────────────────────────────────────────────────────
-function BuildTradeGame() {
+function BuildTradeGame({ onComplete }) {
     // Дорогая = MEXC ($2.418) → SHORT; дешёвая = Bitget ($2.375) → LONG
     const [slots, setSlots] = useState({ mexc: null, bitget: null })
     const [placing, setPlacing] = useState(null) // 'LONG' | 'SHORT'
 
     const placeIn = (ex) => {
         if (!placing) return
-        setSlots(prev => ({ ...prev, [ex]: placing }))
+        setSlots(prev => {
+            const next = { ...prev, [ex]: placing }
+            // Игра пройдена, когда обе ноги на месте и расставлены верно
+            if (next.mexc === 'SHORT' && next.bitget === 'LONG') onComplete?.()
+            return next
+        })
         setPlacing(null)
     }
 
@@ -240,13 +252,13 @@ const GAMES = {
     'build-trade': BuildTradeGame,
 }
 
-function TrainingGame({ kind }) {
+function TrainingGame({ kind, onComplete }) {
     const Game = GAMES[kind]
     if (!Game) return null
     return (
         <>
             <style>{style}</style>
-            <Game />
+            <Game onComplete={onComplete} />
         </>
     )
 }

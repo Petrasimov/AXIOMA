@@ -59,11 +59,22 @@ const style = `
   }
 `
 
-function TrainingQuiz({ question, options, explain }) {
+/**
+ * @param {Function} onComplete — вызывается когда выбран ПРАВИЛЬНЫЙ ответ.
+ *                                Урок нельзя завершить, пока все квизы не пройдены.
+ *                                При ошибке доступна повторная попытка — это
+ *                                обучение, а не экзамен, ограничения по попыткам нет.
+ */
+function TrainingQuiz({ question, options, explain, onComplete }) {
     const [picked, setPicked] = useState(null)
     const opts = Array.isArray(options) ? options : []
     const answered = picked !== null
     const pickedCorrect = answered && opts[picked]?.correct === true
+
+    const handlePick = (i) => {
+        setPicked(i)
+        if (opts[i]?.correct === true) onComplete?.()
+    }
 
     return (
         <>
@@ -82,7 +93,7 @@ function TrainingQuiz({ question, options, explain }) {
                             key={i}
                             className={cls}
                             disabled={answered}
-                            onClick={() => setPicked(i)}
+                            onClick={() => handlePick(i)}
                         >
                             <span className="tq-mark">
                                 {answered && opt.correct ? '✓' : answered && i === picked ? '✕' : String.fromCharCode(65 + i)}

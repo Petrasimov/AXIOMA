@@ -13,7 +13,7 @@ import { useState } from 'react'
 import {
     BookOpen, Settings, Shuffle, Percent, MonitorSmartphone, ShieldCheck,
     GraduationCap, Play, Check, ChevronRight, Trophy,
-    SlidersHorizontal, BarChart3, HelpCircle, Gamepad2,
+    SlidersHorizontal, BarChart3, HelpCircle, Gamepad2, Lock,
 } from 'lucide-react'
 import { TRAINING_SECTIONS, TRAINING_MODULES } from '../data/trainingContent.js'
 import { useTrainingProgress } from '../hooks/useTrainingProgress.js'
@@ -160,6 +160,12 @@ const style = `
     transition: all 0.2s; position: relative; display: flex; flex-direction: column;
   }
   .tp-card:hover { transform: translateY(-4px); border-color: var(--glass-border-hover); background: var(--glass-fill-hover); box-shadow: 0 16px 44px rgba(0,0,0,0.5); }
+
+  /* Модуль закрыт: обучение последовательное, пока не пройден предыдущий —
+     карточка глушится и перестаёт реагировать на наведение и клик */
+  .tp-card.locked { opacity: 0.42; cursor: not-allowed; filter: grayscale(0.55); }
+  .tp-card.locked:hover { transform: none; border-color: var(--glass-border); background: var(--glass-fill); box-shadow: var(--shadow-glass); }
+  .tp-card.locked .tp-card-top { background: var(--text-muted); }
   .tp-card-top { height: 4px; background: var(--mc); }
   .tp-card-body { padding: 20px; flex: 1; display: flex; flex-direction: column; }
   .tp-card-head { display:flex; align-items:center; gap:11px; margin-bottom:12px; }
@@ -220,8 +226,12 @@ const style = `
   }
 `
 
-function TrainingPage({ onNavigate }) {
-    const { progress, isLessonDone, markLesson } = useTrainingProgress(TRAINING_MODULES)
+function TrainingPage({ onNavigate, trainingCount = null, onLessonComplete = null }) {
+    // trainingCount — число пройденных уроков из userSettings.Training (бэкенд).
+    // Пока эндпоинт не готов, приходит null и хук работает на localStorage.
+    // onLessonComplete — сюда подключится запрос, увеличивающий Training на 1.
+    const { progress, isLessonDone, isModuleUnlocked, markLesson } =
+        useTrainingProgress(TRAINING_MODULES, { trainingCount, onLessonComplete })
     const [openModuleId, setOpenModuleId] = useState(null)
     const [lessonIndex, setLessonIndex] = useState(0)
 
@@ -231,6 +241,9 @@ function TrainingPage({ onNavigate }) {
     const next = progress.nextStatus
 
     function startModule(mod) {
+        // Обучение последовательное: модуль открывается только если
+        // предыдущий пройден полностью
+        if (!isModuleUnlocked(mod.id)) return
         // открыть первый незавершённый урок, иначе первый
         const firstUndoneIdx = mod.lessons.findIndex(l => !isLessonDone(l.id))
         setLessonIndex(firstUndoneIdx >= 0 ? firstUndoneIdx : 0)
@@ -343,12 +356,15 @@ function TrainingPage({ onNavigate }) {
                                     <div className="tp-grid">
                                         {mods.map(mod => {
                                             const Icon = ICONS[mod.icon] ?? BookOpen
-                                            const p = progress.perModule[mod.id] ?? { pct: 0, done: 0, total: mod.lessons.length, complete: false }
-                                            const badge = p.complete
-                                                ? { txt: 'Готово', ic: Check }
-                                                : p.done > 0
-                                                    ? { txt: 'В процессе', ic: Play }
-                                                    : { txt: 'Открыт', ic: ChevronRight }
+                                            const p = progress.perModule[mod.id] ?? { pct: 0, done: 0, total: mod.lessons.length, complete: false, unlocked: false }
+                                            const locked = p.unlocked === false
+                                            const badge = locked
+                                                ? { txt: 'Закрыт', ic: Lock }
+                                                : p.complete
+                                                    ? { txt: 'Готово', ic: Check }
+                                                    : p.done > 0
+                                                        ? { txt: 'В процессе', ic: Play }
+                                                        : { txt: 'Открыт', ic: ChevronRight }
                                             const BadgeIc = badge.ic
 
                                             // Состав интерактива этого модуля — считается из реального
@@ -362,7 +378,13 @@ function TrainingPage({ onNavigate }) {
                                             ].filter(Boolean)
 
                                             return (
-                                                <div key={mod.id} className="tp-card" style={{ '--mc': mod.color }} onClick={() => startModule(mod)}>
+                                                <div
+                                                    key={mod.id}
+                                                    className={`tp-card ${locked ? 'locked' : ''}`}
+                                                    style={{ '--mc': mod.color }}
+                                                    title={locked ? 'Сначала пройдите предыдущий модуль' : ''}
+                                                    onClick={() => startModule(mod)}
+                                                >
                                                     <div className="tp-card-top" />
                                                     <div className="tp-card-body">
                                                         <div className="tp-card-head">

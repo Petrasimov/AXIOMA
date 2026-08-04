@@ -6,8 +6,8 @@
  * Кнопка «Завершить урок» отмечает прогресс через markLesson.
  */
 
-import { useState, useEffect } from 'react'
-import { X, ChevronLeft, ChevronRight, Check, Clock, Info, AlertTriangle, Lightbulb } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { X, ChevronLeft, ChevronRight, Check, Clock, Info, AlertTriangle, Lightbulb, Lock } from 'lucide-react'
 import TrainingDiagram from './training/TrainingDiagram.jsx'
 import TrainingSimulator from './training/TrainingSimulator.jsx'
 import TrainingQuiz from './training/TrainingQuiz.jsx'
@@ -101,6 +101,15 @@ const style = `
     cursor: pointer; box-shadow: 0 4px 18px rgba(47,105,151,0.3); transition: all 0.15s;
   }
   .lm-done-btn:hover { transform: translateY(-1px); }
+  .lm-done-btn:disabled { cursor: default; transform: none; }
+  /* Заблокирована до прохождения квизов/игр — гасим градиент, чтобы
+     не выглядела как активный призыв к действию */
+  .lm-done-btn:disabled:not(.done) {
+    background: rgba(255,255,255,0.03);
+    border-color: var(--glass-border);
+    color: var(--text-muted);
+    box-shadow: none;
+  }
   .lm-done-btn.done { background: linear-gradient(135deg, rgba(0,231,143,0.25), rgba(0,168,102,0.12)); border-color: rgba(0,201,122,0.4); color: var(--success); box-shadow: 0 0 16px rgba(0,201,122,0.15); }
 
   /* ══════════════════════════════════════════════════════════════
@@ -161,7 +170,9 @@ const style = `
 
 const CALLOUT_ICON = { info: Info, warn: AlertTriangle, tip: Lightbulb }
 
-function renderBlock(block, i) {
+// onBlockDone(i) — интерактивный блок (квиз/игра) с индексом i пройден.
+// Пока не пройдены все такие блоки, кнопка «Завершить урок» заблокирована.
+function renderBlock(block, i, onBlockDone) {
     switch (block?.type) {
         case 'text':
             return (
@@ -195,9 +206,17 @@ function renderBlock(block, i) {
         case 'simulator':
             return <TrainingSimulator key={i} kind={block.kind} />
         case 'quiz':
-            return <TrainingQuiz key={i} question={block.question} options={block.options} explain={block.explain} />
+            return (
+                <TrainingQuiz
+                    key={i}
+                    question={block.question}
+                    options={block.options}
+                    explain={block.explain}
+                    onComplete={() => onBlockDone?.(i)}
+                />
+            )
         case 'game':
-            return <TrainingGame key={i} kind={block.kind} />
+            return <TrainingGame key={i} kind={block.kind} onComplete={() => onBlockDone?.(i)} />
         default:
             return null
     }
@@ -208,8 +227,15 @@ function LessonModal({ module: mod, lessonIndex, onClose, onNavigate, isLessonDo
     const lesson = lessons[lessonIndex]
     const [scrollKey, setScrollKey] = useState(0)
 
+    // Какие интерактивные блоки текущего урока пройдены: { blockIndex: true }
+    const [blockDone, setBlockDone] = useState({})
+
     // сброс скролла тела при смене урока
     useEffect(() => { setScrollKey(k => k + 1) }, [lessonIndex])
+
+    // Смена урока обнуляет прогресс по интерактивным блокам —
+    // иначе квиз следующего урока считался бы уже пройденным
+    useEffect(() => { setBlockDone({}) }, [lessonIndex, mod?.id])
 
     // Esc закрывает
     useEffect(() => {
@@ -218,11 +244,31 @@ function LessonModal({ module: mod, lessonIndex, onClose, onNavigate, isLessonDo
         return () => window.removeEventListener('keydown', onKey)
     }, [onClose])
 
+    // Индексы блоков, которые нужно пройти прежде чем завершать урок
+    const interactiveIdx = useMemo(() => {
+        const blocks = lessons[lessonIndex]?.blocks ?? []
+        return blocks
+            .map((b, i) => ({ type: b?.type, i }))
+            .filter(({ type }) => type === 'quiz' || type === 'game')
+            .map(({ i }) => i)
+    }, [lessons, lessonIndex])
+
+    const markBlockDone = (i) => setBlockDone(prev => (prev[i] ? prev : { ...prev, [i]: true }))
+
     if (!lesson) return null
 
     const done = isLessonDone?.(lesson.id) === true
     const hasPrev = lessonIndex > 0
     const hasNext = lessonIndex < lessons.length - 1
+
+    // Урок можно завершить только когда пройдены все квизы и мини-игры.
+    // Если интерактивных блоков нет — кнопка доступна сразу.
+    const pendingInteractive = interactiveIdx.filter(i => !blockDone[i]).length
+    const canFinish = pendingInteractive === 0
+
+    // Переход к следующему уроку открыт только после завершения текущего:
+    // обучение последовательное, перепрыгивать вперёд нельзя.
+    const canGoNext = hasNext && done
 
     return (
         <>
@@ -241,7 +287,7 @@ function LessonModal({ module: mod, lessonIndex, onClose, onNavigate, isLessonDo
                     </div>
 
                     <div className="lm-body" key={scrollKey}>
-                        {(lesson.blocks ?? []).map(renderBlock)}
+                        {(lesson.blocks ?? []).map((b, i) => renderBlock(b, i, markBlockDone))}
                     </div>
 
                     <div className="lm-foot">
@@ -249,14 +295,31 @@ function LessonModal({ module: mod, lessonIndex, onClose, onNavigate, isLessonDo
                             <ChevronLeft size={14} /> Назад
                         </button>
 
+                        {/* Кнопка в одну сторону: отметку «пройдено» снять нельзя.
+                            Пока не закрыты квизы/игры — заблокирована с подсказкой. */}
                         <button
                             className={`lm-done-btn ${done ? 'done' : ''}`}
-                            onClick={() => onMarkDone(lesson.id, !done)}
+                            disabled={done || !canFinish}
+                            title={
+                                done ? 'Урок уже пройден'
+                                     : !canFinish ? `Сначала пройдите задания в уроке (осталось: ${pendingInteractive})`
+                                     : ''
+                            }
+                            onClick={() => { if (!done && canFinish) onMarkDone(lesson.id) }}
                         >
-                            <Check size={14} /> {done ? 'Пройдено' : 'Завершить урок'}
+                            {done
+                                ? <><Check size={14} /> Пройдено</>
+                                : canFinish
+                                    ? <><Check size={14} /> Завершить урок</>
+                                    : <><Lock size={13} /> Осталось заданий: {pendingInteractive}</>}
                         </button>
 
-                        <button className="lm-nav-btn" disabled={!hasNext} onClick={() => onNavigate(lessonIndex + 1)}>
+                        <button
+                            className="lm-nav-btn"
+                            disabled={!canGoNext}
+                            title={hasNext && !done ? 'Сначала завершите текущий урок' : ''}
+                            onClick={() => { if (canGoNext) onNavigate(lessonIndex + 1) }}
+                        >
                             Далее <ChevronRight size={14} />
                         </button>
                     </div>
