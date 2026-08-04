@@ -46,6 +46,22 @@ const style = `
   /* Монета с большим расхождением между биржами — потенциальный арбитраж */
   .bm-bub.diverge { box-shadow: 0 6px 26px rgba(0,0,0,0.4), 0 0 0 2px var(--warning), inset 0 2px 10px rgba(255,255,255,0.2); }
 
+  /* Аномальное расхождение (>100%). Оранжевая обводка тут вводит в заблуждение:
+     она читается как «хорошая возможность», хотя на практике такой разрыв почти
+     всегда означает мёртвый стакан, разные токены с похожим тикером или битые
+     данные биржи. Красный + пульсация — сигнал «сначала проверь, потом лезь». */
+  .bm-bub.diverge.extreme {
+    box-shadow: 0 6px 26px rgba(0,0,0,0.4), 0 0 0 2.5px var(--error), inset 0 2px 10px rgba(255,255,255,0.2);
+    animation: bm-in .55s cubic-bezier(.22,1,.36,1) backwards, bm-extreme-pulse 2.2s ease-in-out infinite .55s;
+  }
+  @keyframes bm-extreme-pulse {
+    0%, 100% { box-shadow: 0 6px 26px rgba(0,0,0,0.4), 0 0 0 2.5px var(--error), inset 0 2px 10px rgba(255,255,255,0.2); }
+    50%      { box-shadow: 0 6px 30px rgba(224,62,62,0.45), 0 0 0 3.5px rgba(224,62,62,0.55), inset 0 2px 10px rgba(255,255,255,0.2); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bm-bub.diverge.extreme { animation: none; }
+  }
+
   .bm-sym { font-weight: 800; color: #fff; line-height: 1; text-shadow: 0 1px 4px rgba(0,0,0,0.45); }
   .bm-pct { font-family: var(--font-mono); font-weight: 700; color: rgba(255,255,255,0.93); margin-top: 3px; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
   .bm-ex-tag {
@@ -60,6 +76,9 @@ const style = `
     font-size: 8px; font-family: var(--font-mono); font-weight: 700;
     padding: 2px 6px; border-radius: 10px;
     background: rgba(240,165,0,0.9); color: #1a1200; white-space: nowrap;
+  }
+  .bm-diverge-mark.extreme {
+    background: rgba(224,62,62,0.95); color: #fff;
   }
 
   /* ─── Тултип ─── */
@@ -102,6 +121,11 @@ const style = `
     background: rgba(240,165,0,0.1); border: 1px solid rgba(240,165,0,0.28);
     font-size: 10px; color: var(--warning); line-height: 1.45;
   }
+  .bm-tip-diverge.extreme {
+    background: rgba(224,62,62,0.1); border-color: rgba(224,62,62,0.32);
+    color: var(--error);
+  }
+  .bm-tip-diverge.extreme b { color: #ff8a8a; }
   .bm-tip-hint {
     margin-top: 10px; font-size: 10px; color: var(--accent-bright);
     font-family: var(--font-mono); text-align: center;
@@ -163,6 +187,11 @@ const style = `
 // Порог, с которого расхождение ЦЕН между биржами считаем заметным (%).
 // Это уже потенциальная маржа арбитража до комиссий, поэтому порог низкий.
 const DIVERGE_THRESHOLD = 2
+
+// Порог аномального расхождения. Выше него разрыв между биржами почти никогда
+// не является торгуемой возможностью: обычно это мёртвый стакан, разные токены
+// с одинаковым тикером или битые данные. Помечаем красным и предупреждаем.
+const EXTREME_DIVERGE_THRESHOLD = 100
 
 // Стабильный ключ монеты — сравнивать объекты по ссылке ненадёжно
 // (массив coins может пересобираться), а по этому ключу уже верстается
@@ -267,13 +296,14 @@ function BubbleMap({ coins }) {
                     const up = coin.pct > 0
                     const exInfo = getExchangeInfo(coin.exchange)
                     const isDiverge = div >= DIVERGE_THRESHOLD
+                    const isExtreme = div >= EXTREME_DIVERGE_THRESHOLD
                     const fsSym = Math.max(9, r * 0.31)
                     const fsPct = Math.max(8, r * 0.21)
 
                     return (
                         <div
                             key={`${coin.symbol}_${coin.exchange}`}
-                            className={`bm-bub ${up ? 'up' : 'down'} ${isDiverge ? 'diverge' : ''}`}
+                            className={`bm-bub ${up ? 'up' : 'down'} ${isDiverge ? 'diverge' : ''} ${isExtreme ? 'extreme' : ''}`}
                             style={{
                                 left: x - r, top: y - r,
                                 width: r * 2, height: r * 2,
@@ -290,7 +320,9 @@ function BubbleMap({ coins }) {
                                 {up ? '+' : ''}{coin.pct.toFixed(1)}%
                             </span>
                             {isDiverge && r > 34 && (
-                                <span className="bm-diverge-mark">Δ {div.toFixed(1)}%</span>
+                                <span className={`bm-diverge-mark ${isExtreme ? 'extreme' : ''}`}>
+                                    Δ {div.toFixed(1)}%
+                                </span>
                             )}
                         </div>
                     )
@@ -368,10 +400,19 @@ function BubbleMap({ coins }) {
                             )}
 
                             {coinDivergence(tip.coin) >= DIVERGE_THRESHOLD && (
-                                <div className="bm-tip-diverge">
-                                    ⚡ Цены между биржами расходятся на {coinDivergence(tip.coin).toFixed(2)}% —
-                                    возможен арбитраж по этой монете
-                                </div>
+                                coinDivergence(tip.coin) >= EXTREME_DIVERGE_THRESHOLD ? (
+                                    <div className="bm-tip-diverge extreme">
+                                        ⚠ Расхождение <b>{coinDivergence(tip.coin).toFixed(1)}%</b> — аномально большое.
+                                        Чаще всего это мёртвый стакан, разные токены с одинаковым тикером
+                                        или ошибка данных биржи, а не рабочая связка. Проверь обе стороны
+                                        вручную перед входом.
+                                    </div>
+                                ) : (
+                                    <div className="bm-tip-diverge">
+                                        ⚡ Цены между биржами расходятся на {coinDivergence(tip.coin).toFixed(2)}% —
+                                        возможен арбитраж по этой монете
+                                    </div>
+                                )
                             )}
                         </div>
                     )}

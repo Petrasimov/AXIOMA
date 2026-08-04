@@ -120,6 +120,7 @@ const style = `
   .tm-lg-size i { display:block; border-radius:50%; background:var(--text-muted); opacity:0.65; }
   .tm-lg-size i:nth-child(1){ width:6px; height:6px; } .tm-lg-size i:nth-child(2){ width:9px; height:9px; } .tm-lg-size i:nth-child(3){ width:12px; height:12px; }
   .tm-lg-ring { width:11px; height:11px; border-radius:50%; flex-shrink:0; box-shadow:0 0 0 2px var(--warning); }
+  .tm-lg-ring.extreme { box-shadow:0 0 0 2px var(--error); }
 
   /* ─── Панель-контейнер ─── */
   .tm-panel {
@@ -414,6 +415,7 @@ function TopMoversPage({ onNavigate }) {
                                 <span className="tm-lg-item"><span className="tm-lg-sw down" />падение</span>
                                 <span className="tm-lg-item"><span className="tm-lg-size"><i /><i /><i /></span>размер — сила движения</span>
                                 <span className="tm-lg-item"><span className="tm-lg-ring" />жёлтая обводка — цены на биржах разошлись (возможен арбитраж)</span>
+                                <span className="tm-lg-item"><span className="tm-lg-ring extreme" />красная обводка — расхождение больше 100%, скорее аномалия чем возможность</span>
                             </div>
                         </div>
 
