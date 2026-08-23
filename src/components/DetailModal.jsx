@@ -1,5 +1,5 @@
 const style = `
-  .modal-overlay {
+  .dm-overlay {
     position: fixed; inset: 0;
     background: rgba(3,8,13,0.6);
     backdrop-filter: blur(9px);
@@ -7,13 +7,13 @@ const style = `
     display: flex; align-items: center; justify-content: center;
     padding: 20px;
   }
-  .modal {
+  .dm-modal {
     background: rgba(13,32,51,0.74);
     backdrop-filter: blur(30px) saturate(160%);
     -webkit-backdrop-filter: blur(30px) saturate(160%);
     border: 1px solid var(--glass-border-hover);
     border-radius: var(--radius-xl);
-    width: 1280px; max-width: 100%;
+    width: 1400px; max-width: 100%;
     box-shadow: 0 32px 96px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.06);
     display: flex; flex-direction: column;
     max-height: 92vh;
@@ -70,15 +70,23 @@ const style = `
      верх: [кривая+водопад] [панели бирж] [монитор позиции]
      низ:  стакан во всю ширину */
   .dm-body {
-    flex: 1; min-height: 0; overflow-y: auto;
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+    overscroll-behavior: contain;
     padding: 14px;
     display: flex; flex-direction: column; gap: 14px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-bright) rgba(255,255,255,0.05);
   }
-  .dm-body::-webkit-scrollbar { width: 5px; }
-  .dm-body::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+  .dm-body::-webkit-scrollbar { width: 11px; }
+  .dm-body::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); border-radius: 6px; }
+  .dm-body::-webkit-scrollbar-thumb {
+    background: var(--accent-bright); border-radius: 6px;
+    border: 3px solid transparent; background-clip: padding-box;
+  }
+  .dm-body::-webkit-scrollbar-thumb:hover { background: #4a97d0; }
 
   .dm-top {
-    display: grid; grid-template-columns: 1fr 300px 1fr;
+    display: grid; grid-template-columns: 1fr 360px 1fr;
     gap: 14px; align-items: start;
   }
   .dm-center { display: flex; flex-direction: column; gap: 10px; }
@@ -123,8 +131,8 @@ const style = `
   .ex-card.sell { background: linear-gradient(135deg, rgba(224,62,62,0.09), rgba(224,62,62,0.02)); border-color: rgba(224,62,62,0.22); }
   .ex-card.sell:hover { border-color: rgba(224,62,62,0.45); box-shadow: inset 0 0 60px rgba(224,62,62,0.07); }
   .ex-card.sell::before { background: var(--error); box-shadow: 0 0 8px var(--error); }
-  .ex-inner { padding: 11px 12px 12px 16px; }
-  .ex-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+  .ex-inner { padding: 14px 16px 15px 19px; }
+  .ex-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
   .ex-name { display: flex; align-items: center; gap: 8px; }
   .ex-logo { width: 22px; height: 22px; border-radius: 50%; object-fit: contain; flex-shrink: 0; }
   .ex-logo-fallback {
@@ -138,15 +146,15 @@ const style = `
   .ex-badge.buy { color: var(--success); border-color: rgba(0,201,122,0.35); }
   .ex-badge.sell { color: var(--error); border-color: rgba(224,62,62,0.35); }
   .ex-price {
-    font-family: var(--font-mono); font-size: 20px; font-weight: 800;
-    color: #ecebee; margin-bottom: 10px;
-    padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); line-height: 1;
+    font-family: var(--font-mono); font-size: 24px; font-weight: 800;
+    color: #ecebee; margin-bottom: 12px;
+    padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); line-height: 1;
   }
   .ex-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
-  .ex-m-label { font-size: 8px; letter-spacing: 1px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 3px; }
-  .ex-m-val { font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+  .ex-m-label { font-size: 8.5px; letter-spacing: 1px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 4px; }
+  .ex-m-val { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); font-weight: 500; }
   .ex-m-rate-row { display: flex; align-items: baseline; gap: 6px; }
-  .ex-m-rate { font-family: var(--font-mono); font-size: 13px; font-weight: 700; }
+  .ex-m-rate { font-family: var(--font-mono); font-size: 14px; font-weight: 700; }
   .ex-m-rate.green { color: var(--success); }
   .ex-m-rate.red   { color: var(--error); }
   .ex-m-time { font-family: var(--font-mono); font-size: 10px; color: var(--warning); }
@@ -155,19 +163,19 @@ const style = `
   /* SPREAD SEPARATOR */
   .spread-sep {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 12px 10px 16px;
+    padding: 13px 15px 13px 19px;
     background: var(--glass-fill);
     backdrop-filter: blur(12px);
     border: 1px solid var(--glass-border-hover);
     border-radius: var(--radius-md);
   }
-  .ss-left { display: flex; align-items: center; gap: 8px; }
-  .ss-label { font-size: 8px; color: var(--text-secondary); letter-spacing: 1.5px; }
-  .ss-val { font-family: var(--font-mono); font-size: 20px; font-weight: 700; }
-  .ss-grade { font-size: 9px; font-weight: 700; letter-spacing: 2px; padding: 3px 8px; border: 1px solid; border-radius: 20px; }
+  .ss-left { display: flex; align-items: center; gap: 9px; }
+  .ss-label { font-size: 8.5px; color: var(--text-secondary); letter-spacing: 1.5px; }
+  .ss-val { font-family: var(--font-mono); font-size: 23px; font-weight: 700; }
+  .ss-grade { font-size: 9px; font-weight: 700; letter-spacing: 2px; padding: 3px 9px; border: 1px solid; border-radius: 20px; }
 
   .trade-btn {
-    padding: 8px 18px; font-size: 9px; font-weight: 700; letter-spacing: 1.5px;
+    padding: 11px 28px; font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
     border-radius: var(--radius-sm);
     cursor: pointer; border: 1px solid; transition: all 0.15s;
     font-family: var(--font-sans); white-space: nowrap;
@@ -179,40 +187,56 @@ const style = `
   .trade-btn.exit { color: #fff; border-color: var(--error); background: var(--error); }
   .trade-btn.exit:hover { background: #ff4f4f; }
 
-  /* ── СТАКАН-ЛЕСТНИЦА ── */
-  .ladder { display: grid; grid-template-columns: 1fr 78px 1fr; font-family: var(--font-mono); font-size: 11px; }
-  .lad-hd {
-    padding: 5px 8px; font-size: 8.5px; letter-spacing: 1.1px; color: var(--text-muted);
-    text-transform: uppercase; border-bottom: 1px solid var(--glass-border); margin-bottom: 4px;
+  /* ── СТАКАН (MEXC-стиль): два вертикальных стакана рядом ── */
+  .ob { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .ob-col { display: flex; flex-direction: column; min-width: 0; }
+  .ob-col-h {
+    display: flex; align-items: center; gap: 8px;
+    padding-bottom: 9px; margin-bottom: 8px;
+    border-bottom: 1px solid var(--glass-border);
   }
-  .lad-hd.r { text-align: right; }
-  .lad-hd.c { text-align: center; }
-  .lad-row { display: flex; align-items: center; gap: 6px; padding: 3px 8px; position: relative; height: 22px; }
-  .lad-row.left { justify-content: flex-end; }
-  .lad-bar { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; opacity: 0.5; }
-  .lad-row.left .lad-bar { right: 0; background: linear-gradient(270deg, rgba(224,62,62,0.55), rgba(224,62,62,0.05)); }
-  .lad-row.right .lad-bar { left: 0; background: linear-gradient(90deg, rgba(0,201,122,0.55), rgba(0,201,122,0.05)); }
-  .lad-p { position: relative; font-weight: 700; color: var(--text-primary); }
-  .lad-q { position: relative; color: var(--text-secondary); font-size: 9.5px; }
-  .lad-row.zone .lad-p { color: var(--warning); }
-  .lad-mid {
-    display: flex; align-items: center; justify-content: center;
-    font-size: 8.5px; color: var(--text-muted);
-    border-left: 1px solid var(--glass-border); border-right: 1px solid var(--glass-border);
+  .ob-col-name { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+  .ob-col-role {
+    margin-left: auto; font-family: var(--font-mono); font-size: 8.5px;
+    letter-spacing: 1px; padding: 3px 9px; border-radius: 20px; border: 1px solid; font-weight: 700;
   }
-  .lad-zone-band {
-    grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 9px;
-    margin: 5px 0; padding: 7px; border-radius: var(--radius-sm);
-    background: linear-gradient(90deg, rgba(224,62,62,0.1), rgba(240,165,0,0.14), rgba(0,201,122,0.1));
-    border: 1px dashed rgba(240,165,0,0.4);
-    font-size: 9.5px; letter-spacing: 0.8px; color: var(--warning); font-weight: 700;
+  .ob-col-role.sell { color: var(--error); border-color: rgba(224,62,62,0.4); background: rgba(224,62,62,0.06); }
+  .ob-col-role.buy  { color: var(--success); border-color: rgba(0,201,122,0.4); background: rgba(0,201,122,0.06); }
+
+  .ob-cols {
+    display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 8px;
+    padding: 0 10px 7px; font-size: 8.5px; letter-spacing: 0.6px;
+    text-transform: uppercase; color: var(--text-muted);
   }
-  .lad-foot {
-    display: flex; gap: 16px; padding: 9px 12px; margin-top: 8px;
+  .ob-cols span:nth-child(2), .ob-cols span:nth-child(3) { text-align: right; }
+
+  .ob-row {
+    display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 8px;
+    position: relative; height: 26px; align-items: center;
+    padding: 0 10px; font-family: var(--font-mono); font-size: 11.5px;
+  }
+  .ob-bar {
+    position: absolute; top: 3px; bottom: 3px; right: 0;
+    border-radius: 3px; opacity: 0.14; pointer-events: none;
+  }
+  .ob-col.sell .ob-bar { background: var(--error); }
+  .ob-col.buy  .ob-bar { background: var(--success); }
+  .ob-row.zone { background: rgba(240,165,0,0.09); border-radius: 4px; }
+  .ob-row.zone .ob-p { color: var(--warning); }
+  .ob-p { position: relative; font-weight: 700; }
+  .ob-col.sell .ob-p { color: var(--error); }
+  .ob-col.buy  .ob-p { color: var(--success); }
+  .ob-q { position: relative; text-align: right; color: var(--text-secondary); font-size: 10.5px; }
+  .ob-t { position: relative; text-align: right; color: var(--text-primary); font-weight: 600; }
+
+  .ob-empty-col { padding: 22px 10px; text-align: center; font-size: 10.5px; color: var(--text-muted); }
+  .ob-foot {
+    display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; padding: 10px 12px;
     border-top: 1px solid var(--glass-border);
-    font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted); flex-wrap: wrap;
+    font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
   }
-  .lad-foot b { color: var(--text-primary); font-size: 11px; }
+  .ob-foot b { color: var(--text-primary); font-size: 11.5px; }
+  .ob-foot .zone-b { color: var(--warning); }
 
   /* ── КРИВАЯ ИСПОЛНЕНИЯ ── */
   .curve-legend {
@@ -220,22 +244,6 @@ const style = `
     color: var(--text-muted); margin-top: 8px; flex-wrap: wrap;
   }
   .curve-legend i { display: inline-block; width: 13px; height: 2px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
-  .curve-read {
-    margin-top: 9px; padding: 9px 11px; border-radius: var(--radius-sm);
-    background: rgba(61,135,192,0.07); border: 1px solid rgba(61,135,192,0.25);
-    font-size: 11px; line-height: 1.55; color: var(--text-secondary);
-  }
-  .curve-read b { color: var(--accent-bright); font-family: var(--font-mono); }
-
-  /* ── ВОДОПАД ── */
-  .wf-row { display: grid; grid-template-columns: 1fr 62px 74px; align-items: center; gap: 8px; font-size: 10.5px; margin-bottom: 5px; }
-  .wf-l { color: var(--text-secondary); }
-  .wf-v { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; text-align: right; }
-  .wf-track { height: 7px; border-radius: 4px; background: rgba(255,255,255,0.05); overflow: hidden; }
-  .wf-fill { height: 100%; display: block; border-radius: 4px; }
-  .wf-row.total { padding-top: 7px; border-top: 1px solid var(--glass-border); margin-top: 8px; }
-  .wf-row.total .wf-l { color: var(--text-primary); font-weight: 700; font-size: 11px; }
-  .wf-row.total .wf-v { font-size: 13.5px; }
 
   /* ── МОНИТОР ПОЗИЦИИ ── */
   .pos-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 12px; }
@@ -296,8 +304,8 @@ const style = `
   }
 
   @media (max-width: 768px) {
-    .modal-overlay { padding: 0; align-items: stretch; }
-    .modal {
+    .dm-overlay { padding: 0; align-items: stretch; }
+    .dm-modal {
       width: 100%; max-width: 100%; height: 100%; max-height: 100dvh;
       border-radius: 0;
       /* 30px blur ощутимо просаживает FPS на мобильном GPU */
@@ -317,8 +325,9 @@ const style = `
     }
     .pos-inputs { grid-template-columns: 1fr; }
     .pos-sum { grid-template-columns: 1fr 1fr; }
-    .ladder { grid-template-columns: 1fr 58px 1fr; font-size: 10px; }
-    .lad-row { height: 24px; }
+    /* Два стакана рядом не влезают по ширине — ставим их друг под другом */
+    .ob { grid-template-columns: 1fr; gap: 18px; }
+    .ob-row { height: 30px; }
   }
 
   @media (max-width: 480px) {
@@ -459,11 +468,19 @@ function ExCard({ side, opp, book, livePrice, refPrice }) {
   )
 }
 
-// ─── Стакан-лестница ──────────────────────────────────────────────────────────
-// Показывает уровни обеих бирж, выровненные по цене, и подсвечивает зону
-// пересечения — где bid одной биржи выше ask другой. Именно в этой зоне
-// физически лежат деньги, доступные для арбитража.
-function OrderBookLadder({ bidBook, askBook, bidEx, askEx, depth = 6 }) {
+// ─── Стакан в стиле биржи (два вертикальных стакана рядом) ─────────────────────
+// Левый — биржа bid_ex, где мы ПРОДАЁМ (её bids). Правый — ask_ex, где мы
+// ПОКУПАЕМ (её asks). Колонки Цена / Кол-во / Сумма выровнены, глубина показана
+// накопительной полосой — как в терминале любой биржи. Уровни, по которым
+// реально идёт арбитраж (зона пересечения), подсвечены.
+function fmtQty(q) {
+  if (!isFinite(q)) return '—'
+  if (q >= 1000) return formatVolume(q)
+  if (q >= 1) return q.toFixed(2)
+  return q.toPrecision(3)
+}
+
+function OrderBookLadder({ bidBook, askBook, bidEx, askEx, depth = 8 }) {
   const bidInfo = getExchangeInfo(bidEx)
   const askInfo = getExchangeInfo(askEx)
 
@@ -475,34 +492,36 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx, depth = 6 }) {
       .map(([p, q]) => ({ p: parseFloat(p), q: parseFloat(q) }))
       .filter(l => l.p > 0 && l.q > 0)
 
-    if (!bids.length || !asks.length) return null
+    if (!bids.length && !asks.length) return null
 
-    const bestAsk = asks[0].p
-    const bestBid = bids[0].p
+    const bestAsk = asks[0]?.p ?? Infinity
+    const bestBid = bids[0]?.p ?? -Infinity
 
-    // Уровень попадает в зону пересечения, если по нему реально можно
-    // закрыть сделку: bid выше лучшего ask, ask ниже лучшего bid.
-    const bidRows = bids.map(l => ({ ...l, usd: l.p * l.q, zone: l.p > bestAsk }))
-    const askRows = asks.map(l => ({ ...l, usd: l.p * l.q, zone: l.p < bestBid }))
-
-    const maxUsd = Math.max(
-      ...bidRows.map(r => r.usd),
-      ...askRows.map(r => r.usd),
-      1,
-    )
+    // Накопительный объём по стороне → ширина depth-полосы (как в терминале):
+    // нижняя строка = вся видимая глубина = 100%.
+    const withCum = (rows, zoneFn) => {
+      let cum = 0
+      const total = rows.reduce((s, l) => s + l.p * l.q, 0) || 1
+      return rows.map(l => {
+        const usd = l.p * l.q
+        cum += usd
+        return { ...l, usd, cumPct: cum / total * 100, zone: zoneFn(l.p) }
+      })
+    }
+    // Продаём выше лучшего ask и покупаем ниже лучшего bid → это и есть профит
+    const bidRows = withCum(bids, p => p > bestAsk)
+    const askRows = withCum(asks, p => p < bestBid)
 
     const bidZoneUsd = bidRows.filter(r => r.zone).reduce((s, r) => s + r.usd, 0)
     const askZoneUsd = askRows.filter(r => r.zone).reduce((s, r) => s + r.usd, 0)
-    // Реально доступный объём — минимум из двух сторон: продать можно
-    // столько же, сколько получится купить.
+    // Реально доступный объём — минимум из двух сторон.
     const overlapUsd = Math.min(bidZoneUsd, askZoneUsd)
 
-    // Самый крупный уровень на стороне покупки — «стенка», за которой
-    // цена исполнения резко ухудшается.
+    // «Стенка» — крупнейший уровень на стороне покупки.
     const wall = askRows.reduce((best, r) => (r.usd > (best?.usd ?? 0) ? r : best), null)
 
     return {
-      bidRows, askRows, maxUsd, overlapUsd, wall,
+      bidRows, askRows, overlapUsd, wall,
       zoneLevels: bidRows.filter(r => r.zone).length + askRows.filter(r => r.zone).length,
     }
   }, [bidBook, askBook, depth])
@@ -510,68 +529,51 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx, depth = 6 }) {
   if (!data) {
     return (
       <div className="tool">
-        <div className="tool-h"><span className="tool-t">Стакан · зона пересечения</span></div>
+        <div className="tool-h"><span className="tool-t">Стакан</span></div>
         <div className="tool-empty">Ждём данные стакана обеих бирж…</div>
       </div>
     )
   }
 
-  const { bidRows, askRows, maxUsd, overlapUsd, wall, zoneLevels } = data
-  const rowsCount = Math.max(bidRows.length, askRows.length)
+  const { bidRows, askRows, overlapUsd, wall, zoneLevels } = data
+
+  const renderColumn = (info, rows, kind, roleLabel) => (
+    <div className={`ob-col ${kind}`}>
+      <div className="ob-col-h">
+        <ExLogo info={info} />
+        <span className="ob-col-name">{info.name}</span>
+        <span className={`ob-col-role ${kind}`}>{roleLabel}</span>
+      </div>
+      <div className="ob-cols">
+        <span>Цена</span><span>Кол-во</span><span>Сумма $</span>
+      </div>
+      {rows.length ? rows.map((r, i) => (
+        <div key={i} className={`ob-row ${r.zone ? 'zone' : ''}`}>
+          <span className="ob-bar" style={{ width: `${Math.max(3, r.cumPct)}%` }} />
+          <span className="ob-p">{formatPrice(r.p)}</span>
+          <span className="ob-q">{fmtQty(r.q)}</span>
+          <span className="ob-t">${formatVolume(r.usd)}</span>
+        </div>
+      )) : (
+        <div className="ob-empty-col">нет данных</div>
+      )}
+    </div>
+  )
 
   return (
     <div className="tool">
       <div className="tool-h">
-        <span className="tool-t">Стакан · зона пересечения</span>
+        <span className="tool-t">Стакан</span>
         <span className="tool-sub">{bidInfo.name} ↔ {askInfo.name}</span>
       </div>
       <div className="tool-b">
-        <div className="ladder">
-          <div className="lad-hd r">{bidInfo.name} · продаём в bid</div>
-          <div className="lad-hd c">цена</div>
-          <div className="lad-hd">{askInfo.name} · покупаем из ask</div>
-
-          {/* Верхняя половина — уровни продажи */}
-          {Array.from({ length: rowsCount }).map((_, i) => {
-            const r = bidRows[i]
-            if (!r) return null
-            return (
-              <div key={`b${i}`} style={{ display: 'contents' }}>
-                <div className={`lad-row left ${r.zone ? 'zone' : ''}`}>
-                  <span className="lad-bar" style={{ width: `${Math.max(4, r.usd / maxUsd * 100)}%` }} />
-                  <span className="lad-q">${formatVolume(r.usd)}</span>
-                  <span className="lad-p">{formatPrice(r.p)}</span>
-                </div>
-                <div className="lad-mid">—</div>
-                <div />
-              </div>
-            )
-          })}
-
-          <div className="lad-zone-band">
-            ◆ ЗОНА ПЕРЕСЕЧЕНИЯ · доступно ~${formatVolume(overlapUsd)} ◆
-          </div>
-
-          {/* Нижняя половина — уровни покупки */}
-          {Array.from({ length: rowsCount }).map((_, i) => {
-            const r = askRows[i]
-            if (!r) return null
-            return (
-              <div key={`a${i}`} style={{ display: 'contents' }}>
-                <div />
-                <div className="lad-mid">—</div>
-                <div className={`lad-row right ${r.zone ? 'zone' : ''}`}>
-                  <span className="lad-bar" style={{ width: `${Math.max(4, r.usd / maxUsd * 100)}%` }} />
-                  <span className="lad-p">{formatPrice(r.p)}</span>
-                  <span className="lad-q">${formatVolume(r.usd)}</span>
-                </div>
-              </div>
-            )
-          })}
+        <div className="ob">
+          {renderColumn(bidInfo, bidRows, 'sell', 'ПРОДАЁМ · BID')}
+          {renderColumn(askInfo, askRows, 'buy', 'ПОКУПАЕМ · ASK')}
         </div>
 
-        <div className="lad-foot">
-          <span>в зоне <b>${formatVolume(overlapUsd)}</b></span>
+        <div className="ob-foot">
+          <span>доступно в зоне <b className="zone-b">${formatVolume(overlapUsd)}</b></span>
           {wall && <span>стенка {askInfo.name} <b>{formatPrice(wall.p)}</b> · ${formatVolume(wall.usd)}</span>}
           <span>уровней в зоне <b>{zoneLevels}</b></span>
         </div>
@@ -631,7 +633,7 @@ function ExecutionCurve({ bidBook, askBook, tradeAmount, feeTotal }) {
     )
   }
 
-  const { points, userNet, breakEvenUsd, maxUsd } = data
+  const { points, userNet, maxUsd } = data
 
   // ── Геометрия SVG ──
   const W = 320, H = 170, padL = 34, padR = 12, padT = 12, padB = 24
@@ -716,75 +718,6 @@ function ExecutionCurve({ bidBook, askBook, tradeAmount, feeTotal }) {
           <span><i style={{ background: 'var(--accent-bright)' }} />чистый спред</span>
           <span><i style={{ background: 'var(--error)' }} />безубыток</span>
           <span><i style={{ background: 'var(--warning)' }} />твой объём</span>
-        </div>
-
-        <div className="curve-read">
-          {userNet !== null
-            ? <>На <b>${formatVolume(tradeAmount)}</b> получишь <b>{userNet.toFixed(2)}%</b> чистыми. </>
-            : <>Стакана не хватает на объём ${formatVolume(tradeAmount)}. </>}
-          {breakEvenUsd
-            ? <>Предел до безубытка — <b>${formatVolume(breakEvenUsd)}</b>.</>
-            : <>Спред остаётся прибыльным на всём доступном стакане.</>}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Водопад: из чего складывается чистый спред ──────────────────────────────
-// Грязный спред красив, но до кармана доходит меньше. Здесь видно
-// каждый слой потерь, чтобы решение принималось по честной цифре.
-function SpreadWaterfall({ grossSpread, slipIn, slipOut, feeBid, feeAsk, fundingCost, tradeAmount }) {
-  const net = grossSpread - slipIn - slipOut - feeBid - feeAsk - fundingCost
-  const pnl = net * tradeAmount / 100
-
-  const rows = [
-    { l: 'Грязный спред',          v: grossSpread,   sign: '+', color: 'var(--success)' },
-    { l: 'Проскальзывание вход',   v: slipIn,        sign: '−', color: 'var(--error)' },
-    { l: 'Проскальзывание выход',  v: slipOut,       sign: '−', color: 'var(--error)' },
-    { l: 'Комиссия SHORT',         v: feeBid,        sign: '−', color: 'var(--error)' },
-    { l: 'Комиссия LONG',          v: feeAsk,        sign: '−', color: 'var(--error)' },
-    { l: 'Фандинг за 8ч',          v: fundingCost,   sign: '−', color: 'var(--error)' },
-  ]
-
-  const scale = Math.max(grossSpread, 0.01)
-
-  return (
-    <div className="tool">
-      <div className="tool-h">
-        <span className="tool-t">Что останется</span>
-        <span className="tool-sub">на ${formatVolume(tradeAmount)}</span>
-      </div>
-      <div className="tool-b">
-        {rows.map((r, i) => (
-          <div key={i} className="wf-row">
-            <span className="wf-l">{r.l}</span>
-            <span className="wf-v" style={{ color: r.color }}>
-              {r.sign}{Math.abs(r.v).toFixed(2)}%
-            </span>
-            <span className="wf-track">
-              <i className="wf-fill" style={{
-                width: `${Math.min(100, Math.abs(r.v) / scale * 100)}%`,
-                background: r.color,
-              }} />
-            </span>
-          </div>
-        ))}
-        <div className="wf-row total">
-          <span className="wf-l">
-            Чистыми · {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
-          </span>
-          <span className="wf-v" style={{ color: net >= 0 ? 'var(--success)' : 'var(--error)' }}>
-            {net >= 0 ? '+' : ''}{net.toFixed(2)}%
-          </span>
-          <span className="wf-track">
-            <i className="wf-fill" style={{
-              width: `${Math.max(0, Math.min(100, net / scale * 100))}%`,
-              background: net >= 0
-                ? 'linear-gradient(90deg, var(--accent), var(--success))'
-                : 'var(--error)',
-            }} />
-          </span>
         </div>
       </div>
     </div>
@@ -1072,8 +1005,8 @@ function DetailModal({
   return (
     <>
       <style>{style}</style>
-      <div className="modal-overlay" onClick={onClose}>
-        <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="dm-overlay" onClick={onClose}>
+        <div className="dm-modal" onClick={e => e.stopPropagation()}>
 
           {/* HEADER */}
           <div className="dm-header">
@@ -1110,22 +1043,13 @@ function DetailModal({
 
             <div className="dm-top">
 
-              {/* ЛЕВО — кривая исполнения + водопад */}
+              {/* ЛЕВО — кривая исполнения */}
               <div className="dm-side dm-side-left">
                 <ExecutionCurve
                   bidBook={bidBook}
                   askBook={askBook}
                   tradeAmount={tradeAmount}
                   feeTotal={feeTotal + fundingCost}
-                />
-                <SpreadWaterfall
-                  grossSpread={grossSpread}
-                  slipIn={slipIn}
-                  slipOut={slipOut}
-                  feeBid={feeBid * 2}
-                  feeAsk={feeAsk * 2}
-                  fundingCost={fundingCost}
-                  tradeAmount={tradeAmount}
                 />
               </div>
 
