@@ -70,6 +70,10 @@ const style = `
      верх: [кривая+водопад] [панели бирж] [монитор позиции]
      низ:  стакан во всю ширину */
   .dm-body {
+    /* Явный предел высоты во vh — тело гарантированно ограничено и скроллится,
+       даже если flex-высота не доезжает через backdrop-filter/overflow родителя.
+       92vh (высота модалки) минус шапка (~64px). */
+    max-height: calc(92vh - 64px);
     flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
     overscroll-behavior: contain;
     padding: 14px;
@@ -319,6 +323,7 @@ const style = `
     .dm-btn { width: 40px; height: 40px; }
     .dm-net-v { font-size: 17px; }
     .dm-body {
+      max-height: calc(100dvh - 62px);
       padding: 12px;
       padding-bottom: calc(12px + env(safe-area-inset-bottom));
       -webkit-overflow-scrolling: touch;
