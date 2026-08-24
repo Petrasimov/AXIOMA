@@ -13,11 +13,17 @@ const style = `
     -webkit-backdrop-filter: blur(30px) saturate(160%);
     border: 1px solid var(--glass-border-hover);
     border-radius: var(--radius-xl);
-    width: 1400px; max-width: 100%;
+    width: 1180px; max-width: 100%;
     box-shadow: 0 32px 96px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.06);
     display: flex; flex-direction: column;
     max-height: 92vh;
     overflow: hidden;
+    /* Раздвигается вправо, когда открыта шторка монитора позиции */
+    transition: width 0.35s cubic-bezier(0.22,0.9,0.3,1);
+  }
+  .dm-modal.pos-open { width: 1560px; }
+  @media (prefers-reduced-motion: reduce) {
+    .dm-modal, .dm-panel { transition: none; }
   }
 
   /* HEADER */
@@ -66,35 +72,69 @@ const style = `
   .dm-btn.fav-active { color: #f0a500; border-color: #f0a50066; background: rgba(240,165,0,0.1); }
   .dm-btn.close-btn:hover { background: rgba(224,62,62,0.2); border-color: var(--error); color: var(--error); }
 
-  /* BODY — новая раскладка:
-     верх: [кривая+водопад] [панели бирж] [монитор позиции]
-     низ:  стакан во всю ширину */
+  /* BODY — раскладка:
+     [левая колонка: биржи + кривая] [стакан] | [панель позиции] [шторка]
+     Высота фиксирована, скролла внутри нет: обе колонки растягиваются
+     ровно на доступную высоту, а строки стакана «резиновые». */
   .dm-body {
-    /* Явный предел высоты во vh — тело гарантированно ограничено и скроллится,
-       даже если flex-высота не доезжает через backdrop-filter/overflow родителя.
-       92vh (высота модалки) минус шапка (~64px). */
-    max-height: calc(92vh - 64px);
-    flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
-    overscroll-behavior: contain;
-    padding: 14px;
-    display: flex; flex-direction: column; gap: 14px;
+    flex: 1 1 auto; min-height: 0;
+    height: calc(92vh - 64px);
+    display: flex; overflow: hidden;
+  }
+
+  /* Ядро: доля 50/50 считается ТОЛЬКО между колонкой бирж и стаканом.
+     Шторка и панель позиции лежат вне .dm-core и в расчёт не входят. */
+  .dm-core { flex: 1 1 auto; min-width: 0; display: flex; }
+
+  .dm-left {
+    flex: 0 0 50%; min-width: 0; min-height: 0;
+    padding: 14px; display: flex; flex-direction: column; gap: 10px;
+    border-right: 1px solid var(--glass-border);
+  }
+  .dm-obside {
+    flex: 1 1 50%; min-width: 0; min-height: 0;
+    padding: 14px; display: flex; flex-direction: column;
+  }
+
+  /* Вертикальная шторка «Позиция и выход» */
+  .dm-strip {
+    flex: 0 0 40px; display: flex; flex-direction: column;
+    align-items: center; justify-content: space-between;
+    padding: 16px 0; cursor: pointer; user-select: none;
+    background: var(--glass-fill); border-left: 1px solid var(--glass-border);
+    transition: background 0.15s;
+  }
+  .dm-strip:hover { background: var(--glass-fill-hover); }
+  .dm-strip-label {
+    writing-mode: vertical-rl; transform: rotate(180deg);
+    font-size: 10px; font-weight: 800; letter-spacing: 2px;
+    color: var(--text-secondary); display: flex; align-items: center; gap: 9px;
+    text-transform: uppercase;
+  }
+  .dm-strip:hover .dm-strip-label { color: var(--text-primary); }
+  .dm-strip-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-bright); flex-shrink: 0; }
+  .dm-strip-chev { color: var(--accent-bright); transition: transform 0.3s; flex-shrink: 0; }
+  .dm-strip.open .dm-strip-chev { transform: rotate(180deg); }
+
+  .dm-panel {
+    flex: 0 0 0px; width: 0; overflow: hidden; opacity: 0;
+    border-left: 1px solid var(--glass-border);
+    transition: flex-basis 0.35s cubic-bezier(0.22,0.9,0.3,1),
+                width 0.35s cubic-bezier(0.22,0.9,0.3,1), opacity 0.22s ease;
+  }
+  .dm-panel.open { flex: 0 0 370px; width: 370px; opacity: 1; }
+  .dm-panel-inner {
+    width: 370px; height: 100%; padding: 14px;
+    overflow-y: auto; overscroll-behavior: contain;
     scrollbar-width: thin;
     scrollbar-color: var(--accent-bright) rgba(255,255,255,0.05);
   }
-  .dm-body::-webkit-scrollbar { width: 11px; }
-  .dm-body::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); border-radius: 6px; }
-  .dm-body::-webkit-scrollbar-thumb {
+  .dm-panel-inner::-webkit-scrollbar { width: 10px; }
+  .dm-panel-inner::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); }
+  .dm-panel-inner::-webkit-scrollbar-thumb {
     background: var(--accent-bright); border-radius: 6px;
     border: 3px solid transparent; background-clip: padding-box;
   }
-  .dm-body::-webkit-scrollbar-thumb:hover { background: #4a97d0; }
-
-  .dm-top {
-    display: grid; grid-template-columns: 1fr 360px 1fr;
-    gap: 14px; align-items: start;
-  }
-  .dm-center { display: flex; flex-direction: column; gap: 10px; }
-  .dm-side { display: flex; flex-direction: column; gap: 12px; }
 
   /* Универсальная карточка инструмента */
   .tool {
@@ -116,6 +156,9 @@ const style = `
     padding: 26px 14px; text-align: center;
     font-size: 11.5px; color: var(--text-muted); line-height: 1.6;
   }
+  /* Карточка, забирающая остаток высоты колонки (кривая, стакан) */
+  .tool.grow { flex: 1 1 auto; min-height: 0; }
+  .tool.grow > .tool-b { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 
   /* EXCHANGE CARD */
   .ex-card {
@@ -191,63 +234,132 @@ const style = `
   .trade-btn.exit { color: #fff; border-color: var(--error); background: var(--error); }
   .trade-btn.exit:hover { background: #ff4f4f; }
 
-  /* ── СТАКАН (MEXC-стиль): два вертикальных стакана рядом ── */
-  .ob { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .ob-col { display: flex; flex-direction: column; min-width: 0; }
-  .ob-col-h {
-    display: flex; align-items: center; gap: 8px;
-    padding-bottom: 9px; margin-bottom: 8px;
-    border-bottom: 1px solid var(--glass-border);
+  /* ══ СТАКАН: биржевой вид — продажа сверху, покупка снизу ══
+     Скролла внутри нет ни при каком размере: строки «резиновые» (flex),
+     они сжимаются/растягиваются под доступную высоту. */
+  .ob-modes {
+    display: flex; gap: 3px; margin-left: auto; padding: 3px;
+    border-radius: var(--radius-sm);
+    background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border);
   }
-  .ob-col-name { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+  .ob-mode {
+    display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 24px; padding: 0; cursor: pointer;
+    background: none; border: none; border-radius: 5px;
+    color: var(--text-muted); transition: background 0.15s, color 0.15s;
+  }
+  .ob-mode:hover { background: var(--glass-fill-hover); color: var(--text-secondary); }
+  .ob-mode.on { background: rgba(61,135,192,0.18); color: var(--text-primary); }
+
+  .ob-frame {
+    flex: 1 1 auto; min-height: 0;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .ob-half { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  .ob-half-h {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+    padding: 0 10px 8px; border-bottom: 1px solid var(--glass-border);
+  }
+  .ob-col-name { font-size: 12px; font-weight: 700; color: var(--text-primary); }
   .ob-col-role {
     margin-left: auto; font-family: var(--font-mono); font-size: 8.5px;
     letter-spacing: 1px; padding: 3px 9px; border-radius: 20px; border: 1px solid; font-weight: 700;
   }
   .ob-col-role.sell { color: var(--error); border-color: rgba(224,62,62,0.4); background: rgba(224,62,62,0.06); }
   .ob-col-role.buy  { color: var(--success); border-color: rgba(0,201,122,0.4); background: rgba(0,201,122,0.06); }
+  .ob-count { font-family: var(--font-mono); font-size: 9px; color: var(--text-muted); }
 
   .ob-cols {
-    display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 8px;
-    padding: 0 10px 7px; font-size: 8.5px; letter-spacing: 0.6px;
+    flex: 0 0 auto;
+    display: grid; grid-template-columns: 1.15fr 1fr 1fr 1fr; gap: 8px;
+    padding: 6px 10px; font-size: 8px; letter-spacing: 0.5px;
     text-transform: uppercase; color: var(--text-muted);
   }
-  .ob-cols span:nth-child(2), .ob-cols span:nth-child(3) { text-align: right; }
+  .ob-cols span { text-align: right; }
+  .ob-cols span:first-child { text-align: left; }
 
+  .ob-rows { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
   .ob-row {
-    display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 8px;
-    position: relative; height: 26px; align-items: center;
-    padding: 0 10px; font-family: var(--font-mono); font-size: 11.5px;
+    flex: 1 1 26px; min-height: 17px; max-height: 32px;
+    display: grid; grid-template-columns: 1.15fr 1fr 1fr 1fr; gap: 8px;
+    position: relative; align-items: center;
+    padding: 0 10px; font-family: var(--font-mono); font-size: 11px;
   }
   .ob-bar {
-    position: absolute; top: 3px; bottom: 3px; right: 0;
-    border-radius: 3px; opacity: 0.14; pointer-events: none;
+    position: absolute; top: 2px; bottom: 2px; right: 0;
+    border-radius: 3px; opacity: 0.13; pointer-events: none;
   }
-  .ob-col.sell .ob-bar { background: var(--error); }
-  .ob-col.buy  .ob-bar { background: var(--success); }
-  .ob-row.zone { background: rgba(240,165,0,0.09); border-radius: 4px; }
+  .ob-half.sell .ob-bar, .ob-solo-col.sell .ob-bar { background: var(--error); }
+  .ob-half.buy  .ob-bar, .ob-solo-col.buy  .ob-bar { background: var(--success); }
+  .ob-row.zone { background: rgba(240,165,0,0.08); }
   .ob-row.zone .ob-p { color: var(--warning); }
-  .ob-p { position: relative; font-weight: 700; }
-  .ob-col.sell .ob-p { color: var(--error); }
-  .ob-col.buy  .ob-p { color: var(--success); }
-  .ob-q { position: relative; text-align: right; color: var(--text-secondary); font-size: 10.5px; }
+  .ob-p { position: relative; font-weight: 700; text-align: left; }
+  .ob-half.sell .ob-p, .ob-solo-col.sell .ob-p { color: var(--error); }
+  .ob-half.buy  .ob-p, .ob-solo-col.buy  .ob-p { color: var(--success); }
+  .ob-q, .ob-cum { position: relative; text-align: right; color: var(--text-secondary); font-size: 10px; }
   .ob-t { position: relative; text-align: right; color: var(--text-primary); font-weight: 600; }
 
-  .ob-empty-col { padding: 22px 10px; text-align: center; font-size: 10.5px; color: var(--text-muted); }
-  .ob-foot {
-    display: flex; gap: 18px; flex-wrap: wrap; margin-top: 12px; padding: 10px 12px;
-    border-top: 1px solid var(--glass-border);
-    font-family: var(--font-mono); font-size: 10px; color: var(--text-muted);
+  /* Центральная полоса спреда — как «текущая цена» в биржевом стакане */
+  .ob-mid {
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 9px 12px; margin: 6px 0;
+    border-radius: var(--radius-sm);
+    background: linear-gradient(90deg, rgba(224,62,62,0.1), rgba(240,165,0,0.15), rgba(0,201,122,0.1));
+    border-top: 1px solid rgba(240,165,0,0.28); border-bottom: 1px solid rgba(240,165,0,0.28);
   }
-  .ob-foot b { color: var(--text-primary); font-size: 11.5px; }
+  .ob-mid-l { display: flex; align-items: center; gap: 9px; }
+  .ob-mid-k { font-size: 8.5px; letter-spacing: 1.2px; color: var(--text-secondary); text-transform: uppercase; }
+  .ob-mid-v { font-family: var(--font-mono); font-size: 15px; font-weight: 800; color: var(--warning); }
+  .ob-mid-r { font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); text-align: right; }
+  .ob-mid-r b { color: var(--text-primary); }
+
+  /* Режимы «только продажа/покупка»: две колонки той же биржи,
+     чтобы удвоить глубину без сжатия строк */
+  .ob-solo-h {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+    padding: 0 10px 8px; border-bottom: 1px solid var(--glass-border);
+  }
+  .ob-solo { flex: 1 1 auto; min-height: 0; display: flex; }
+  .ob-solo-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+  .ob-solo-col + .ob-solo-col { border-left: 1px solid var(--glass-border); margin-left: 10px; padding-left: 4px; }
+
+  .ob-empty-col { padding: 20px 10px; text-align: center; font-size: 10.5px; color: var(--text-muted); }
+  .ob-foot {
+    flex: 0 0 auto;
+    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; padding-top: 9px;
+    border-top: 1px solid var(--glass-border);
+    font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted);
+  }
+  .ob-foot b { color: var(--text-primary); font-size: 11px; }
   .ob-foot .zone-b { color: var(--warning); }
 
   /* ── КРИВАЯ ИСПОЛНЕНИЯ ── */
+  .curve-chart { flex: 1 1 auto; min-height: 110px; width: 100%; }
   .curve-legend {
     display: flex; gap: 13px; font-family: var(--font-mono); font-size: 8.5px;
-    color: var(--text-muted); margin-top: 8px; flex-wrap: wrap;
+    color: var(--text-muted); margin-top: 8px; flex-wrap: wrap; flex-shrink: 0;
   }
   .curve-legend i { display: inline-block; width: 13px; height: 2px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+  .curve-tip {
+    background: rgba(7,24,40,0.96); border: 1px solid var(--glass-border-hover);
+    border-radius: var(--radius-sm); padding: 7px 10px;
+    font-family: var(--font-mono); font-size: 10.5px; color: var(--text-primary);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .curve-tip-k { color: var(--text-muted); font-size: 9px; display: block; margin-bottom: 3px; }
+  /* Таблица объёмов — числа видны всегда, при любой высоте окна */
+  .curve-tbl {
+    flex-shrink: 0; margin-top: 10px; width: 100%;
+    border-collapse: collapse; font-family: var(--font-mono); font-size: 10.5px;
+  }
+  .curve-tbl th {
+    text-align: left; font-family: var(--font-sans); font-size: 8px;
+    letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted);
+    font-weight: 600; padding: 0 0 5px;
+  }
+  .curve-tbl th:last-child, .curve-tbl td:last-child { text-align: right; }
+  .curve-tbl td { padding: 4px 0; border-top: 1px solid var(--glass-border); color: var(--text-secondary); }
+  .curve-tbl tr.you td { color: var(--warning); font-weight: 700; }
 
   /* ── МОНИТОР ПОЗИЦИИ ── */
   .pos-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 12px; }
@@ -293,18 +405,19 @@ const style = `
   /* ══════════════════════════════════════════════════════════════
      МОБИЛЬНАЯ АДАПТАЦИЯ
      ══════════════════════════════════════════════════════════════
-     .dm-top — сетка "1fr | 300px | 1fr". На телефоне даже одна
-     центральная колонка шире экрана, поэтому три колонки
-     схлопываются в одну. Порядок задаётся order: панели бирж
-     поднимаются наверх (это главное что нужно увидеть сразу),
-     затем монитор позиции, затем кривая с водопадом.
-     Стакан остаётся последним — он и так снизу.
+     На десктопе тело — горизонтальная строка фиксированной высоты
+     без скролла. На узких экранах эта раскладка не работает: колонки
+     схлопываются в одну, тело начинает скроллиться целиком, а стакан
+     получает фиксированную высоту (строки остаются читаемыми, свой
+     скролл внутри стакана по-прежнему не появляется).
   */
   @media (max-width: 1100px) {
-    .dm-top { grid-template-columns: 1fr; }
-    .dm-top > .dm-center { order: 1; }
-    .dm-top > .dm-side-right { order: 2; }
-    .dm-top > .dm-side-left { order: 3; }
+    .dm-body { height: auto; max-height: calc(92vh - 64px); overflow-y: auto; overscroll-behavior: contain; }
+    .dm-core { flex-direction: column; }
+    .dm-left { flex: 0 0 auto; border-right: none; border-bottom: 1px solid var(--glass-border); }
+    .dm-obside { flex: 0 0 auto; height: 560px; }
+    .dm-panel.open { flex-basis: 300px; width: 300px; }
+    .dm-panel-inner { width: 300px; }
   }
 
   @media (max-width: 768px) {
@@ -323,16 +436,21 @@ const style = `
     .dm-btn { width: 40px; height: 40px; }
     .dm-net-v { font-size: 17px; }
     .dm-body {
-      max-height: calc(100dvh - 62px);
-      padding: 12px;
-      padding-bottom: calc(12px + env(safe-area-inset-bottom));
+      height: auto; max-height: calc(100dvh - 62px);
+      padding-bottom: env(safe-area-inset-bottom);
       -webkit-overflow-scrolling: touch;
     }
+    .dm-left, .dm-obside { padding: 12px; }
+    .dm-obside { height: 500px; }
+    /* Шторка на телефоне не помещается сбоку — панель раскрывается на всю ширину */
+    .dm-strip { flex-basis: 34px; }
+    .dm-strip-label { font-size: 9px; letter-spacing: 1.4px; }
+    .dm-panel.open { flex-basis: auto; width: 100%; }
+    .dm-panel-inner { width: 100%; }
     .pos-inputs { grid-template-columns: 1fr; }
     .pos-sum { grid-template-columns: 1fr 1fr; }
-    /* Два стакана рядом не влезают по ширине — ставим их друг под другом */
-    .ob { grid-template-columns: 1fr; gap: 18px; }
-    .ob-row { height: 30px; }
+    .ob-row { font-size: 10.5px; }
+    .ob-solo-col + .ob-solo-col { margin-left: 6px; }
   }
 
   @media (max-width: 480px) {
@@ -341,11 +459,20 @@ const style = `
     /* Возраст возможности — второстепенная деталь при таком дефиците места */
     .dm-age-badge { display: none; }
     .pos-sum { grid-template-columns: 1fr; }
+    .dm-obside { height: 440px; }
+    /* Накопительный объём — первое, чем жертвуем при дефиците ширины */
+    .ob-cols { grid-template-columns: 1.2fr 1fr 1fr; }
+    .ob-row { grid-template-columns: 1.2fr 1fr 1fr; }
+    .ob-cols span:nth-child(3), .ob-cum { display: none; }
   }
 `
 
 import { useState, useEffect, useMemo } from 'react'
-import { Star, Trash2, X } from 'lucide-react'
+import { Star, Trash2, X, ChevronLeft } from 'lucide-react'
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
+  CartesianGrid, Tooltip, ReferenceLine, LabelList,
+} from 'recharts'
 import { connectOrderBook } from '../ws.js'
 import {
   getExchangeInfo, getSpreadColor, getSpreadGrade,
@@ -473,11 +600,21 @@ function ExCard({ side, opp, book, livePrice, refPrice }) {
   )
 }
 
-// ─── Стакан в стиле биржи (два вертикальных стакана рядом) ─────────────────────
-// Левый — биржа bid_ex, где мы ПРОДАЁМ (её bids). Правый — ask_ex, где мы
-// ПОКУПАЕМ (её asks). Колонки Цена / Кол-во / Сумма выровнены, глубина показана
-// накопительной полосой — как в терминале любой биржи. Уровни, по которым
-// реально идёт арбитраж (зона пересечения), подсвечены.
+// ─── Стакан в биржевом стиле ──────────────────────────────────────────────────
+// Раскладка как в терминале: сверху сторона продажи (биржа bid_ex, её bids),
+// снизу сторона покупки (ask_ex, её asks), между ними полоса спреда —
+// аналог «текущей цены». Лучшие цены обеих сторон сходятся к центру, потому
+// что именно там происходит арбитраж.
+//
+// Три режима просмотра:
+//   both — 10 уровней продажи + 10 покупки
+//   sell — только продажа, 20 уровней (две колонки по 10)
+//   buy  — только покупка, 20 уровней
+// Собственного скролла у стакана нет: строки резиновые (flex) и подстраиваются
+// под доступную высоту.
+const OB_HALF_DEPTH = 10           // уровней на сторону в режиме «оба»
+const OB_SOLO_DEPTH = OB_HALF_DEPTH * 2  // уровней в режиме одной стороны
+
 function fmtQty(q) {
   if (!isFinite(q)) return '—'
   if (q >= 1000) return formatVolume(q)
@@ -485,32 +622,61 @@ function fmtQty(q) {
   return q.toPrecision(3)
 }
 
-function OrderBookLadder({ bidBook, askBook, bidEx, askEx, depth = 8 }) {
+// Иконки режимов — в стилистике биржевых переключателей стакана:
+// обе стороны / только продажа / только покупка.
+function ModeIcon({ mode }) {
+  const red = 'var(--error)', green = 'var(--success)'
+  const rows = mode === 'sell'
+    ? [red, red, red, red]
+    : mode === 'buy'
+      ? [green, green, green, green]
+      : [red, red, green, green]
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      {rows.map((c, i) => (
+        <rect key={i} x="1" y={1 + i * 3.4} width={i % 2 ? 9 : 12} height="2.2" rx="1" fill={c} />
+      ))}
+    </svg>
+  )
+}
+
+function OrderBookRow({ r, maxUsd }) {
+  return (
+    <div className={`ob-row ${r.zone ? 'zone' : ''}`}>
+      <span className="ob-bar" style={{ width: `${Math.max(4, Math.min(100, r.usd / maxUsd * 100))}%` }} />
+      <span className="ob-p">{formatPrice(r.p)}</span>
+      <span className="ob-q">{fmtQty(r.q)}</span>
+      <span className="ob-cum">${formatVolume(r.cum)}</span>
+      <span className="ob-t">${formatVolume(r.usd)}</span>
+    </div>
+  )
+}
+
+function OrderBookLadder({ bidBook, askBook, bidEx, askEx, spread }) {
+  const [mode, setMode] = useState('both')
   const bidInfo = getExchangeInfo(bidEx)
   const askInfo = getExchangeInfo(askEx)
 
   const data = useMemo(() => {
-    const bids = (bidBook?.bids ?? []).slice(0, depth)
-      .map(([p, q]) => ({ p: parseFloat(p), q: parseFloat(q) }))
-      .filter(l => l.p > 0 && l.q > 0)
-    const asks = (askBook?.asks ?? []).slice(0, depth)
+    const take = (src, n) => (src ?? []).slice(0, n)
       .map(([p, q]) => ({ p: parseFloat(p), q: parseFloat(q) }))
       .filter(l => l.p > 0 && l.q > 0)
 
+    // Берём сразу максимальную глубину — режим только решает, сколько показать
+    const bids = take(bidBook?.bids, OB_SOLO_DEPTH)
+    const asks = take(askBook?.asks, OB_SOLO_DEPTH)
     if (!bids.length && !asks.length) return null
 
     const bestAsk = asks[0]?.p ?? Infinity
     const bestBid = bids[0]?.p ?? -Infinity
 
-    // Накопительный объём по стороне → ширина depth-полосы (как в терминале):
-    // нижняя строка = вся видимая глубина = 100%.
+    // Накопительный объём считается от лучшей цены вглубь стакана
     const withCum = (rows, zoneFn) => {
       let cum = 0
-      const total = rows.reduce((s, l) => s + l.p * l.q, 0) || 1
       return rows.map(l => {
         const usd = l.p * l.q
         cum += usd
-        return { ...l, usd, cumPct: cum / total * 100, zone: zoneFn(l.p) }
+        return { ...l, usd, cum, zone: zoneFn(l.p) }
       })
     }
     // Продаём выше лучшего ask и покупаем ниже лучшего bid → это и есть профит
@@ -525,56 +691,143 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx, depth = 8 }) {
     // «Стенка» — крупнейший уровень на стороне покупки.
     const wall = askRows.reduce((best, r) => (r.usd > (best?.usd ?? 0) ? r : best), null)
 
+    const maxUsd = Math.max(
+      ...bidRows.map(r => r.usd),
+      ...askRows.map(r => r.usd),
+      1,
+    )
+
     return {
-      bidRows, askRows, overlapUsd, wall,
+      bidRows, askRows, overlapUsd, wall, maxUsd,
       zoneLevels: bidRows.filter(r => r.zone).length + askRows.filter(r => r.zone).length,
     }
-  }, [bidBook, askBook, depth])
+  }, [bidBook, askBook])
+
+  const modeSwitch = (
+    <div className="ob-modes">
+      {[
+        { id: 'both', title: 'Продажа и покупка' },
+        { id: 'sell', title: `Только продажа · ${bidInfo.name}` },
+        { id: 'buy',  title: `Только покупка · ${askInfo.name}` },
+      ].map(m => (
+        <button
+          key={m.id}
+          className={`ob-mode ${mode === m.id ? 'on' : ''}`}
+          onClick={() => setMode(m.id)}
+          title={m.title}
+          aria-label={m.title}
+          aria-pressed={mode === m.id}
+        >
+          <ModeIcon mode={m.id} />
+        </button>
+      ))}
+    </div>
+  )
 
   if (!data) {
     return (
-      <div className="tool">
-        <div className="tool-h"><span className="tool-t">Стакан</span></div>
+      <div className="tool grow">
+        <div className="tool-h">
+          <span className="tool-t">Стакан</span>
+          {modeSwitch}
+        </div>
         <div className="tool-empty">Ждём данные стакана обеих бирж…</div>
       </div>
     )
   }
 
-  const { bidRows, askRows, overlapUsd, wall, zoneLevels } = data
+  const { bidRows, askRows, overlapUsd, wall, maxUsd, zoneLevels } = data
 
-  const renderColumn = (info, rows, kind, roleLabel) => (
-    <div className={`ob-col ${kind}`}>
-      <div className="ob-col-h">
-        <ExLogo info={info} />
-        <span className="ob-col-name">{info.name}</span>
-        <span className={`ob-col-role ${kind}`}>{roleLabel}</span>
-      </div>
-      <div className="ob-cols">
-        <span>Цена</span><span>Кол-во</span><span>Сумма $</span>
-      </div>
-      {rows.length ? rows.map((r, i) => (
-        <div key={i} className={`ob-row ${r.zone ? 'zone' : ''}`}>
-          <span className="ob-bar" style={{ width: `${Math.max(3, r.cumPct)}%` }} />
-          <span className="ob-p">{formatPrice(r.p)}</span>
-          <span className="ob-q">{fmtQty(r.q)}</span>
-          <span className="ob-t">${formatVolume(r.usd)}</span>
-        </div>
-      )) : (
-        <div className="ob-empty-col">нет данных</div>
-      )}
+  const colHead = (
+    <div className="ob-cols">
+      <span>Цена</span><span>Кол-во</span><span>Накоп.</span><span>Сумма $</span>
     </div>
   )
 
+  const sideHead = (info, kind, role, count) => (
+    <div className="ob-half-h">
+      <ExLogo info={info} />
+      <span className="ob-col-name">{info.name}</span>
+      <span className={`ob-col-role ${kind}`}>{role}</span>
+      <span className="ob-count">{count}</span>
+    </div>
+  )
+
+  // Половина стакана. reverse=true для стороны продажи: худшая цена уходит
+  // наверх, лучшая оказывается у центральной полосы — как в биржевом стакане.
+  const renderHalf = (rows, kind, reverse) => {
+    const list = reverse ? [...rows].reverse() : rows
+    return (
+      <div className={`ob-half ${kind}`}>
+        {colHead}
+        <div className="ob-rows">
+          {list.length
+            ? list.map((r, i) => <OrderBookRow key={i} r={r} maxUsd={maxUsd} />)
+            : <div className="ob-empty-col">нет данных</div>}
+        </div>
+      </div>
+    )
+  }
+
+  // Режим одной стороны: 20 уровней двумя колонками по 10 — глубина удваивается,
+  // а высота строки не меняется.
+  const renderSolo = (rows, kind) => {
+    const left = rows.slice(0, OB_HALF_DEPTH)
+    const right = rows.slice(OB_HALF_DEPTH, OB_SOLO_DEPTH)
+    const col = (list, key) => (
+      <div key={key} className={`ob-solo-col ${kind}`}>
+        {colHead}
+        <div className="ob-rows">
+          {list.length
+            ? list.map((r, i) => <OrderBookRow key={i} r={r} maxUsd={maxUsd} />)
+            : <div className="ob-empty-col">нет данных</div>}
+        </div>
+      </div>
+    )
+    return <div className="ob-solo">{col(left, 'l')}{right.length > 0 && col(right, 'r')}</div>
+  }
+
   return (
-    <div className="tool">
+    <div className="tool grow">
       <div className="tool-h">
         <span className="tool-t">Стакан</span>
-        <span className="tool-sub">{bidInfo.name} ↔ {askInfo.name}</span>
+        {modeSwitch}
       </div>
       <div className="tool-b">
-        <div className="ob">
-          {renderColumn(bidInfo, bidRows, 'sell', 'ПРОДАЁМ · BID')}
-          {renderColumn(askInfo, askRows, 'buy', 'ПОКУПАЕМ · ASK')}
+        <div className="ob-frame">
+          {mode === 'both' && (
+            <>
+              {sideHead(bidInfo, 'sell', 'ПРОДАЁМ · BID', `${Math.min(bidRows.length, OB_HALF_DEPTH)} ур.`)}
+              {renderHalf(bidRows.slice(0, OB_HALF_DEPTH), 'sell', true)}
+
+              <div className="ob-mid">
+                <div className="ob-mid-l">
+                  <span className="ob-mid-k">спред</span>
+                  <span className="ob-mid-v">{Number(spread ?? 0).toFixed(2)}%</span>
+                </div>
+                <div className="ob-mid-r">
+                  в зоне <b>${formatVolume(overlapUsd)}</b> · {zoneLevels} ур.
+                </div>
+              </div>
+
+              {sideHead(askInfo, 'buy', 'ПОКУПАЕМ · ASK', `${Math.min(askRows.length, OB_HALF_DEPTH)} ур.`)}
+              {renderHalf(askRows.slice(0, OB_HALF_DEPTH), 'buy', false)}
+            </>
+          )}
+
+          {mode === 'sell' && (
+            <>
+              {sideHead(bidInfo, 'sell', 'ПРОДАЁМ · BID', `${bidRows.length} ур.`)}
+              {renderSolo(bidRows, 'sell')}
+            </>
+          )}
+
+          {mode === 'buy' && (
+            <>
+              {sideHead(askInfo, 'buy', 'ПОКУПАЕМ · ASK', `${askRows.length} ур.`)}
+              {renderSolo(askRows, 'buy')}
+            </>
+          )}
         </div>
 
         <div className="ob-foot">
@@ -592,6 +845,26 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx, depth = 8 }) {
 // Чем больше позиция, тем глубже приходится идти по стакану и тем хуже
 // средняя цена исполнения — кривая показывает эту деградацию наглядно
 // и даёт предельный объём, после которого сделка уходит в минус.
+// Построена на recharts: значения подписаны прямо на точках, а таблица под
+// графиком дублирует их числами — цифры видны при любой высоте окна.
+function curveVolLabel(usd) {
+  return usd >= 1000 ? `$${usd / 1000}K` : `$${usd}`
+}
+
+function CurveTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null
+  const p = payload[0]?.payload
+  if (!p) return null
+  return (
+    <div className="curve-tip">
+      <span className="curve-tip-k">объём {curveVolLabel(p.usd)}</span>
+      <span style={{ color: p.net >= 0 ? 'var(--success)' : 'var(--error)' }}>
+        {p.net >= 0 ? '+' : ''}{p.net.toFixed(2)}% чистыми
+      </span>
+    </div>
+  )
+}
+
 function ExecutionCurve({ bidBook, askBook, tradeAmount, feeTotal }) {
   const data = useMemo(() => {
     if (!bidBook?.bids?.length || !askBook?.asks?.length) return null
@@ -631,99 +904,122 @@ function ExecutionCurve({ bidBook, askBook, tradeAmount, feeTotal }) {
 
   if (!data) {
     return (
-      <div className="tool">
+      <div className="tool grow">
         <div className="tool-h"><span className="tool-t">Кривая исполнения</span></div>
         <div className="tool-empty">Ждём данные стакана…</div>
       </div>
     )
   }
 
-  const { points, userNet, maxUsd } = data
+  const { points, userNet, breakEvenUsd } = data
 
-  // ── Геометрия SVG ──
-  const W = 320, H = 170, padL = 34, padR = 12, padT = 12, padB = 24
-  const iw = W - padL - padR, ih = H - padT - padB
-
-  const logMin = Math.log10(points[0].usd)
-  const logMax = Math.log10(maxUsd)
-  const yVals = points.map(p => p.net)
-  const yMax = Math.max(...yVals, 0.5) * 1.1
-  const yMin = Math.min(...yVals, 0) * 1.1 - 0.1
-
-  const X = v => padL + (Math.log10(v) - logMin) / (logMax - logMin || 1) * iw
-  const Y = v => padT + (yMax - v) / (yMax - yMin || 1) * ih
-
-  const line = points.map((p, i) => `${i ? 'L' : 'M'}${X(p.usd).toFixed(1)},${Y(p.net).toFixed(1)}`).join(' ')
-  const area = `${line} L${X(maxUsd).toFixed(1)},${Y(yMin).toFixed(1)} L${X(points[0].usd).toFixed(1)},${Y(yMin).toFixed(1)} Z`
-
-  const xTicks = points.filter((_, i) => i % 2 === 0)
-  const yTicks = [yMax, yMax / 2, 0].filter(v => v >= yMin)
-
-  const userX = tradeAmount >= points[0].usd && tradeAmount <= maxUsd ? X(tradeAmount) : null
+  // Объём пользователя рисуем только если он попадает в диапазон кривой
+  const userInRange = tradeAmount >= points[0].usd && tradeAmount <= data.maxUsd
 
   return (
-    <div className="tool">
+    <div className="tool grow">
       <div className="tool-h">
         <span className="tool-t">Кривая исполнения</span>
         <span className="tool-sub">спред vs объём</span>
       </div>
       <div className="tool-b">
-        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
-          <defs>
-            <linearGradient id="ecGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--accent-bright)" stopOpacity="0.3" />
-              <stop offset="100%" stopColor="var(--accent-bright)" stopOpacity="0" />
-            </linearGradient>
-          </defs>
+        <div className="curve-chart">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={points} margin={{ top: 16, right: 12, bottom: 4, left: -14 }}>
+              <defs>
+                <linearGradient id="ecGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--accent-bright)" stopOpacity="0.35" />
+                  <stop offset="100%" stopColor="var(--accent-bright)" stopOpacity="0" />
+                </linearGradient>
+              </defs>
 
-          {yTicks.map((v, i) => (
-            <g key={`y${i}`}>
-              <line x1={padL} y1={Y(v)} x2={padL + iw} y2={Y(v)} stroke="var(--chart-grid)" strokeWidth="1" />
-              <text x={padL - 6} y={Y(v) + 3} fill="var(--chart-label)" fontSize="8.5"
-                    fontFamily="var(--font-mono)" textAnchor="end">
-                {v.toFixed(1)}%
-              </text>
-            </g>
-          ))}
+              <CartesianGrid stroke="var(--chart-grid)" strokeDasharray="3 3" vertical={false} />
 
-          {xTicks.map((p, i) => (
-            <g key={`x${i}`}>
-              <line x1={X(p.usd)} y1={padT} x2={X(p.usd)} y2={padT + ih} stroke="var(--chart-axis)" strokeWidth="1" />
-              <text x={X(p.usd)} y={H - 7} fill="var(--chart-label)" fontSize="8.5"
-                    fontFamily="var(--font-mono)" textAnchor="middle">
-                {p.usd >= 1000 ? `$${p.usd / 1000}K` : `$${p.usd}`}
-              </text>
-            </g>
-          ))}
+              <XAxis
+                dataKey="usd"
+                type="number"
+                scale="log"
+                domain={['dataMin', 'dataMax']}
+                ticks={points.map(p => p.usd)}
+                tickFormatter={curveVolLabel}
+                tick={{ fill: 'var(--chart-label)', fontSize: 8.5, fontFamily: 'var(--font-mono)' }}
+                stroke="var(--chart-axis)"
+                tickLine={false}
+                interval="preserveStartEnd"
+                minTickGap={14}
+              />
+              <YAxis
+                tickFormatter={v => `${v.toFixed(1)}%`}
+                tick={{ fill: 'var(--chart-label)', fontSize: 8.5, fontFamily: 'var(--font-mono)' }}
+                stroke="var(--chart-axis)"
+                tickLine={false}
+                width={44}
+              />
 
-          {/* Зона убытка — всё что ниже нуля */}
-          {yMin < 0 && (
-            <>
-              <rect x={padL} y={Y(0)} width={iw} height={padT + ih - Y(0)} fill="var(--error)" opacity="0.07" />
-              <line x1={padL} y1={Y(0)} x2={padL + iw} y2={Y(0)}
-                    stroke="var(--error)" strokeWidth="1" strokeDasharray="3 3" opacity="0.75" />
-            </>
-          )}
+              <Tooltip content={<CurveTooltip />} cursor={{ stroke: 'var(--accent-bright)', strokeDasharray: '3 3' }} />
 
-          <path d={area} fill="url(#ecGrad)" />
-          <path d={line} fill="none" stroke="var(--accent-bright)" strokeWidth="2"
-                strokeLinejoin="round" strokeLinecap="round" />
+              {/* Безубыток */}
+              <ReferenceLine y={0} stroke="var(--error)" strokeDasharray="4 3" strokeWidth={1.4} />
+              {/* Объём пользователя */}
+              {userInRange && (
+                <ReferenceLine x={tradeAmount} stroke="var(--warning)" strokeDasharray="2 3" strokeWidth={1.2} />
+              )}
 
-          {userX !== null && userNet !== null && (
-            <>
-              <line x1={userX} y1={padT} x2={userX} y2={padT + ih}
-                    stroke="var(--warning)" strokeWidth="1" strokeDasharray="2 3" opacity="0.8" />
-              <circle cx={userX} cy={Y(userNet)} r="4.5" fill="var(--warning)"
-                      stroke="var(--chart-dot-stroke)" strokeWidth="2" />
-            </>
-          )}
-        </svg>
+              <Area
+                type="monotone"
+                dataKey="net"
+                stroke="var(--accent-bright)"
+                strokeWidth={2.2}
+                fill="url(#ecGrad)"
+                dot={{ r: 2.8, fill: 'var(--accent-bright)', strokeWidth: 0 }}
+                activeDot={{ r: 4.5, fill: 'var(--accent-bright)', stroke: 'var(--chart-dot-stroke)', strokeWidth: 2 }}
+                isAnimationActive={false}
+              >
+                <LabelList
+                  dataKey="net"
+                  position="top"
+                  offset={7}
+                  formatter={v => `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
+                  style={{ fill: 'var(--text-secondary)', fontSize: 8.5, fontFamily: 'var(--font-mono)', fontWeight: 700 }}
+                />
+              </Area>
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
 
         <div className="curve-legend">
           <span><i style={{ background: 'var(--accent-bright)' }} />чистый спред</span>
           <span><i style={{ background: 'var(--error)' }} />безубыток</span>
           <span><i style={{ background: 'var(--warning)' }} />твой объём</span>
         </div>
+
+        <table className="curve-tbl">
+          <thead>
+            <tr><th>Объём</th><th>Чистыми</th></tr>
+          </thead>
+          <tbody>
+            {points.map(p => (
+              <tr key={p.usd} className={p.usd === tradeAmount ? 'you' : ''}>
+                <td>{curveVolLabel(p.usd)}</td>
+                <td style={{ color: p.usd === tradeAmount ? undefined : (p.net >= 0 ? 'var(--success)' : 'var(--error)') }}>
+                  {p.net >= 0 ? '+' : ''}{p.net.toFixed(2)}%
+                </td>
+              </tr>
+            ))}
+            {userNet !== null && !points.some(p => p.usd === tradeAmount) && (
+              <tr className="you">
+                <td>{curveVolLabel(tradeAmount)} · твой</td>
+                <td>{userNet >= 0 ? '+' : ''}{userNet.toFixed(2)}%</td>
+              </tr>
+            )}
+            {breakEvenUsd && (
+              <tr>
+                <td>предел</td>
+                <td style={{ color: 'var(--warning)' }}>${formatVolume(breakEvenUsd)}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   )
@@ -911,6 +1207,8 @@ function DetailModal({
   const [askBook, setAskBook] = useState(null)
   const [avgLong, setAvgLong] = useState(initialAvgLong || '')
   const [avgShort, setAvgShort] = useState(initialAvgShort || '')
+  // Монитор позиции скрыт за шторкой — он нужен только когда позиция уже открыта
+  const [posOpen, setPosOpen] = useState(false)
 
   // ВХОД — открываем позицию:
   // SELL на bid-бирже → бьём по bids (покупатели готовы купить у нас)
@@ -1011,7 +1309,7 @@ function DetailModal({
     <>
       <style>{style}</style>
       <div className="dm-overlay" onClick={onClose}>
-        <div className="dm-modal" onClick={e => e.stopPropagation()}>
+        <div className={`dm-modal ${posOpen ? 'pos-open' : ''}`} onClick={e => e.stopPropagation()}>
 
           {/* HEADER */}
           <div className="dm-header">
@@ -1045,21 +1343,10 @@ function DetailModal({
 
           {/* BODY */}
           <div className="dm-body">
+            <div className="dm-core">
 
-            <div className="dm-top">
-
-              {/* ЛЕВО — кривая исполнения */}
-              <div className="dm-side dm-side-left">
-                <ExecutionCurve
-                  bidBook={bidBook}
-                  askBook={askBook}
-                  tradeAmount={tradeAmount}
-                  feeTotal={feeTotal + fundingCost}
-                />
-              </div>
-
-              {/* ЦЕНТР — панели бирж, спред и кнопка */}
-              <div className="dm-center">
+              {/* ЛЕВО — панели бирж, спред, кнопка и кривая исполнения */}
+              <div className="dm-left">
                 <ExCard side="bid" opp={opp} book={bidBook} livePrice={vwapBid} refPrice={vwapAsk} />
 
                 <div className="spread-sep">
@@ -1095,10 +1382,31 @@ function DetailModal({
                 )}
 
                 <ExCard side="ask" opp={opp} book={askBook} livePrice={vwapAsk} refPrice={vwapBid} />
+
+                <ExecutionCurve
+                  bidBook={bidBook}
+                  askBook={askBook}
+                  tradeAmount={tradeAmount}
+                  feeTotal={feeTotal + fundingCost}
+                />
               </div>
 
-              {/* ПРАВО — монитор позиции + калькулятор */}
-              <div className="dm-side dm-side-right">
+              {/* ПРАВО — стакан на всю высоту */}
+              <div className="dm-obside">
+                <OrderBookLadder
+                  bidBook={bidBook}
+                  askBook={askBook}
+                  bidEx={opp.bid_ex}
+                  askEx={opp.ask_ex}
+                  spread={liveSpread}
+                />
+              </div>
+
+            </div>
+
+            {/* Выдвижная панель монитора позиции */}
+            <div className={`dm-panel ${posOpen ? 'open' : ''}`}>
+              <div className="dm-panel-inner">
                 <PositionMonitor
                   opp={opp}
                   tradeAmount={tradeAmount}
@@ -1112,16 +1420,27 @@ function DetailModal({
                   feeTotal={feeTotal}
                 />
               </div>
-
             </div>
 
-            {/* НИЗ — стакан во всю ширину */}
-            <OrderBookLadder
-              bidBook={bidBook}
-              askBook={askBook}
-              bidEx={opp.bid_ex}
-              askEx={opp.ask_ex}
-            />
+            {/* Шторка-ручка: раздвигает модалку вправо */}
+            <div
+              className={`dm-strip ${posOpen ? 'open' : ''}`}
+              onClick={() => setPosOpen(v => !v)}
+              role="button"
+              tabIndex={0}
+              aria-expanded={posOpen}
+              aria-label={posOpen ? 'Скрыть позицию и выход' : 'Показать позицию и выход'}
+              onKeyDown={e => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPosOpen(v => !v) }
+              }}
+            >
+              <span style={{ width: 14 }} />
+              <span className="dm-strip-label">
+                <span className="dm-strip-dot" />
+                Позиция и выход
+              </span>
+              <ChevronLeft className="dm-strip-chev" size={14} />
+            </div>
 
           </div>
         </div>
