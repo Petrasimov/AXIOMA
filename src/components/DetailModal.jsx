@@ -54,11 +54,6 @@ const style = `
     border-left: 1px solid rgba(255,255,255,0.1);
     padding-left: 12px;
   }
-  .dm-net {
-    display: flex; align-items: baseline; gap: 7px; margin-left: auto; padding-right: 6px;
-  }
-  .dm-net-k { font-size: 9px; letter-spacing: 1.4px; color: var(--text-muted); text-transform: uppercase; }
-  .dm-net-v { font-family: var(--font-mono); font-size: 20px; font-weight: 800; }
   .dm-btn {
     background: rgba(255,255,255,0.07);
     border: 1px solid rgba(255,255,255,0.12);
@@ -95,6 +90,9 @@ const style = `
     flex: 1 1 50%; min-width: 0; min-height: 0;
     padding: 14px; display: flex; flex-direction: column;
   }
+  /* Карточки бирж и полоса спреда показываются целиком: сжимается только
+     кривая, иначе у карточек срезает нижние строки (ставка/перевод). */
+  .dm-left > .ex-card, .dm-left > .spread-sep { flex-shrink: 0; }
 
   /* Вертикальная шторка «Позиция и выход» */
   .dm-strip {
@@ -299,19 +297,6 @@ const style = `
   .ob-q, .ob-cum { position: relative; text-align: right; color: var(--text-secondary); font-size: 10px; }
   .ob-t { position: relative; text-align: right; color: var(--text-primary); font-weight: 600; }
 
-  /* Центральная полоса спреда — как «текущая цена» в биржевом стакане */
-  .ob-mid {
-    flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
-    gap: 12px; padding: 9px 12px; margin: 6px 0;
-    border-radius: var(--radius-sm);
-    background: linear-gradient(90deg, rgba(224,62,62,0.1), rgba(240,165,0,0.15), rgba(0,201,122,0.1));
-    border-top: 1px solid rgba(240,165,0,0.28); border-bottom: 1px solid rgba(240,165,0,0.28);
-  }
-  .ob-mid-l { display: flex; align-items: center; gap: 9px; }
-  .ob-mid-k { font-size: 8.5px; letter-spacing: 1.2px; color: var(--text-secondary); text-transform: uppercase; }
-  .ob-mid-v { font-family: var(--font-mono); font-size: 15px; font-weight: 800; color: var(--warning); }
-  .ob-mid-r { font-family: var(--font-mono); font-size: 10px; color: var(--text-secondary); text-align: right; }
-  .ob-mid-r b { color: var(--text-primary); }
 
   /* Режимы «только продажа/покупка»: две колонки той же биржи,
      чтобы удвоить глубину без сжатия строк */
@@ -319,9 +304,7 @@ const style = `
     flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
     padding: 0 10px 8px; border-bottom: 1px solid var(--glass-border);
   }
-  .ob-solo { flex: 1 1 auto; min-height: 0; display: flex; }
-  .ob-solo-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
-  .ob-solo-col + .ob-solo-col { border-left: 1px solid var(--glass-border); margin-left: 10px; padding-left: 4px; }
+  .ob-solo { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 
   .ob-empty-col { padding: 20px 10px; text-align: center; font-size: 10.5px; color: var(--text-muted); }
   .ob-foot {
@@ -332,6 +315,12 @@ const style = `
   }
   .ob-foot b { color: var(--text-primary); font-size: 11px; }
   .ob-foot .zone-b { color: var(--warning); }
+  /* Пояснение подсветки: жёлтым выделены уровни, дающие профит */
+  .ob-legend { display: inline-flex; align-items: center; gap: 6px; }
+  .ob-legend i {
+    display: inline-block; width: 16px; height: 9px; border-radius: 3px;
+    background: rgba(240,165,0,0.28); border: 1px solid rgba(240,165,0,0.5);
+  }
 
   /* ── КРИВАЯ ИСПОЛНЕНИЯ ── */
   .curve-chart { flex: 1 1 auto; min-height: 110px; width: 100%; }
@@ -347,19 +336,6 @@ const style = `
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
   }
   .curve-tip-k { color: var(--text-muted); font-size: 9px; display: block; margin-bottom: 3px; }
-  /* Таблица объёмов — числа видны всегда, при любой высоте окна */
-  .curve-tbl {
-    flex-shrink: 0; margin-top: 10px; width: 100%;
-    border-collapse: collapse; font-family: var(--font-mono); font-size: 10.5px;
-  }
-  .curve-tbl th {
-    text-align: left; font-family: var(--font-sans); font-size: 8px;
-    letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted);
-    font-weight: 600; padding: 0 0 5px;
-  }
-  .curve-tbl th:last-child, .curve-tbl td:last-child { text-align: right; }
-  .curve-tbl td { padding: 4px 0; border-top: 1px solid var(--glass-border); color: var(--text-secondary); }
-  .curve-tbl tr.you td { color: var(--warning); font-weight: 700; }
 
   /* ── МОНИТОР ПОЗИЦИИ ── */
   .pos-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 12px; }
@@ -399,6 +375,7 @@ const style = `
     font-size: 10.5px; line-height: 1.5;
     background: rgba(0,201,122,0.07); border: 1px solid rgba(0,201,122,0.25); color: var(--success);
   }
+  .pos-sum-note { font-family: var(--font-mono); font-size: 8.5px; color: var(--text-muted); margin-top: 3px; }
   .pos-hint.warn { background: rgba(240,165,0,0.07); border-color: rgba(240,165,0,0.25); color: var(--warning); }
   .pos-hint.neutral { background: rgba(61,135,192,0.07); border-color: rgba(61,135,192,0.25); color: var(--text-secondary); }
 
@@ -434,7 +411,6 @@ const style = `
       padding-top: calc(12px + env(safe-area-inset-top));
     }
     .dm-btn { width: 40px; height: 40px; }
-    .dm-net-v { font-size: 17px; }
     .dm-body {
       height: auto; max-height: calc(100dvh - 62px);
       padding-bottom: env(safe-area-inset-bottom);
@@ -450,7 +426,6 @@ const style = `
     .pos-inputs { grid-template-columns: 1fr; }
     .pos-sum { grid-template-columns: 1fr 1fr; }
     .ob-row { font-size: 10.5px; }
-    .ob-solo-col + .ob-solo-col { margin-left: 6px; }
   }
 
   @media (max-width: 480px) {
@@ -602,14 +577,14 @@ function ExCard({ side, opp, book, livePrice, refPrice }) {
 
 // ─── Стакан в биржевом стиле ──────────────────────────────────────────────────
 // Раскладка как в терминале: сверху сторона продажи (биржа bid_ex, её bids),
-// снизу сторона покупки (ask_ex, её asks), между ними полоса спреда —
-// аналог «текущей цены». Лучшие цены обеих сторон сходятся к центру, потому
-// что именно там происходит арбитраж.
+// снизу сторона покупки (ask_ex, её asks). Лучшие цены обеих сторон сходятся
+// к центру — именно там происходит арбитраж, и жёлтым подсвечены те уровни,
+// на которых спред ещё положительный.
 //
 // Три режима просмотра:
 //   both — 10 уровней продажи + 10 покупки
-//   sell — только продажа, 20 уровней (две колонки по 10)
-//   buy  — только покупка, 20 уровней
+//   sell — только продажа, единый стакан на 20 уровней (лучшая цена внизу)
+//   buy  — только покупка, единый стакан на 20 уровней (лучшая цена вверху)
 // Собственного скролла у стакана нет: строки резиновые (flex) и подстраиваются
 // под доступную высоту.
 const OB_HALF_DEPTH = 10           // уровней на сторону в режиме «оба»
@@ -652,7 +627,7 @@ function OrderBookRow({ r, maxUsd }) {
   )
 }
 
-function OrderBookLadder({ bidBook, askBook, bidEx, askEx, spread }) {
+function OrderBookLadder({ bidBook, askBook, bidEx, askEx }) {
   const [mode, setMode] = useState('both')
   const bidInfo = getExchangeInfo(bidEx)
   const askInfo = getExchangeInfo(askEx)
@@ -697,10 +672,7 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx, spread }) {
       1,
     )
 
-    return {
-      bidRows, askRows, overlapUsd, wall, maxUsd,
-      zoneLevels: bidRows.filter(r => r.zone).length + askRows.filter(r => r.zone).length,
-    }
+    return { bidRows, askRows, overlapUsd, wall, maxUsd }
   }, [bidBook, askBook])
 
   const modeSwitch = (
@@ -736,7 +708,7 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx, spread }) {
     )
   }
 
-  const { bidRows, askRows, overlapUsd, wall, maxUsd, zoneLevels } = data
+  const { bidRows, askRows, overlapUsd, wall, maxUsd } = data
 
   const colHead = (
     <div className="ob-cols">
@@ -769,13 +741,15 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx, spread }) {
     )
   }
 
-  // Режим одной стороны: 20 уровней двумя колонками по 10 — глубина удваивается,
-  // а высота строки не меняется.
-  const renderSolo = (rows, kind) => {
-    const left = rows.slice(0, OB_HALF_DEPTH)
-    const right = rows.slice(OB_HALF_DEPTH, OB_SOLO_DEPTH)
-    const col = (list, key) => (
-      <div key={key} className={`ob-solo-col ${kind}`}>
+  // Режим одной стороны: единый стакан на 20 уровней в одну колонку.
+  // reverse=true для продажи — лучшая цена оказывается в самом низу,
+  // для покупки лучшая цена остаётся сверху.
+  const renderSolo = (rows, kind, reverse) => {
+    const list = reverse
+      ? [...rows.slice(0, OB_SOLO_DEPTH)].reverse()
+      : rows.slice(0, OB_SOLO_DEPTH)
+    return (
+      <div className={`ob-solo ob-solo-col ${kind}`}>
         {colHead}
         <div className="ob-rows">
           {list.length
@@ -784,7 +758,6 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx, spread }) {
         </div>
       </div>
     )
-    return <div className="ob-solo">{col(left, 'l')}{right.length > 0 && col(right, 'r')}</div>
   }
 
   return (
@@ -800,16 +773,6 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx, spread }) {
               {sideHead(bidInfo, 'sell', 'ПРОДАЁМ · BID', `${Math.min(bidRows.length, OB_HALF_DEPTH)} ур.`)}
               {renderHalf(bidRows.slice(0, OB_HALF_DEPTH), 'sell', true)}
 
-              <div className="ob-mid">
-                <div className="ob-mid-l">
-                  <span className="ob-mid-k">спред</span>
-                  <span className="ob-mid-v">{Number(spread ?? 0).toFixed(2)}%</span>
-                </div>
-                <div className="ob-mid-r">
-                  в зоне <b>${formatVolume(overlapUsd)}</b> · {zoneLevels} ур.
-                </div>
-              </div>
-
               {sideHead(askInfo, 'buy', 'ПОКУПАЕМ · ASK', `${Math.min(askRows.length, OB_HALF_DEPTH)} ур.`)}
               {renderHalf(askRows.slice(0, OB_HALF_DEPTH), 'buy', false)}
             </>
@@ -818,22 +781,22 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx, spread }) {
           {mode === 'sell' && (
             <>
               {sideHead(bidInfo, 'sell', 'ПРОДАЁМ · BID', `${bidRows.length} ур.`)}
-              {renderSolo(bidRows, 'sell')}
+              {renderSolo(bidRows, 'sell', true)}
             </>
           )}
 
           {mode === 'buy' && (
             <>
               {sideHead(askInfo, 'buy', 'ПОКУПАЕМ · ASK', `${askRows.length} ур.`)}
-              {renderSolo(askRows, 'buy')}
+              {renderSolo(askRows, 'buy', false)}
             </>
           )}
         </div>
 
         <div className="ob-foot">
+          <span className="ob-legend"><i />уровни со спредом в плюс</span>
           <span>доступно в зоне <b className="zone-b">${formatVolume(overlapUsd)}</b></span>
           {wall && <span>стенка {askInfo.name} <b>{formatPrice(wall.p)}</b> · ${formatVolume(wall.usd)}</span>}
-          <span>уровней в зоне <b>{zoneLevels}</b></span>
         </div>
       </div>
     </div>
@@ -845,8 +808,9 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx, spread }) {
 // Чем больше позиция, тем глубже приходится идти по стакану и тем хуже
 // средняя цена исполнения — кривая показывает эту деградацию наглядно
 // и даёт предельный объём, после которого сделка уходит в минус.
-// Построена на recharts: значения подписаны прямо на точках, а таблица под
-// графиком дублирует их числами — цифры видны при любой высоте окна.
+// Построена на recharts: значение подписано прямо над каждой точкой.
+// Кривая начинается с нулевого объёма и обрывается на первой точке ниже
+// безубытка — что происходит глубже, для входа уже не имеет значения.
 function curveVolLabel(usd) {
   return usd >= 1000 ? `$${usd / 1000}K` : `$${usd}`
 }
@@ -869,16 +833,31 @@ function ExecutionCurve({ bidBook, askBook, tradeAmount, feeTotal }) {
   const data = useMemo(() => {
     if (!bidBook?.bids?.length || !askBook?.asks?.length) return null
 
-    const points = []
+    // Нулевая точка — спред по верхушке стакана, до всякого проскальзывания.
+    // Именно с неё кривая и должна начинаться: при объёме → 0 глубина не задета.
+    const topBid = parseFloat(bidBook.bids[0]?.[0] ?? 0)
+    const topAsk = parseFloat(askBook.asks[0]?.[0] ?? 0)
+    if (!topBid || !topAsk) return null
+
+    const raw = [{ usd: 0, net: (topBid - topAsk) / topBid * 100 - feeTotal }]
     for (const usd of CURVE_STEPS) {
       const vb = calcVwap(bidBook.bids, usd)
       const va = calcVwap(askBook.asks, usd)
       // null означает что стакана не хватает на такой объём — дальше не идём
       if (!vb || !va) break
       const gross = (vb - va) / vb * 100
-      points.push({ usd, net: gross - feeTotal })
+      raw.push({ usd, net: gross - feeTotal })
     }
-    if (points.length < 2) return null
+    if (raw.length < 2) return null
+
+    // Ниже нуля показываем ровно один пункт: важно увидеть, ГДЕ кривая
+    // пересекла безубыток, а насколько глубоко она падает дальше — неинформативно.
+    const points = []
+    for (const p of raw) {
+      points.push(p)
+      if (p.net < 0) break
+    }
+    if (points.length < 2) points.push(raw[1])
 
     // Спред на объёме пользователя
     const vbUser = calcVwap(bidBook.bids, tradeAmount)
@@ -913,19 +892,24 @@ function ExecutionCurve({ bidBook, askBook, tradeAmount, feeTotal }) {
 
   const { points, userNet, breakEvenUsd } = data
 
-  // Объём пользователя рисуем только если он попадает в диапазон кривой
-  const userInRange = tradeAmount >= points[0].usd && tradeAmount <= data.maxUsd
+  // Ось X — категориальная: шаги объёма распределены равномерно, иначе на
+  // линейной шкале первые точки слипаются у левого края и график нечитаем.
+  const userTick = points.some(p => p.usd === tradeAmount) ? tradeAmount : null
 
   return (
     <div className="tool grow">
       <div className="tool-h">
         <span className="tool-t">Кривая исполнения</span>
-        <span className="tool-sub">спред vs объём</span>
+        <span className="tool-sub">
+          {breakEvenUsd
+            ? `предел ${'$'}${formatVolume(breakEvenUsd)}`
+            : 'спред в плюсе на всём стакане'}
+        </span>
       </div>
       <div className="tool-b">
         <div className="curve-chart">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={points} margin={{ top: 16, right: 12, bottom: 4, left: -14 }}>
+            <AreaChart data={points} margin={{ top: 20, right: 14, bottom: 4, left: -12 }}>
               <defs>
                 <linearGradient id="ecGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--accent-bright)" stopOpacity="0.35" />
@@ -937,16 +921,12 @@ function ExecutionCurve({ bidBook, askBook, tradeAmount, feeTotal }) {
 
               <XAxis
                 dataKey="usd"
-                type="number"
-                scale="log"
-                domain={['dataMin', 'dataMax']}
-                ticks={points.map(p => p.usd)}
                 tickFormatter={curveVolLabel}
                 tick={{ fill: 'var(--chart-label)', fontSize: 8.5, fontFamily: 'var(--font-mono)' }}
                 stroke="var(--chart-axis)"
                 tickLine={false}
-                interval="preserveStartEnd"
-                minTickGap={14}
+                interval={0}
+                minTickGap={4}
               />
               <YAxis
                 tickFormatter={v => `${v.toFixed(1)}%`}
@@ -961,8 +941,8 @@ function ExecutionCurve({ bidBook, askBook, tradeAmount, feeTotal }) {
               {/* Безубыток */}
               <ReferenceLine y={0} stroke="var(--error)" strokeDasharray="4 3" strokeWidth={1.4} />
               {/* Объём пользователя */}
-              {userInRange && (
-                <ReferenceLine x={tradeAmount} stroke="var(--warning)" strokeDasharray="2 3" strokeWidth={1.2} />
+              {userTick !== null && (
+                <ReferenceLine x={userTick} stroke="var(--warning)" strokeDasharray="2 3" strokeWidth={1.2} />
               )}
 
               <Area
@@ -978,7 +958,7 @@ function ExecutionCurve({ bidBook, askBook, tradeAmount, feeTotal }) {
                 <LabelList
                   dataKey="net"
                   position="top"
-                  offset={7}
+                  offset={8}
                   formatter={v => `${v > 0 ? '+' : ''}${v.toFixed(1)}%`}
                   style={{ fill: 'var(--text-secondary)', fontSize: 8.5, fontFamily: 'var(--font-mono)', fontWeight: 700 }}
                 />
@@ -990,36 +970,13 @@ function ExecutionCurve({ bidBook, askBook, tradeAmount, feeTotal }) {
         <div className="curve-legend">
           <span><i style={{ background: 'var(--accent-bright)' }} />чистый спред</span>
           <span><i style={{ background: 'var(--error)' }} />безубыток</span>
-          <span><i style={{ background: 'var(--warning)' }} />твой объём</span>
+          {userTick !== null && <span><i style={{ background: 'var(--warning)' }} />твой объём</span>}
+          {userNet !== null && (
+            <span style={{ marginLeft: 'auto', color: userNet >= 0 ? 'var(--success)' : 'var(--error)' }}>
+              на ${formatVolume(tradeAmount)}: {userNet >= 0 ? '+' : ''}{userNet.toFixed(2)}%
+            </span>
+          )}
         </div>
-
-        <table className="curve-tbl">
-          <thead>
-            <tr><th>Объём</th><th>Чистыми</th></tr>
-          </thead>
-          <tbody>
-            {points.map(p => (
-              <tr key={p.usd} className={p.usd === tradeAmount ? 'you' : ''}>
-                <td>{curveVolLabel(p.usd)}</td>
-                <td style={{ color: p.usd === tradeAmount ? undefined : (p.net >= 0 ? 'var(--success)' : 'var(--error)') }}>
-                  {p.net >= 0 ? '+' : ''}{p.net.toFixed(2)}%
-                </td>
-              </tr>
-            ))}
-            {userNet !== null && !points.some(p => p.usd === tradeAmount) && (
-              <tr className="you">
-                <td>{curveVolLabel(tradeAmount)} · твой</td>
-                <td>{userNet >= 0 ? '+' : ''}{userNet.toFixed(2)}%</td>
-              </tr>
-            )}
-            {breakEvenUsd && (
-              <tr>
-                <td>предел</td>
-                <td style={{ color: 'var(--warning)' }}>${formatVolume(breakEvenUsd)}</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
       </div>
     </div>
   )
@@ -1055,19 +1012,26 @@ function PositionMonitor({
     const shortPnl = shortPct * legAmount / 100
     const longPnl  = longPct  * legAmount / 100
 
-    // Спред выхода: сколько ещё осталось до схождения цен
+    // Спред выхода: сколько стоит закрыть обе ноги прямо сейчас
     const exitSpread = (curBidExit - curAskExit) / curBidExit * 100
-    const totalPnl = shortPnl + longPnl
+    const grossPnl = shortPnl + longPnl
 
-    // Сколько движения уже отработано
-    const progress = entrySpread > 0
-      ? Math.max(0, Math.min(100, (entrySpread - exitSpread) / entrySpread * 100))
-      : 0
+    // Комиссии: feeTotal — это уже вход+выход по обеим биржам в процентах,
+    // берётся с номинала одной ноги (так же, как считает кривая исполнения)
+    const feeCost = feeTotal / 100 * legAmount
+    const totalPnl = grossPnl - feeCost
+
+    // Точка безубытка — это НЕ размер комиссии, а тот спред выхода, при котором
+    // прибыль от схождения ровно покрывает комиссии: entry - exit - fee = 0.
+    const breakEven = entrySpread - feeTotal
+
+    // Сколько движения уже отработано — путь от спреда входа до безубытка
+    const span = entrySpread - breakEven === 0 ? 1 : entrySpread - breakEven
+    const progress = Math.max(0, Math.min(100, (entrySpread - exitSpread) / span * 100))
 
     return {
       entrySpread, shortPct, longPct, shortPnl, longPnl,
-      exitSpread, totalPnl, progress,
-      breakEven: feeTotal,
+      exitSpread, grossPnl, feeCost, totalPnl, progress, breakEven,
     }
   }, [filled, nShort, nLong, curBidExit, curAskExit, tradeAmount, feeTotal])
 
@@ -1175,18 +1139,21 @@ function PositionMonitor({
                 <div className="pos-sum-v" style={{ color: calc.totalPnl >= 0 ? 'var(--success)' : 'var(--error)' }}>
                   {calc.totalPnl >= 0 ? '+' : ''}${calc.totalPnl.toFixed(2)}
                 </div>
+                <div className="pos-sum-note">
+                  {calc.grossPnl >= 0 ? '+' : ''}${calc.grossPnl.toFixed(2)} − ${calc.feeCost.toFixed(2)} комис.
+                </div>
               </div>
             </div>
 
             {calc.exitSpread <= calc.breakEven ? (
               <div className="pos-hint">
                 ✓ Спред сошёлся до {calc.exitSpread.toFixed(2)}% — ниже точки безубытка
-                ({calc.breakEven.toFixed(2)}%). Движение отработано, можно закрывать.
+                ({calc.breakEven.toFixed(2)}%). Комиссии отбиты, можно закрывать.
               </div>
             ) : (
               <div className="pos-hint warn">
-                ⏳ Отработано {calc.progress.toFixed(0)}% движения. Безубыточный выход —
-                при спреде {calc.breakEven.toFixed(2)}%.
+                ⏳ Отработано {calc.progress.toFixed(0)}% движения. Выход в ноль — когда спред
+                сойдётся до {calc.breakEven.toFixed(2)}% (сейчас {calc.exitSpread.toFixed(2)}%).
               </div>
             )}
           </>
@@ -1245,8 +1212,6 @@ function DetailModal({
     return () => { bidWs.close(); askWs.close() }
   }, [opp.bid_ex, opp.ask_ex, opp.symbol, opp.strategy])
 
-  const curBid     = vwapBid     ?? opp.bid_price
-  const curAsk     = vwapAsk     ?? opp.ask_price
   const curBidExit = vwapBidExit ?? opp.bid_price
   const curAskExit = vwapAskExit ?? opp.ask_price
 
@@ -1262,20 +1227,6 @@ function DetailModal({
   // Вход и выход — по сделке на каждой бирже, значит комиссия берётся дважды
   const feeTotal = (feeBid + feeAsk) * 2
 
-  // Проскальзывание — разница между ценой верхнего уровня стакана и VWAP
-  // на объём пользователя. Ровно то, что теряется на глубине.
-  const slipIn = useMemo(() => {
-    const topBid = parseFloat(bidBook?.bids?.[0]?.[0] ?? 0)
-    const topAsk = parseFloat(askBook?.asks?.[0]?.[0] ?? 0)
-    if (!topBid || !topAsk || !vwapBid || !vwapAsk) return 0
-    const gross = (topBid - topAsk) / topBid * 100
-    const real  = (vwapBid - vwapAsk) / vwapBid * 100
-    return Math.max(0, gross - real)
-  }, [bidBook, askBook, vwapBid, vwapAsk])
-
-  // Выход стоит примерно столько же — считаем симметрично
-  const slipOut = slipIn
-
   // Фандинг за одно начисление: платим по короткой ноге, получаем по длинной
   const fundingCost = useMemo(() => {
     const bidRate = opp.bid_funding?.rate ?? 0
@@ -1283,9 +1234,6 @@ function DetailModal({
     // SHORT платит при положительной ставке, LONG получает — и наоборот
     return Math.max(0, bidRate) + Math.max(0, -askRate)
   }, [opp.bid_funding, opp.ask_funding])
-
-  const grossSpread = liveSpread
-  const netSpread = grossSpread - slipIn - slipOut - feeBid * 2 - feeAsk * 2 - fundingCost
 
   const calcFilled = !!(avgLong && avgShort && parseFloat(avgLong) > 0 && parseFloat(avgShort) > 0)
 
@@ -1317,12 +1265,6 @@ function DetailModal({
               <span className="dm-symbol">{opp.symbol}</span>
               <span className="dm-strategy">{STRATEGY_NAMES[opp.strategy] ?? opp.strategy.toUpperCase()}</span>
               <span className="dm-age-badge">🕐 {formatAge(opp.first_seen)}</span>
-            </div>
-            <div className="dm-net">
-              <span className="dm-net-k">чистыми</span>
-              <span className="dm-net-v" style={{ color: netSpread >= 0 ? 'var(--success)' : 'var(--error)' }}>
-                {netSpread >= 0 ? '+' : ''}{netSpread.toFixed(2)}%
-              </span>
             </div>
             <div className="dm-header-right">
               <button
@@ -1398,7 +1340,6 @@ function DetailModal({
                   askBook={askBook}
                   bidEx={opp.bid_ex}
                   askEx={opp.ask_ex}
-                  spread={liveSpread}
                 />
               </div>
 
