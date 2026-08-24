@@ -258,6 +258,16 @@ const style = `
     flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
     padding: 0 10px 8px; border-bottom: 1px solid var(--glass-border);
   }
+  /* Стык сторон: воздух + тонкая линия с переходом красный→зелёный.
+     Данные не приглушаем — у стыка стоят лучшие цены обеих сторон,
+     это самое важное место стакана. */
+  .ob-split {
+    flex: 0 0 auto; height: 1px; margin: 10px 10px 12px; border-radius: 1px;
+    background: linear-gradient(90deg,
+      rgba(224,62,62,0.30), rgba(255,255,255,0.09) 50%, rgba(0,201,122,0.30));
+  }
+  /* Второй заголовок не должен выглядеть как новый блок — он тише первого */
+  .ob-half-h.second { border-bottom-color: rgba(255,255,255,0.05); padding-top: 0; }
   .ob-col-name { font-size: 12px; font-weight: 700; color: var(--text-primary); }
   .ob-col-role {
     margin-left: auto; font-family: var(--font-mono); font-size: 8.5px;
@@ -309,12 +319,11 @@ const style = `
   .ob-empty-col { padding: 20px 10px; text-align: center; font-size: 10.5px; color: var(--text-muted); }
   .ob-foot {
     flex: 0 0 auto;
-    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; padding-top: 9px;
+    display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px;
     border-top: 1px solid var(--glass-border);
     font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted);
   }
   .ob-foot b { color: var(--text-primary); font-size: 11px; }
-  .ob-foot .zone-b { color: var(--warning); }
   /* Пояснение подсветки: жёлтым выделены уровни, дающие профит */
   .ob-legend { display: inline-flex; align-items: center; gap: 6px; }
   .ob-legend i {
@@ -375,7 +384,6 @@ const style = `
     font-size: 10.5px; line-height: 1.5;
     background: rgba(0,201,122,0.07); border: 1px solid rgba(0,201,122,0.25); color: var(--success);
   }
-  .pos-sum-note { font-family: var(--font-mono); font-size: 8.5px; color: var(--text-muted); margin-top: 3px; }
   .pos-hint.warn { background: rgba(240,165,0,0.07); border-color: rgba(240,165,0,0.25); color: var(--warning); }
   .pos-hint.neutral { background: rgba(61,135,192,0.07); border-color: rgba(61,135,192,0.25); color: var(--text-secondary); }
 
@@ -658,21 +666,15 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx }) {
     const bidRows = withCum(bids, p => p > bestAsk)
     const askRows = withCum(asks, p => p < bestBid)
 
-    const bidZoneUsd = bidRows.filter(r => r.zone).reduce((s, r) => s + r.usd, 0)
-    const askZoneUsd = askRows.filter(r => r.zone).reduce((s, r) => s + r.usd, 0)
-    // Реально доступный объём — минимум из двух сторон.
-    const overlapUsd = Math.min(bidZoneUsd, askZoneUsd)
-
-    // «Стенка» — крупнейший уровень на стороне покупки.
-    const wall = askRows.reduce((best, r) => (r.usd > (best?.usd ?? 0) ? r : best), null)
-
+    // Общий масштаб depth-полос: обе стороны меряются одной линейкой,
+    // иначе крупный уровень на одной бирже визуально не сравнить с другой
     const maxUsd = Math.max(
       ...bidRows.map(r => r.usd),
       ...askRows.map(r => r.usd),
       1,
     )
 
-    return { bidRows, askRows, overlapUsd, wall, maxUsd }
+    return { bidRows, askRows, maxUsd }
   }, [bidBook, askBook])
 
   const modeSwitch = (
@@ -708,7 +710,7 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx }) {
     )
   }
 
-  const { bidRows, askRows, overlapUsd, wall, maxUsd } = data
+  const { bidRows, askRows, maxUsd } = data
 
   const colHead = (
     <div className="ob-cols">
@@ -716,8 +718,8 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx }) {
     </div>
   )
 
-  const sideHead = (info, kind, role, count) => (
-    <div className="ob-half-h">
+  const sideHead = (info, kind, role, count, second) => (
+    <div className={`ob-half-h ${second ? 'second' : ''}`}>
       <ExLogo info={info} />
       <span className="ob-col-name">{info.name}</span>
       <span className={`ob-col-role ${kind}`}>{role}</span>
@@ -773,7 +775,9 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx }) {
               {sideHead(bidInfo, 'sell', 'ПРОДАЁМ · BID', `${Math.min(bidRows.length, OB_HALF_DEPTH)} ур.`)}
               {renderHalf(bidRows.slice(0, OB_HALF_DEPTH), 'sell', true)}
 
-              {sideHead(askInfo, 'buy', 'ПОКУПАЕМ · ASK', `${Math.min(askRows.length, OB_HALF_DEPTH)} ур.`)}
+              <div className="ob-split" />
+
+              {sideHead(askInfo, 'buy', 'ПОКУПАЕМ · ASK', `${Math.min(askRows.length, OB_HALF_DEPTH)} ур.`, true)}
               {renderHalf(askRows.slice(0, OB_HALF_DEPTH), 'buy', false)}
             </>
           )}
@@ -795,8 +799,6 @@ function OrderBookLadder({ bidBook, askBook, bidEx, askEx }) {
 
         <div className="ob-foot">
           <span className="ob-legend"><i />уровни со спредом в плюс</span>
-          <span>доступно в зоне <b className="zone-b">${formatVolume(overlapUsd)}</b></span>
-          {wall && <span>стенка {askInfo.name} <b>{formatPrice(wall.p)}</b> · ${formatVolume(wall.usd)}</span>}
         </div>
       </div>
     </div>
@@ -922,18 +924,18 @@ function ExecutionCurve({ bidBook, askBook, tradeAmount, feeTotal }) {
               <XAxis
                 dataKey="usd"
                 tickFormatter={curveVolLabel}
-                tick={{ fill: 'var(--chart-label)', fontSize: 8.5, fontFamily: 'var(--font-mono)' }}
-                stroke="var(--chart-axis)"
+                tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600 }}
+                stroke="var(--text-muted)"
                 tickLine={false}
                 interval={0}
                 minTickGap={4}
               />
               <YAxis
                 tickFormatter={v => `${v.toFixed(1)}%`}
-                tick={{ fill: 'var(--chart-label)', fontSize: 8.5, fontFamily: 'var(--font-mono)' }}
-                stroke="var(--chart-axis)"
+                tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontFamily: 'var(--font-mono)', fontWeight: 600 }}
+                stroke="var(--text-muted)"
                 tickLine={false}
-                width={44}
+                width={46}
               />
 
               <Tooltip content={<CurveTooltip />} cursor={{ stroke: 'var(--accent-bright)', strokeDasharray: '3 3' }} />
@@ -1031,7 +1033,7 @@ function PositionMonitor({
 
     return {
       entrySpread, shortPct, longPct, shortPnl, longPnl,
-      exitSpread, grossPnl, feeCost, totalPnl, progress, breakEven,
+      exitSpread, totalPnl, progress, breakEven,
     }
   }, [filled, nShort, nLong, curBidExit, curAskExit, tradeAmount, feeTotal])
 
@@ -1138,9 +1140,6 @@ function PositionMonitor({
                 <div className="pos-sum-k">чистый P&amp;L</div>
                 <div className="pos-sum-v" style={{ color: calc.totalPnl >= 0 ? 'var(--success)' : 'var(--error)' }}>
                   {calc.totalPnl >= 0 ? '+' : ''}${calc.totalPnl.toFixed(2)}
-                </div>
-                <div className="pos-sum-note">
-                  {calc.grossPnl >= 0 ? '+' : ''}${calc.grossPnl.toFixed(2)} − ${calc.feeCost.toFixed(2)} комис.
                 </div>
               </div>
             </div>
