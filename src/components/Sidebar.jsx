@@ -23,7 +23,7 @@
  */
 
 import { useState, useEffect } from "react"
-import { Home, TrendingUp, Percent, BookOpen, ArrowLeftRight, Shuffle, Code2, Users, Flame, Menu, X } from "lucide-react"
+import { Home, TrendingUp, Percent, BookOpen, ArrowLeftRight, Shuffle, Code2, Users, Flame, Menu, X, Lock, LogIn, User } from "lucide-react"
 import { TABS } from "../constants"
 import UserProfile from './UserProfile.jsx'
 
@@ -219,6 +219,92 @@ const style = `
     .sidebar:not(:hover) .sidebar-footer {
         opacity: 0;
     }
+
+    /* ── Блок гостя (не авторизован) ──────────────────────────────────────
+       Занимает место UserProfile. Сайдбар свёрнут до 68px и раскрывается по
+       hover, поэтому в свёрнутом виде показываем только аватар-заглушку,
+       а имя и ссылки появляются вместе с раскрытием — так же, как UserProfile.
+    */
+    .sb-guest {
+        margin-top: auto;
+        padding: 14px 0;
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding-left: 18px;
+        padding-right: 14px;
+        white-space: nowrap;
+    }
+
+    .sb-guest-av {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        border: 1.5px dashed var(--glass-border-hover);
+        background: rgba(255,255,255,0.02);
+    }
+
+    .sb-guest-info {
+        display: none;
+        flex-direction: column;
+        gap: 3px;
+        min-width: 0;
+    }
+
+    .sidebar:hover .sb-guest-info { display: flex; }
+
+    .sb-guest-name {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: var(--text-secondary);
+        font-family: var(--font-sans);
+        line-height: 1.2;
+    }
+
+    .sb-guest-links {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+    }
+
+    .sb-guest-link {
+        padding: 0;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-family: var(--font-sans);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--accent-bright);
+        transition: color 0.15s ease;
+    }
+
+    .sb-guest-link:hover { color: var(--text-primary); }
+
+    .sb-guest-link:focus-visible {
+        outline: 2px solid var(--accent-bright);
+        outline-offset: 2px;
+        border-radius: 3px;
+    }
+
+    .sb-guest-dot { color: var(--text-muted); }
+
+    /* Замок на разделах, закрытых без подписки */
+    .sidebar-tab-lock {
+        margin-left: auto;
+        display: none;
+        color: var(--text-muted);
+        flex-shrink: 0;
+    }
+
+    .sidebar:hover .sidebar-tab-lock { display: inline-flex; }
 
     /* ══════════════════════════════════════════════════════════════
        МОБИЛКА (≤1024px) — верхний бар + выдвижная панель (off-canvas)
@@ -612,15 +698,89 @@ const style = `
     .sb-drawer-profile-badge.admin { color: #a78bfa; }
     .sb-drawer-profile-badge.admin .sb-drawer-profile-dot { background: #a78bfa; }
 
-    .sb-drawer-version {
-        padding: 12px 6px 16px;
-        font-size: 11px;
-        color: var(--text-muted);
-        letter-spacing: 1px;
+    .sb-drawer-guest {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: var(--radius-md);
+        background: rgba(255,255,255,0.02);
+        border: 1px solid var(--glass-border);
     }
+
+    .sb-drawer-guest-av {
+        width: 38px;
+        height: 38px;
+        min-width: 38px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        border: 1.5px dashed var(--glass-border-hover);
+        background: rgba(255,255,255,0.02);
+    }
+
+    .sb-drawer-guest-info {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .sb-drawer-guest-name {
+        font-size: 13px;
+        font-weight: 700;
+        color: var(--text-secondary);
+        font-family: var(--font-sans);
+        line-height: 1.2;
+    }
+
+    .sb-drawer-guest-links {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+    }
+
+    .sb-drawer-guest-link {
+        padding: 0;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--accent-bright);
+    }
+
+    .sb-drawer-guest-dot { color: var(--text-muted); font-size: 12px; }
+
+    /* Кнопка «Войти» в мобильном топбаре — на месте аватара */
+    .sb-topbar-login {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 14px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        background: var(--accent);
+        border: 1px solid rgba(255,255,255,0.14);
+        color: #fff;
+        font-family: var(--font-sans);
+        font-size: 12.5px;
+        font-weight: 700;
+    }
+
+    .sb-nav-item-lock {
+        margin-left: auto;
+        color: var(--text-muted);
+        flex-shrink: 0;
+    }
+
 `
 
-function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, onLogout, onOpenProfile }) {
+function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, onLogout, onOpenProfile, onOpenAuth }) {
     const [futuresSubTab, setFuturesSubTab] = useState('cex-cex')
     const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
@@ -683,7 +843,10 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
                     const isActive = activeTab === tab.id
 
                     if (tab.id === 'developers' && !isAdmin) return null
-                    if (tab.id === 'funding' && !isCexCexPaid) return null
+
+                    // Раздел виден всем, но без подписки помечен замком: пользователь
+                    // должен понимать, что здесь есть, а не искать пропавший пункт меню.
+                    const locked = tab.id === 'funding' && !isCexCexPaid
 
                     return (
                         <div key={tab.id}>
@@ -693,6 +856,7 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
                             >
                                 {Icon && <Icon size={18} />}
                                 <span>{tab.label}</span>
+                                {locked && <Lock className="sidebar-tab-lock" size={13} />}
                             </div>
 
                             {tab.id === 'futures' && isActive && (
@@ -728,12 +892,34 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
                     )
                 })}
 
-                {/* Профиль / версия */}
+                {/* Профиль пользователя / блок гостя */}
                 {authUser ? (
                     <UserProfile user={authUser} onOpenProfile={onOpenProfile} />
                 ) : (
-                    <div className="sidebar-footer">
-                        AXIOM v1.0
+                    <div className="sb-guest">
+                        <span className="sb-guest-av">
+                            <User size={16} />
+                        </span>
+                        <span className="sb-guest-info">
+                            <span className="sb-guest-name">Гость</span>
+                            <span className="sb-guest-links">
+                                <button
+                                    type="button"
+                                    className="sb-guest-link"
+                                    onClick={() => onOpenAuth?.('login')}
+                                >
+                                    Войти
+                                </button>
+                                <span className="sb-guest-dot">·</span>
+                                <button
+                                    type="button"
+                                    className="sb-guest-link"
+                                    onClick={() => onOpenAuth?.('register')}
+                                >
+                                    Регистрация
+                                </button>
+                            </span>
+                        </span>
                     </div>
                 )}
 
@@ -755,7 +941,7 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
                     <span className="sb-topbar-text">AXIOM</span>
                 </div>
 
-                {authUser && (
+                {authUser ? (
                     <button
                         className="sb-topbar-av"
                         onClick={() => onOpenProfile?.()}
@@ -766,6 +952,15 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
                                 ? <img src={authUser.photoUrl} alt={displayName} onError={e => { e.target.style.display = 'none' }} />
                                 : initial}
                         </span>
+                    </button>
+                ) : (
+                    <button
+                        className="sb-topbar-login"
+                        onClick={() => onOpenAuth?.('login')}
+                        aria-label="Войти"
+                    >
+                        <LogIn size={15} />
+                        Войти
                     </button>
                 )}
             </header>
@@ -799,7 +994,8 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
                         const isActive = activeTab === tab.id
 
                         if (tab.id === 'developers' && !isAdmin) return null
-                        if (tab.id === 'funding' && !isCexCexPaid) return null
+
+                        const locked = tab.id === 'funding' && !isCexCexPaid
 
                         return (
                             <div key={tab.id}>
@@ -809,6 +1005,7 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
                                 >
                                     {Icon && <Icon size={18} />}
                                     <span>{tab.label}</span>
+                                    {locked && <Lock className="sb-nav-item-lock" size={14} />}
                                 </button>
 
                                 {tab.id === 'futures' && isActive && (
@@ -865,7 +1062,31 @@ function Sidebar({ activeTab, onTabChange, activePage, onPageChange, authUser, o
                             </span>
                         </button>
                     ) : (
-                        <div className="sb-drawer-version">AXIOM v1.0</div>
+                        <div className="sb-drawer-guest">
+                            <span className="sb-drawer-guest-av">
+                                <User size={18} />
+                            </span>
+                            <span className="sb-drawer-guest-info">
+                                <span className="sb-drawer-guest-name">Гость</span>
+                                <span className="sb-drawer-guest-links">
+                                    <button
+                                        type="button"
+                                        className="sb-drawer-guest-link"
+                                        onClick={() => { onOpenAuth?.('login'); setMobileNavOpen(false) }}
+                                    >
+                                        Войти
+                                    </button>
+                                    <span className="sb-drawer-guest-dot">·</span>
+                                    <button
+                                        type="button"
+                                        className="sb-drawer-guest-link"
+                                        onClick={() => { onOpenAuth?.('register'); setMobileNavOpen(false) }}
+                                    >
+                                        Регистрация
+                                    </button>
+                                </span>
+                            </span>
+                        </div>
                     )}
                 </div>
             </aside>

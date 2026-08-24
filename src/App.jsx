@@ -24,6 +24,7 @@ import ProfileModal from "./components/ProfileModal.jsx";
 import { loadSession, checkAccess, saveSession, clearSession, saveUserSettings, toggleNotifications } from "./auth.js";
 import TelegramAuthModal from "./components/TelegramAuthModal.jsx";
 import AccessDenied from "./components/AccessDenied.jsx";
+import AuthGate from "./components/AuthGate.jsx";
 import PaySuccess from "./components/PaySuccess.jsx";
 import PayCancel from "./components/PayCancel.jsx";
 import { createInvoice } from "./payments.js";
@@ -113,6 +114,12 @@ function App() {
 
   // модалка профиля пользователя
   const [profileOpen, setProfileOpen] = useState(false)
+
+  // Модалка входа больше не появляется сама при заходе на сканер: гость видит
+  // в рабочей области AuthGate, а модалка открывается по явному действию —
+  // кнопками гейта или ссылками в сайдбаре. mode задаёт стартовую вкладку.
+  const [authModal, setAuthModal] = useState({ open: false, mode: 'login' })
+  const openAuthModal = (mode = 'login') => setAuthModal({ open: true, mode })
 
   // pushPath — синхронизирует адресную строку без перезагрузки страницы.
   const pushPath = (path) => {
@@ -230,7 +237,7 @@ function App() {
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   // Три возможных статуса:
-  //   'unknown'  — не авторизован, показываем TelegramAuthModal
+  //   'unknown'  — не авторизован, на сканерах показываем AuthGate
   //   'checking' — авторизован, идёт первичная проверка доступа
   //   'ready'    — проверка завершена, user содержит актуальный статус
 
@@ -241,8 +248,8 @@ function App() {
       aLog('info', `[APP] Старт: сессия найдена → status='checking' | userId=${session.userId} login=${session.login}`)
       return { status: 'checking', user: session }
     }
-    // Лог старта приложения — сессии нет, показываем TelegramAuthModal
-    aLog('info', `[APP] Старт: сессия отсутствует → status='unknown', показываем TelegramAuthModal`)
+    // Лог старта приложения — сессии нет, на сканерах покажем AuthGate
+    aLog('info', `[APP] Старт: сессия отсутствует → status='unknown', на сканерах показываем AuthGate`)
     return { status: 'unknown', user: null }
   })
 
@@ -431,6 +438,9 @@ function App() {
 
   function handleAuthSuccess(userData) {
     saveSession(userData)
+    // Модалку закрываем сразу: дальше пользователь увидит либо сканер,
+    // либо AccessDenied — в зависимости от подписки.
+    setAuthModal({ open: false, mode: 'login' })
     // Запускаем проверку доступа перед тем как открыть скринер
     setAuth({ status: 'checking', user: userData })
   }
@@ -1181,6 +1191,7 @@ function App() {
   const isScannerPage   = activePage === 'futures' || activePage === 'funding'
   // Доступ к сканерам открыт только авторизованному пользователю с активной подпиской.
   const scannerUnlocked = auth.status === 'ready' && auth.user?.isCexCexPaid === true
+  // Гость на странице сканера: вместо контента — AuthGate с кнопками входа.
   const showAuthModal    = isScannerPage && auth.status === 'unknown'
   const showAccessDenied = isScannerPage && auth.status === 'ready' && !auth.user?.isCexCexPaid
 
@@ -1196,6 +1207,7 @@ function App() {
         authUser={auth.status === 'ready' ? auth.user : null}
         onLogout={handleLogout}
         onOpenProfile={() => setProfileOpen(true)}
+        onOpenAuth={openAuthModal}
       />
 
       <div className="main-area" style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
@@ -1236,9 +1248,13 @@ function App() {
         ) : activePage === 'funding' ? (
           <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-            {/* Не авторизован → модалка входа */}
+            {/* Не авторизован → заглушка с кнопками входа (модалка по клику) */}
             {showAuthModal && (
-              <TelegramAuthModal onSuccess={handleAuthSuccess} />
+              <AuthGate
+                page="funding"
+                onLogin={() => openAuthModal('login')}
+                onRegister={() => openAuthModal('register')}
+              />
             )}
 
             {/* Авторизован, но нет подписки → paywall */}
@@ -1292,9 +1308,13 @@ function App() {
 
             <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-              {/* Не авторизован → модалка входа */}
+              {/* Не авторизован → заглушка с кнопками входа (модалка по клику) */}
               {showAuthModal && (
-                <TelegramAuthModal onSuccess={handleAuthSuccess} />
+                <AuthGate
+                  page="futures"
+                  onLogin={() => openAuthModal('login')}
+                  onRegister={() => openAuthModal('register')}
+                />
               )}
 
               {/* Авторизован, проверка идёт → пустой экран (LoadingScreen покажет isLoading) */}
@@ -1420,6 +1440,15 @@ function App() {
         >
           {payError}
         </div>
+      )}
+
+      {/* Модалка входа/регистрации — поверх всего, открывается с любой страницы */}
+      {authModal.open && (
+        <TelegramAuthModal
+          initialMode={authModal.mode}
+          onSuccess={handleAuthSuccess}
+          onClose={() => setAuthModal({ open: false, mode: 'login' })}
+        />
       )}
 
       {/* Модалка профиля — поверх всего, доступна с любой страницы */}
