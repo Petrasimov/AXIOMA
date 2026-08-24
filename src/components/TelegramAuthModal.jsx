@@ -84,6 +84,39 @@ const REGISTER_ERRORS = {
     network_error: 'Нет связи с сервером. Проверьте интернет.',
 }
 
+// Оценка надёжности пароля. Считаем длину и разнообразие символов —
+// это подсказка пользователю, а не проверка: вход блокирует только
+// минимальная длина в validate(). Пароль сюда приходит, но никуда не уходит:
+// функция ничего не логирует и не отправляет.
+function passwordStrength(pw) {
+    if (!pw) return { score: 0, label: '', color: 'var(--text-muted)', hint: '' }
+
+    let score = 0
+    if (pw.length >= 8) score++
+    if (pw.length >= 12) score++
+    if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++
+    if (/\d/.test(pw)) score++
+    if (/[^\w\s]/.test(pw)) score++
+
+    // Короткий пароль не может считаться надёжным, сколько бы классов
+    // символов в нём ни было
+    if (pw.length < 8) score = Math.min(score, 1)
+    score = Math.min(score, 4)
+
+    const tips = []
+    if (pw.length < 12) tips.push('длиннее')
+    if (!(/[a-z]/.test(pw) && /[A-Z]/.test(pw))) tips.push('заглавные и строчные')
+    if (!/\d/.test(pw)) tips.push('цифры')
+    if (!/[^\w\s]/.test(pw)) tips.push('символы')
+
+    const hint = tips.length ? `Надёжнее будет с: ${tips.join(', ')}.` : 'Отличный пароль.'
+
+    if (score <= 1) return { score: 1, label: 'Слабый',   color: 'var(--error)',   hint }
+    if (score === 2) return { score: 2, label: 'Средний',  color: 'var(--warning)', hint }
+    if (score === 3) return { score: 3, label: 'Хороший',  color: '#7bc86c',        hint }
+    return { score: 4, label: 'Надёжный', color: 'var(--success)', hint }
+}
+
 const style = `
     .tg-overlay {
         position: fixed;
@@ -250,43 +283,32 @@ const style = `
 
     .tg-demo-foot {
         display: flex;
-        align-items: center;
+        align-items: baseline;
         justify-content: space-between;
+        gap: 12px;
         margin-top: 12px;
         padding-top: 12px;
         border-top: 1px solid var(--glass-border);
     }
 
+    /* Подпись и значение выровнены по базовой линии: без мигающей точки
+       строка читается спокойнее, а цифра остаётся главной. */
     .tg-demo-k {
-        display: flex;
-        align-items: center;
-        gap: 7px;
         font-family: var(--font-sans);
         font-size: 10px;
-        letter-spacing: 1.3px;
+        letter-spacing: 1.4px;
         text-transform: uppercase;
         color: var(--text-secondary);
+        white-space: nowrap;
     }
 
     .tg-demo-v {
         font-family: var(--font-mono);
-        font-size: 19px;
+        font-size: 22px;
         font-weight: 800;
+        line-height: 1;
+        letter-spacing: -0.5px;
         color: var(--success);
-    }
-
-    .tg-pulse {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: var(--success);
-        box-shadow: 0 0 0 0 rgba(0,201,122,0.6);
-        animation: tg-pulse 1.8s infinite;
-    }
-
-    @keyframes tg-pulse {
-        70%  { box-shadow: 0 0 0 8px rgba(0,201,122,0); }
-        100% { box-shadow: 0 0 0 0 rgba(0,201,122,0); }
     }
 
     .tg-stats { display: flex; gap: 22px; }
@@ -415,6 +437,45 @@ const style = `
     .tg-peek:focus-visible {
         outline: 2px solid var(--accent-bright);
         outline-offset: 1px;
+    }
+
+    /* Индикатор надёжности пароля — только подсказка, вход не блокирует */
+    .tg-strength {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-top: 8px;
+    }
+
+    .tg-strength-track {
+        display: flex;
+        gap: 4px;
+        flex: 1;
+    }
+
+    .tg-strength-seg {
+        flex: 1;
+        height: 4px;
+        border-radius: 3px;
+        background: rgba(255,255,255,0.08);
+        transition: background 0.2s ease;
+    }
+
+    .tg-strength-label {
+        font-family: var(--font-sans);
+        font-size: 10.5px;
+        font-weight: 700;
+        white-space: nowrap;
+        min-width: 62px;
+        text-align: right;
+    }
+
+    .tg-strength-hint {
+        margin-top: 6px;
+        font-family: var(--font-sans);
+        font-size: 10.5px;
+        line-height: 1.45;
+        color: var(--text-muted);
     }
 
     .tg-err {
@@ -606,7 +667,7 @@ const style = `
 
     @media (prefers-reduced-motion: reduce) {
         .tg-overlay, .tg-modal { animation: none; }
-        .tg-pulse, .tg-spin { animation: none; }
+        .tg-spin { animation: none; }
     }
 `
 
@@ -630,7 +691,10 @@ function TelegramAuthModal({ initialMode = 'login', onSuccess, onClose }) {
     const [login, setLogin] = useState('')
     const [password, setPassword] = useState('')
     const [password2, setPassword2] = useState('')
+    // Каждое поле открывается своим глазом — иначе, подсматривая повтор,
+    // пользователь засвечивает и основной пароль.
     const [showPw, setShowPw] = useState(false)
+    const [showPw2, setShowPw2] = useState(false)
 
     const widgetRef = useRef(null)
     // Ref для busy: обработчик Telegram-виджета живёт вне React-цикла и в момент
@@ -721,6 +785,7 @@ function TelegramAuthModal({ initialMode = 'login', onSuccess, onClose }) {
         setPassword('')
         setPassword2('')
         setShowPw(false)
+        setShowPw2(false)
     }
 
     // Клиентская валидация до запроса — быстрее и не нагружает бэкенд.
@@ -786,6 +851,9 @@ function TelegramAuthModal({ initialMode = 'login', onSuccess, onClose }) {
     }
 
     const isRegister = mode === 'register'
+    // Индикатор показываем только при регистрации: при входе пароль уже задан
+    // и оценивать его бессмысленно.
+    const strength = isRegister ? passwordStrength(password) : null
 
     function renderForm() {
         return (
@@ -856,6 +924,26 @@ function TelegramAuthModal({ initialMode = 'login', onSuccess, onClose }) {
                             {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
                         </button>
                     </div>
+
+                    {isRegister && password && (
+                        <>
+                            <div className="tg-strength">
+                                <span className="tg-strength-track">
+                                    {[1, 2, 3, 4].map(i => (
+                                        <span
+                                            key={i}
+                                            className="tg-strength-seg"
+                                            style={i <= strength.score ? { background: strength.color } : undefined}
+                                        />
+                                    ))}
+                                </span>
+                                <span className="tg-strength-label" style={{ color: strength.color }}>
+                                    {strength.label}
+                                </span>
+                            </div>
+                            <div className="tg-strength-hint">{strength.hint}</div>
+                        </>
+                    )}
                 </div>
 
                 {isRegister && (
@@ -864,8 +952,8 @@ function TelegramAuthModal({ initialMode = 'login', onSuccess, onClose }) {
                         <div className="tg-inp-wrap">
                             <input
                                 id="tg-pw2"
-                                className="tg-inp"
-                                type={showPw ? 'text' : 'password'}
+                                className="tg-inp has-peek"
+                                type={showPw2 ? 'text' : 'password'}
                                 value={password2}
                                 onChange={e => setPassword2(e.target.value)}
                                 onKeyDown={onFieldKeyDown}
@@ -873,6 +961,15 @@ function TelegramAuthModal({ initialMode = 'login', onSuccess, onClose }) {
                                 autoComplete="new-password"
                                 disabled={busy}
                             />
+                            <button
+                                type="button"
+                                className="tg-peek"
+                                onClick={() => setShowPw2(v => !v)}
+                                aria-label={showPw2 ? 'Скрыть пароль' : 'Показать пароль'}
+                                tabIndex={-1}
+                            >
+                                {showPw2 ? <EyeOff size={17} /> : <Eye size={17} />}
+                            </button>
                         </div>
                     </div>
                 )}
@@ -1030,10 +1127,7 @@ function TelegramAuthModal({ initialMode = 'login', onSuccess, onClose }) {
                                 </div>
                             </div>
                             <div className="tg-demo-foot">
-                                <span className="tg-demo-k">
-                                    <span className="tg-pulse" />
-                                    Чистый спред
-                                </span>
+                                <span className="tg-demo-k">Чистый спред</span>
                                 <span className="tg-demo-v">+1.83%</span>
                             </div>
                         </div>
@@ -1041,7 +1135,7 @@ function TelegramAuthModal({ initialMode = 'login', onSuccess, onClose }) {
                         <div className="tg-stats">
                             <div className="tg-stat"><b>8</b><span>бирж</span></div>
                             <div className="tg-stat"><b>24/7</b><span>сканирование</span></div>
-                            <div className="tg-stat"><b>&lt;1с</b><span>обновление</span></div>
+                            <div className="tg-stat"><b>60с</b><span>цикл обновления</span></div>
                         </div>
                     </div>
 
